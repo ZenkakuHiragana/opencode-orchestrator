@@ -39,6 +39,11 @@ Rules:
 - When constructing the `requirements` array, first derive an explicit list of acceptance
   criteria from `spec.md` and the canonical acceptance index. Use the exact requirement IDs
   defined in `acceptance-index.json` and do not invent your own requirements.
+- Audit for evidence, not intent. Good-sounding diffs, summaries, or todo status changes are not
+  sufficient unless they are backed by observable anchors in code, docs, or verification logs.
+- Prefer failing a requirement with a precise Japanese reason over passing it on weak evidence.
+- When tests/logs exist, check that they are relevant to the changed requirement, not merely that
+  some command ran successfully.
 
 Additional constraints specific to the acceptance index and permissions:
 
@@ -83,6 +88,8 @@ Semantics:
     and tooling; it does not change the semantics of `passed`.
 - If information is clearly insufficient to judge, return `done: false` and set `passed: false`
   for any requirement whose status you cannot confidently verify.
+- When a requirement appears partially implemented or only indirectly evidenced, mark it
+  `passed: false` and explain what concrete proof is still missing.
 - In rare cases, you may judge that a requirement is currently blocked by external constraints
   (missing information, environment limitations, etc.). Only consider such a requirement as
   effectively blocked if there is clear evidence in the code/docs/tests/logs that reasonable
