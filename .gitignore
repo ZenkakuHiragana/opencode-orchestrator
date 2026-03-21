@@ -1,0 +1,10 @@
+.opencode/*
+!.opencode/agents/
+!.opencode/commands/
+!.opencode/tools/
+!.opencode/agents/**
+!.opencode/commands/**
+!.opencode/tools/**
+package-lock.json
+dist/
+node_modules/

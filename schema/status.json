@@ -1,0 +1,302 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "OrchestratorStatus",
+  "type": "object",
+  "required": [
+    "version"
+  ],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "const": 1,
+      "description": "Schema version for the status.json file."
+    },
+    "last_session_id": {
+      "type": "string",
+      "description": "Most recent orchestrator session id associated with this task."
+    },
+    "current_cycle": {
+      "type": "integer",
+      "description": "Current loop step number for this task."
+    },
+    "last_executor_step": {
+      "$ref": "#/definitions/ExecutorStepSnapshot"
+    },
+    "last_auditor_report": {
+      "$ref": "#/definitions/AuditorReportSnapshot"
+    },
+    "replan_required": {
+      "type": "boolean",
+      "description": "Whether the executor has requested replanning via a STEP_BLOCKER marker."
+    },
+    "replan_reason": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Short reason for the replan_required flag, if true."
+    },
+    "consecutive_env_blocked": {
+      "type": "integer",
+      "description": "Count of consecutive steps where the executor reported env_blocked."
+    },
+    "proposals": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/ProposalSnapshot"
+      },
+      "description": "List of proposals emitted by the executor/auditor that require manual intervention."
+    }
+  },
+  "additionalProperties": true,
+  "definitions": {
+    "ExecutorTodoSnapshot": {
+      "type": "object",
+      "required": [
+        "id",
+        "requirements",
+        "description"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "requirements": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "description": {
+          "type": "string"
+        },
+        "from": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "to": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": true
+    },
+    "ExecutorDiffSnapshot": {
+      "type": "object",
+      "required": [
+        "path",
+        "summary"
+      ],
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "summary": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    },
+    "ExecutorCmdSnapshot": {
+      "type": "object",
+      "required": [
+        "command",
+        "status",
+        "outcome"
+      ],
+      "properties": {
+        "command": {
+          "type": "string"
+        },
+        "command_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "status": {
+          "type": "string"
+        },
+        "outcome": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    },
+    "ExecutorBlockerSnapshot": {
+      "type": "object",
+      "required": [
+        "scope",
+        "tag",
+        "reason"
+      ],
+      "properties": {
+        "scope": {
+          "type": "string"
+        },
+        "tag": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    },
+    "ExecutorAuditSnapshot": {
+      "type": "object",
+      "required": [
+        "status",
+        "requirement_ids"
+      ],
+      "properties": {
+        "status": {
+          "type": "string"
+        },
+        "requirement_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "ExecutorStepSnapshot": {
+      "type": "object",
+      "required": [
+        "step",
+        "session_id",
+        "step_todo",
+        "step_diff",
+        "step_cmd",
+        "step_blocker",
+        "raw_stdout"
+      ],
+      "properties": {
+        "step": {
+          "type": "integer"
+        },
+        "session_id": {
+          "type": "string"
+        },
+        "step_todo": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ExecutorTodoSnapshot"
+          }
+        },
+        "step_diff": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ExecutorDiffSnapshot"
+          }
+        },
+        "step_cmd": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ExecutorCmdSnapshot"
+          }
+        },
+        "step_blocker": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ExecutorBlockerSnapshot"
+          }
+        },
+        "step_audit": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/ExecutorAuditSnapshot"
+            }
+          ]
+        },
+        "raw_stdout": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    },
+    "AuditorRequirementSnapshot": {
+      "type": "object",
+      "required": [
+        "id",
+        "passed"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "passed": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    },
+    "AuditorReportSnapshot": {
+      "type": "object",
+      "required": [
+        "cycle",
+        "done",
+        "requirements"
+      ],
+      "properties": {
+        "cycle": {
+          "type": "integer"
+        },
+        "done": {
+          "type": "boolean"
+        },
+        "requirements": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/AuditorRequirementSnapshot"
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "ProposalSnapshot": {
+      "type": "object",
+      "required": [
+        "id",
+        "source",
+        "cycle",
+        "kind",
+        "summary"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "executor",
+            "auditor"
+          ]
+        },
+        "cycle": {
+          "type": "integer"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "summary": {
+          "type": "string"
+        },
+        "details": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}

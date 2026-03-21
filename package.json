@@ -1,0 +1,26 @@
+{
+  "name": "@zenkaku/opencode-orchestrator",
+  "version": "0.1.14",
+  "private": false,
+  "description": "Orchestrator CLI and plugin for OpenCode multi-agent workflows",
+  "license": "MIT",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "opencode-orchestrator": "dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,md}\"",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@opencode-ai/plugin": "^1.2.25"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.15",
+    "prettier": "^3.8.1",
+    "typescript": "^5.7.0",
+    "vitest": "^4.1.0"
+  }
+}

@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AcceptanceIndex",
+  "type": "object",
+  "required": [
+    "version",
+    "requirements"
+  ],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "description": "Schema version for the acceptance index (currently 1)."
+    },
+    "requirements": {
+      "type": "array",
+      "description": "List of acceptance requirements for this task.",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "description"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "description": "Stable requirement identifier (for example R1, R2-api-list)."
+          },
+          "title": {
+            "type": "string",
+            "description": "Short human-readable title for the requirement."
+          },
+          "description": {
+            "type": "string",
+            "description": "Natural-language description of the requirement (written in Japanese by agents)."
+          },
+          "acceptance": {
+            "type": "object",
+            "description": "Structured hints for how this requirement should be evaluated.",
+            "properties": {
+              "notes": {
+                "type": "string",
+                "description": "Additional notes about how to judge acceptance."
+              },
+              "files": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "File paths that are directly relevant to this requirement."
+              },
+              "evidence": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Concrete anchors such as test names, log snippets, or counts."
+              }
+            },
+            "additionalProperties": true
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional tags or categories for this requirement."
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}

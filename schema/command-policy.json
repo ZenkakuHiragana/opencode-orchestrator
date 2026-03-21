@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CommandPolicy",
+  "type": "object",
+  "required": [
+    "version",
+    "summary",
+    "commands"
+  ],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "description": "Schema version for the command-policy file (currently 1)."
+    },
+    "summary": {
+      "type": "object",
+      "required": [
+        "loop_status"
+      ],
+      "properties": {
+        "loop_status": {
+          "type": "string",
+          "enum": [
+            "ready_for_loop",
+            "needs_refinement",
+            "blocked_by_environment"
+          ],
+          "description": "Mechanical gate for starting the executor loop."
+        }
+      },
+      "additionalProperties": true
+    },
+    "commands": {
+      "type": "array",
+      "description": "List of allowed commands (or templates) for this task.",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "command",
+          "role",
+          "usage"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9-]+$",
+            "description": "Stable command identifier in lowercase kebab-case (for example cmd-npm-test)."
+          },
+          "command": {
+            "type": "string",
+            "description": "Concrete command line or command template without shell pipelines or control operators."
+          },
+          "role": {
+            "type": "string",
+            "description": "High-level role of the command (for example build, test, lint, doc, explore)."
+          },
+          "usage": {
+            "type": "string",
+            "enum": [
+              "must_exec",
+              "may_exec",
+              "doc_only"
+            ],
+            "description": "How critical this command is for the story."
+          },
+          "availability": {
+            "type": "string",
+            "enum": [
+              "available",
+              "unavailable"
+            ],
+            "description": "Preflight result for this command as recorded by the planner."
+          },
+          "related_requirements": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Requirement IDs from acceptance-index.json that this command mainly serves."
+          },
+          "probe_command": {
+            "type": "string",
+            "description": "Non-destructive variant of the base CLI used only for preflight probes."
+          },
+          "parameters": {
+            "type": "object",
+            "description": "Metadata for template parameters such as {{pattern}} or {{subdir}}.",
+            "additionalProperties": {
+              "type": "object",
+              "required": [
+                "description"
+              ],
+              "properties": {
+                "description": {
+                  "type": "string",
+                  "description": "Short explanation of the parameter semantics."
+                }
+              },
+              "additionalProperties": true
+            }
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}
