@@ -99,6 +99,55 @@ describe("maybeRunTodoWriterStep", () => {
     expect(res.abortLoop).toBe(true);
     expect(res.restartedSession).toBe(false);
   });
+
+  it("clears replan metadata after todo-writer consumes a replanning step", async () => {
+    const status: OrchestratorStatus = {
+      ...createStatus(),
+      replan_required: true,
+      replan_reason: "general: 粒度を分割したい",
+      replan_request: {
+        requested_at_cycle: 3,
+        issues: [
+          {
+            source: "executor",
+            summary: "粒度を分割したい",
+            related_todo_ids: [],
+            related_requirement_ids: [],
+          },
+        ],
+      },
+    };
+    const tmpState = fs.mkdtempSync(
+      path.join(os.tmpdir(), "orch-steps-state-replan-clear-"),
+    );
+    const tmpLogs = fs.mkdtempSync(
+      path.join(os.tmpdir(), "orch-steps-logs-replan-clear-"),
+    );
+    const acceptancePath = path.join(tmpState, "acceptance-index.json");
+    fs.writeFileSync(acceptancePath, "{}", "utf8");
+
+    mockRunOpencode.mockResolvedValueOnce({ code: 0, stdout: "" } as any);
+
+    const res = await maybeRunTodoWriterStep(
+      baseOpts,
+      2,
+      "002",
+      tmpState,
+      tmpLogs,
+      acceptancePath,
+      "sess-1",
+      [],
+      status,
+      path.join(tmpState, "status.json"),
+      0,
+      false,
+    );
+
+    expect(res.abortLoop).toBe(false);
+    expect(status.replan_required).toBe(false);
+    expect(status.replan_reason).toBeNull();
+    expect(status.replan_request).toBeNull();
+  });
 });
 
 describe("runExecutorAndAuditorStep", () => {
@@ -163,6 +212,17 @@ describe("runExecutorAndAuditorStep", () => {
     expect(status.replan_required).toBe(true);
     // replan_reason は `<scope>: <reason>` 形式で保存される
     expect(status.replan_reason).toBe("general: 粒度が大きすぎる");
+    expect(status.replan_request).toEqual({
+      requested_at_cycle: 1,
+      issues: [
+        {
+          source: "executor",
+          summary: "粒度が大きすぎる",
+          related_todo_ids: [],
+          related_requirement_ids: [],
+        },
+      ],
+    });
   });
 
   it("invokes auditor when STEP_AUDIT ready and propagates done + report", async () => {
@@ -233,6 +293,65 @@ describe("runExecutorAndAuditorStep", () => {
     // 順序は失敗→成功の順で入るので、R2 が failed, R1 が passed になっていることを確認
     expect(r1).toMatchObject({ id: "R2", passed: false });
     expect(r2).toMatchObject({ id: "R1", passed: true });
+  });
+
+  it("merges auditor failures into replan_request when replanning is already required", async () => {
+    const status = createStatus();
+    const execStdout = [
+      "STEP_BLOCKER: T4-auth need_replan 認証todoを分割したい",
+      "STEP_AUDIT: ready R3-auth",
+    ].join("\n");
+
+    const auditPayload = {
+      done: false,
+      requirements: [
+        { id: "R3-auth", passed: false, reason: "認証の受け入れ条件が未達" },
+      ],
+    };
+    const auditStdout = JSON.stringify({
+      part: {
+        type: "text",
+        text: JSON.stringify(auditPayload),
+      },
+    });
+
+    mockRunOpencode
+      .mockResolvedValueOnce({ code: 0, stdout: execStdout } as any)
+      .mockResolvedValueOnce({ code: 0, stdout: auditStdout } as any)
+      .mockResolvedValueOnce({ code: 0, stdout: "[]" } as any);
+
+    await runExecutorAndAuditorStep(
+      baseOpts,
+      6,
+      "sess-1",
+      [],
+      "/tmp/logs/orch_step_006.txt",
+      "/tmp/logs/audit_step_006.jsonl",
+      status,
+      "/tmp/state/status.json",
+      0,
+      false,
+      "/tmp/logs",
+    );
+
+    expect(status.replan_required).toBe(true);
+    expect(status.replan_request).toEqual({
+      requested_at_cycle: 6,
+      issues: [
+        {
+          source: "executor",
+          summary: "認証todoを分割したい",
+          related_todo_ids: ["T4-auth"],
+          related_requirement_ids: [],
+        },
+        {
+          source: "auditor",
+          summary: "認証の受け入れ条件が未達",
+          related_todo_ids: [],
+          related_requirement_ids: ["R3-auth"],
+        },
+      ],
+    });
   });
 
   it("skips auditor when no STEP_AUDIT ready is reported", async () => {

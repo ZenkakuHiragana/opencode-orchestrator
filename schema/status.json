@@ -36,6 +36,18 @@
       ],
       "description": "Short reason for the replan_required flag, if true."
     },
+    "replan_request": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "allOf": [
+        {
+          "$ref": "#/definitions/ReplanRequest"
+        }
+      ],
+      "description": "Normalized replanning request derived from the latest executor blockers and auditor failures."
+    },
     "consecutive_env_blocked": {
       "type": "integer",
       "description": "Count of consecutive steps where the executor reported env_blocked."
@@ -258,6 +270,59 @@
           "type": "array",
           "items": {
             "$ref": "#/definitions/AuditorRequirementSnapshot"
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "ReplanIssue": {
+      "type": "object",
+      "required": [
+        "source",
+        "summary",
+        "related_todo_ids",
+        "related_requirement_ids"
+      ],
+      "properties": {
+        "source": {
+          "type": "string",
+          "enum": [
+            "executor",
+            "auditor"
+          ]
+        },
+        "summary": {
+          "type": "string"
+        },
+        "related_todo_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "related_requirement_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "ReplanRequest": {
+      "type": "object",
+      "required": [
+        "requested_at_cycle",
+        "issues"
+      ],
+      "properties": {
+        "requested_at_cycle": {
+          "type": "integer"
+        },
+        "issues": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ReplanIssue"
           }
         }
       },

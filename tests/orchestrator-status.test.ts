@@ -5,6 +5,7 @@ import * as fs from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import {
+  buildReplanRequest,
   parseExecutorStepSnapshot,
   loadStatusJson,
   saveStatusJson,
@@ -75,6 +76,17 @@ describe("loadStatusJson / saveStatusJson", () => {
       current_cycle: 2,
       replan_required: true,
       replan_reason: "general: need more info",
+      replan_request: {
+        requested_at_cycle: 2,
+        issues: [
+          {
+            source: "executor",
+            summary: "need more info",
+            related_todo_ids: [],
+            related_requirement_ids: [],
+          },
+        ],
+      },
       consecutive_env_blocked: 1,
       proposals: [],
     };
@@ -87,6 +99,17 @@ describe("loadStatusJson / saveStatusJson", () => {
     expect(loaded.current_cycle).toBe(2);
     expect(loaded.replan_required).toBe(true);
     expect(loaded.replan_reason).toBe("general: need more info");
+    expect(loaded.replan_request).toEqual({
+      requested_at_cycle: 2,
+      issues: [
+        {
+          source: "executor",
+          summary: "need more info",
+          related_todo_ids: [],
+          related_requirement_ids: [],
+        },
+      ],
+    });
     expect(loaded.consecutive_env_blocked).toBe(1);
   });
 
@@ -109,5 +132,51 @@ describe("loadStatusJson / saveStatusJson", () => {
     );
     const wrongVersion = loadStatusJson(wrongVersionPath);
     expect(wrongVersion).toEqual({ version: 1 });
+  });
+});
+
+describe("buildReplanRequest", () => {
+  it("normalizes executor blockers and auditor failures into one request", () => {
+    const executorStep = parseExecutorStepSnapshot(
+      [
+        "STEP_BLOCKER: general need_replan タスクが大きすぎる",
+        "STEP_BLOCKER: T4-auth need_replan 認証周りを分割したい",
+      ].join("\n"),
+      "sess-1",
+      7,
+    );
+
+    const request = buildReplanRequest(7, executorStep, {
+      cycle: 6,
+      done: false,
+      requirements: [
+        { id: "R3-auth", passed: false, reason: "認証要件の証拠が不足している" },
+        { id: "R4-ui", passed: true },
+      ],
+    });
+
+    expect(request).toEqual({
+      requested_at_cycle: 7,
+      issues: [
+        {
+          source: "executor",
+          summary: "タスクが大きすぎる",
+          related_todo_ids: [],
+          related_requirement_ids: [],
+        },
+        {
+          source: "executor",
+          summary: "認証周りを分割したい",
+          related_todo_ids: ["T4-auth"],
+          related_requirement_ids: [],
+        },
+        {
+          source: "auditor",
+          summary: "認証要件の証拠が不足している",
+          related_todo_ids: [],
+          related_requirement_ids: ["R3-auth"],
+        },
+      ],
+    });
   });
 });

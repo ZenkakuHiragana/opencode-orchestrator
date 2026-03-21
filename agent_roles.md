@@ -28,6 +28,8 @@
     - `todo.json` … Todo-Writer が生成する canonical todo 一覧
     - `command-policy.json` … Planner が合成するコマンドポリシー
     - `status.json` … `orchestrator-loop` が更新するループ状態
+      - 直近の executor / auditor スナップショットに加えて、Todo-Writer が再計画入力として優先参照する
+        `replan_request` を含む。
 
 以下、エージェント／コマンドごとに、(A) 役割, (B) 主な入力ファイル, (C) 主な出力ファイル,
 (D) プロンプト上の出力仕様 を整理します。
@@ -177,6 +179,7 @@
   - `$XDG_STATE_HOME/opencode/orchestrator/<task>/state/acceptance-index.json`
   - `$XDG_STATE_HOME/opencode/orchestrator/<task>/state/spec.md`
   - `$XDG_STATE_HOME/opencode/orchestrator/<task>/state/status.json`
+    - `replan_request` がある場合は、Todo-Writer にとっての第一級の再計画入力として扱う。
   - `$XDG_STATE_HOME/opencode/orchestrator/<task>/state/todo.json`
   - `orch_todo_read` ツールからの既存 canonical todo 群
 
@@ -230,7 +233,7 @@
     - `STEP_BLOCKER:` 行（0個以上）
     - `STEP_AUDIT:` 行（ちょうど 1 個）
   - これらは `src/orchestrator-loop.ts` の `parseExecutorStepSnapshot` などでパースされ、
-    `status.json` の `last_executor_step` / `proposals` などに反映される。
+    `status.json` の `last_executor_step` / `replan_request` / `proposals` などに反映される。
 
 ## 8. orch-auditor / orch-audit
 
@@ -250,7 +253,7 @@
   - `$XDG_STATE_HOME/opencode/orchestrator/<task>/state/spec.md`
   - `$XDG_STATE_HOME/opencode/orchestrator/<task>/state/acceptance-index.json`
   - `$XDG_STATE_HOME/opencode/orchestrator/<task>/state/status.json`
-    - `last_executor_step` や TODO 状況、`proposals` など。参考情報であり、
+    - `last_executor_step`、`last_auditor_report`、`replan_request`、TODO 状況、`proposals` など。参考情報であり、
       それ自体を証拠とは見なさない。
   - Git 差分・ログ・テストログなど（添付ファイルや `bash` 読み取り系コマンド経由）。
 
@@ -307,7 +310,7 @@
 - (C) 主な出力ファイル
   - `$XDG_STATE_HOME/opencode/orchestrator/<task>/state/status.json`
     - `last_session_id`, `current_cycle`, `last_executor_step`, `last_auditor_report`,
-      `replan_required`, `proposals` などを更新。
+      `replan_required`, `replan_reason`, `replan_request`, `proposals` などを更新。
   - `$XDG_STATE_HOME/opencode/orchestrator/<task>/logs/` 配下
     - `orch_step_XXX.txt` / `audit_step_XXX.jsonl` / `todowriter_step_XXX.txt` などのログ。
   - `orchestrator_session_*.json`
@@ -474,6 +477,23 @@
   },
   "replan_required": false,
   "replan_reason": "...",
+  "replan_request": {
+    "requested_at_cycle": 3,
+    "issues": [
+      {
+        "source": "executor",
+        "summary": "...",
+        "related_todo_ids": ["T4-auth"],
+        "related_requirement_ids": [],
+      },
+      {
+        "source": "auditor",
+        "summary": "...",
+        "related_todo_ids": [],
+        "related_requirement_ids": ["R1"],
+      },
+    ],
+  },
   "consecutive_env_blocked": 0,
   "proposals": [
     {
@@ -491,6 +511,9 @@
 - 上記以外のフィールドは現時点では CLI からは書き込まれていません。スキーマ (`schema/status.json`) も
   この構造に合わせており、今後フィールドを追加する場合はまず CLI 実装側を更新してからスキーマを
   拡張する想定です。
+- `replan_request` は `last_executor_step.step_blocker` と `last_auditor_report.requirements`
+  から CLI が正規化して構築する「現在の再計画要求」です。Todo-Writer は、生の履歴スナップショット
+  を直接解釈する前に、まずこのフィールドを参照する想定です。
 
 ### 11.5 spec-checker 結果 JSON（orch-spec-check 出力）
 

@@ -103,16 +103,28 @@ Planning workflow:
    - When an existing todo set is present (session todos or `todo.json`), prefer **evolving**
      it (adding missing items, clarifying descriptions) rather than discarding it, unless it
      is obviously inconsistent with the current acceptance index.
-   - When `status.json.replan_required` is true or you see `need_replan` blockers in
-     `last_executor_step.step_blocker`, prioritize fixing the structural issues they hint at:
-     split overly large todos, add missing bridge todos, or reassign coverage, always while
-     staying faithful to `acceptance-index.json` and `spec.md`.
-   - When `status.json.last_auditor_report` shows `passed: false` requirements, ensure there are clear,
-     verifiable todos that drive those requirements toward satisfaction. Use the auditor's
-     `reason` text only as a hint about missing coverage or evidence; do not attempt to
-     "game" the auditor by creating superficial todos that only target the wording of the
-     reason. The goal is to make the underlying requirement true, not to satisfy the
-     explanation string.
+   - When `status.json.replan_required` is true, first look for `status.json.replan_request`.
+     Treat `replan_request` as the primary, normalized handoff for replanning.
+     - `replan_request.issues[]` contains a flattened list of planner-relevant concerns from
+       the latest executor blockers and auditor failures.
+     - For each issue:
+       - `source: "executor"` means the executor believes the current todo structure itself
+         is not actionable enough and should be split, clarified, or bridged.
+       - `source: "auditor"` means an acceptance requirement still lacks sufficient evidence
+         or coverage and the todo structure should make concrete progress toward satisfying it.
+       - `related_todo_ids` identifies existing todo ids that should be reconsidered or split.
+       - `related_requirement_ids` identifies requirements that still need stronger todo
+         coverage or more explicit execution paths.
+   - Only if `replan_request` is missing, fall back to older raw snapshots in `status.json`
+     such as `last_executor_step.step_blocker` and `last_auditor_report.requirements`.
+   - When handling executor-origin issues, prioritize fixing the structural issues they hint
+     at: split overly large todos, add missing bridge todos, or reassign coverage, always
+     while staying faithful to `acceptance-index.json` and `spec.md`.
+   - When handling auditor-origin issues, ensure there are clear, verifiable todos that drive
+     those requirements toward satisfaction. Use the auditor's `reason` text only as a hint
+     about missing coverage or evidence; do not attempt to "game" the auditor by creating
+     superficial todos that only target the wording of the reason. The goal is to make the
+     underlying requirement true, not to satisfy the explanation string.
 
 3. **Maintain canonical todos and filtered views**
    - Treat acceptance-index.json plus your internal plan as the **authoritative source** for

@@ -16,6 +16,7 @@ import type {
   OrchestratorStatus,
 } from "./orchestrator-status.js";
 import {
+  buildReplanRequest,
   parseExecutorStepSnapshot,
   saveStatusJson,
   ProposalSnapshot,
@@ -165,6 +166,8 @@ export async function maybeRunTodoWriterStep(
   }
 
   status.replan_required = false;
+  status.replan_reason = null;
+  status.replan_request = null;
   saveStatusJson(statusPath, status);
 
   return {
@@ -319,7 +322,6 @@ export async function runExecutorAndAuditorStep(
   } else {
     status.consecutive_env_blocked = 0;
   }
-  saveStatusJson(statusPath, status);
 
   for (const line of execRes.stdout.split(/\r?\n/)) {
     const trimmed = line.trim();
@@ -428,7 +430,6 @@ export async function runExecutorAndAuditorStep(
         ),
     };
     status.last_auditor_report = reporter;
-    saveStatusJson(statusPath, status);
 
     if (failed.length > 0) {
       const ids = failed.map((f) => f.id).join(", ");
@@ -467,6 +468,16 @@ export async function runExecutorAndAuditorStep(
       "[opencode-orchestrator] skipping auditor for this step (no STEP_AUDIT: ready reported by executor).",
     );
   }
+
+  if (status.replan_required === true) {
+    status.replan_request =
+      buildReplanRequest(
+        step,
+        status.last_executor_step,
+        status.last_auditor_report,
+      ) ?? null;
+  }
+  saveStatusJson(statusPath, status);
 
   if (Array.isArray(status.proposals) && status.proposals.length > 0) {
     console.error(

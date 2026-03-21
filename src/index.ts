@@ -177,3 +177,5 @@ export const OrchestratorPlugin: Plugin = async () => {
     },
   };
 };
+
+export default OrchestratorPlugin;
