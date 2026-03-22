@@ -8,11 +8,19 @@ const z = tool.schema;
 
 export type TodoStatus = "pending" | "in_progress" | "completed" | "cancelled";
 
+export type CanonicalTodoExecutionContract = {
+  intent?: "implement" | "verify" | "investigate";
+  expected_evidence?: string[];
+  command_ids?: string[];
+  audit_ready_when?: string[];
+};
+
 export type CanonicalTodo = {
   id: string;
   summary: string;
   status: TodoStatus;
   related_requirement_ids: string[];
+  execution_contract?: CanonicalTodoExecutionContract;
 };
 
 type CanonicalTodoFile = {
@@ -23,6 +31,7 @@ function loadCanonicalTodos(task: string): {
   todos: CanonicalTodo[];
   stateDir: string;
   todoPath: string;
+  invalidReason?: string;
 } {
   const stateDir = getOrchestratorStateDir(task);
   const todoPath = path.join(stateDir, "todo.json");
@@ -32,14 +41,53 @@ function loadCanonicalTodos(task: string): {
 
   const raw = fs.readFileSync(todoPath, "utf8");
   try {
-    const parsed = JSON.parse(raw) as CanonicalTodoFile;
-    if (parsed && Array.isArray(parsed.todos)) {
+    const parsed = JSON.parse(raw) as CanonicalTodoFile | CanonicalTodo[];
+    if (Array.isArray(parsed) && parsed.every(isCanonicalTodoLike)) {
+      return { todos: parsed, stateDir, todoPath };
+    }
+    if (
+      parsed &&
+      Array.isArray(parsed.todos) &&
+      parsed.todos.every(isCanonicalTodoLike)
+    ) {
       return { todos: parsed.todos, stateDir, todoPath };
     }
   } catch {
-    // fall through to treat as empty / corrupted file
+    return {
+      todos: [],
+      stateDir,
+      todoPath,
+      invalidReason: "todo.json parse failed",
+    };
   }
-  return { todos: [], stateDir, todoPath };
+  return {
+    todos: [],
+    stateDir,
+    todoPath,
+    invalidReason: "todo.json has invalid shape",
+  };
+}
+
+function isCanonicalTodoLike(value: unknown): value is CanonicalTodo {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const todo = value as {
+    id?: unknown;
+    summary?: unknown;
+    status?: unknown;
+    related_requirement_ids?: unknown;
+  };
+  return (
+    typeof todo.id === "string" &&
+    typeof todo.summary === "string" &&
+    (todo.status === "pending" ||
+      todo.status === "in_progress" ||
+      todo.status === "completed" ||
+      todo.status === "cancelled") &&
+    Array.isArray(todo.related_requirement_ids) &&
+    todo.related_requirement_ids.every((rid) => typeof rid === "string")
+  );
 }
 
 function saveCanonicalTodos(todoPath: string, todos: CanonicalTodo[]): void {
@@ -47,6 +95,24 @@ function saveCanonicalTodos(todoPath: string, todos: CanonicalTodo[]): void {
   const dir = path.dirname(todoPath);
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(todoPath, JSON.stringify(fileObj, null, 2) + "\n", "utf8");
+}
+
+function buildGeneratedTodoId(
+  ordinal: number,
+  summary: string,
+  relatedRequirementIds: string[],
+): string {
+  const reqSlug = slugifyTodoPart(relatedRequirementIds[0] ?? "todo");
+  const summarySlug = slugifyTodoPart(summary);
+  return `T${ordinal}-${reqSlug || "todo"}-${summarySlug || "item"}`;
+}
+
+function slugifyTodoPart(input: string): string {
+  return input
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 32);
 }
 
 export const orchTodoReadTool = tool({
@@ -99,7 +165,13 @@ export const orchTodoReadTool = tool({
       });
     }
 
-    const { todos } = loadCanonicalTodos(args.task);
+    const { todos, invalidReason } = loadCanonicalTodos(args.task);
+    if (invalidReason) {
+      return JSON.stringify({
+        ok: false,
+        error: "SPEC_ERROR: canonical todo cache is invalid: " + invalidReason,
+      });
+    }
 
     const filter = args.filter ?? {};
     let filtered = todos;
@@ -171,6 +243,17 @@ export const orchTodoWriteTool = tool({
             .describe(
               "One or more requirement ids from acceptance-index.json covered by this todo.",
             ),
+          execution_contract: z
+            .object({
+              intent: z.enum(["implement", "verify", "investigate"]).optional(),
+              expected_evidence: z.array(z.string()).optional(),
+              command_ids: z.array(z.string()).optional(),
+              audit_ready_when: z.array(z.string()).optional(),
+            })
+            .describe(
+              "Optional executor-oriented handoff metadata: execution intent, expected evidence, relevant command ids, and audit-ready conditions.",
+            )
+            .optional(),
         }),
       )
       .describe(
@@ -189,6 +272,17 @@ export const orchTodoWriteTool = tool({
             .describe(
               "One or more requirement ids from acceptance-index.json covered by this todo.",
             ),
+          execution_contract: z
+            .object({
+              intent: z.enum(["implement", "verify", "investigate"]).optional(),
+              expected_evidence: z.array(z.string()).optional(),
+              command_ids: z.array(z.string()).optional(),
+              audit_ready_when: z.array(z.string()).optional(),
+            })
+            .describe(
+              "Optional executor-oriented handoff metadata: execution intent, expected evidence, relevant command ids, and audit-ready conditions.",
+            )
+            .optional(),
         }),
       )
       .describe(
@@ -211,7 +305,11 @@ export const orchTodoWriteTool = tool({
   },
   async execute(args, context) {
     const agentName = (context as any).agent as string | undefined;
-    const { todos: existing, todoPath } = loadCanonicalTodos(args.task);
+    const {
+      todos: existing,
+      todoPath,
+      invalidReason,
+    } = loadCanonicalTodos(args.task);
 
     if (args.mode === "planner_replace_canonical") {
       if (agentName !== "orch-todo-writer") {
@@ -230,6 +328,16 @@ export const orchTodoWriteTool = tool({
       }
       saveCanonicalTodos(todoPath, args.canonicalTodos);
       return JSON.stringify({ ok: true });
+    }
+
+    if (invalidReason) {
+      return JSON.stringify({
+        ok: false,
+        error:
+          "SPEC_ERROR: canonical todo cache is invalid: " +
+          invalidReason +
+          ". Use planner_replace_canonical to regenerate it.",
+      });
     }
 
     if (args.mode === "planner_add_todos") {
@@ -256,7 +364,11 @@ export const orchTodoWriteTool = tool({
         let id: string;
         for (;;) {
           counter += 1;
-          const candidate = `T${counter}-`;
+          const candidate = buildGeneratedTodoId(
+            counter,
+            t.summary,
+            t.related_requirement_ids,
+          );
           if (!existingIds.has(candidate)) {
             id = candidate;
             existingIds.add(candidate);
@@ -269,6 +381,7 @@ export const orchTodoWriteTool = tool({
           summary: t.summary,
           status: t.status,
           related_requirement_ids: t.related_requirement_ids,
+          execution_contract: t.execution_contract,
         });
       }
 

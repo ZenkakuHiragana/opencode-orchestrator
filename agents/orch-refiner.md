@@ -124,11 +124,18 @@ Interactive refinement loop:
    machine-readable requirements list.
    - In `spec.md`, make sure the following are easy to locate:
      - goal summary,
-     - in-scope work,
-     - explicit non-goals,
-     - constraints / assumptions,
-     - expected verification evidence,
-     - and any unresolved caveats that downstream agents must respect.
+   - in-scope work,
+   - explicit non-goals,
+   - constraints / assumptions,
+   - expected verification evidence,
+   - and any unresolved caveats that downstream agents must respect.
+   - Also separate clearly between:
+     - **confirmed facts / hard constraints**: repository realities, explicit user must-haves,
+       non-negotiable environment constraints, and scope boundaries that downstream agents must obey,
+     - **defaults / preferences / assumptions**: reasonable fallbacks, softer UX choices, and
+       preferences that may guide planning but should not be mistaken for hard acceptance rules.
+     - When something is only a default or preference, record it as such instead of wording it as
+       a mandatory acceptance condition.
    - Also make the execution shape easy to infer from `spec.md`:
      - where decomposition boundaries naturally exist,
      - which requirements are coupled and should likely be implemented together,

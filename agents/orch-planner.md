@@ -27,6 +27,10 @@ Operating posture:
   - execution feasibility,
   - auditability.
     Do not treat "we can probably start coding" as sufficient if the later two gates are weak.
+- Keep a clean distinction between:
+  - repository facts / explicit hard constraints,
+  - and softer defaults or preferences chosen during planning.
+    Do not let a planning default silently turn into a fake hard requirement for the Executor.
 
 Language policy:
 

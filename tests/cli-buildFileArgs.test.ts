@@ -43,7 +43,20 @@ describe("buildFileArgs", () => {
       const todo = path.join(stateDir, "todo.json");
       const spec = path.join(stateDir, "spec.md");
       fs.writeFileSync(acc, "{}", "utf8");
-      fs.writeFileSync(todo, "[]", "utf8");
+      fs.writeFileSync(
+        todo,
+        JSON.stringify({
+          todos: [
+            {
+              id: "T1",
+              summary: "valid todo",
+              status: "pending",
+              related_requirement_ids: ["R1"],
+            },
+          ],
+        }),
+        "utf8",
+      );
       fs.writeFileSync(spec, "# spec", "utf8");
 
       const args = buildFileArgs(
@@ -60,12 +73,44 @@ describe("buildFileArgs", () => {
         stateDir,
       );
 
-      expect(args[0]).toBe("--file");
-      const files = args.slice(1);
+      expect(args).toEqual([
+        "--file",
+        "user.txt",
+        "--file",
+        acc,
+        "--file",
+        spec,
+        "--file",
+        todo,
+      ]);
+      const files = args.filter((arg) => arg !== "--file");
       expect(files).toContain("user.txt");
       expect(files).toContain(acc);
       expect(files).toContain(todo);
       expect(files).toContain(spec);
+    });
+  });
+
+  it("skips invalid todo.json artifacts even when the file exists", () => {
+    withTempStateDir("taskY", (stateDir) => {
+      const todo = path.join(stateDir, "todo.json");
+      fs.writeFileSync(todo, JSON.stringify({ todos: [{}] }), "utf8");
+
+      const args = buildFileArgs(
+        {
+          task: "taskY",
+          prompt: "p",
+          sessionId: undefined,
+          continueLast: false,
+          commitOnDone: false,
+          maxLoop: 1,
+          maxRestarts: 0,
+          files: [],
+        },
+        stateDir,
+      );
+
+      expect(args).not.toContain(todo);
     });
   });
 });

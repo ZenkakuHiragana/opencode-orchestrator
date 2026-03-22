@@ -32,6 +32,18 @@ export type ExecutorAuditSnapshot = {
   requirement_ids: string[];
 };
 
+export type ExecutorIntentSnapshot = {
+  intent: "implement" | "verify" | "replan" | "blocked";
+  requirement_ids: string[];
+  summary: string;
+};
+
+export type ExecutorVerificationSnapshot = {
+  status: "ready" | "not_ready" | "blocked";
+  command_ids: string[];
+  summary: string;
+};
+
 export type ExecutorStepSnapshot = {
   step: number;
   session_id: string;
@@ -39,6 +51,8 @@ export type ExecutorStepSnapshot = {
   step_diff: ExecutorDiffSnapshot[];
   step_cmd: ExecutorCmdSnapshot[];
   step_blocker: ExecutorBlockerSnapshot[];
+  step_intent?: ExecutorIntentSnapshot;
+  step_verify?: ExecutorVerificationSnapshot;
   step_audit?: ExecutorAuditSnapshot;
   raw_stdout: string;
 };
@@ -76,6 +90,17 @@ export type ReplanRequest = {
   issues: ReplanIssue[];
 };
 
+export type FailureBudgetSnapshot = {
+  todo_writer_safety_restarts: number;
+  executor_safety_restarts: number;
+  consecutive_env_blocked: number;
+  consecutive_audit_failures: number;
+  consecutive_verification_gaps: number;
+  consecutive_contract_gaps: number;
+  last_failure_kind?: string;
+  last_failure_summary?: string;
+};
+
 export type OrchestratorStatus = {
   version: 1;
   last_session_id?: string;
@@ -86,6 +111,7 @@ export type OrchestratorStatus = {
   replan_reason?: string | null;
   replan_request?: ReplanRequest | null;
   consecutive_env_blocked?: number;
+  failure_budget?: FailureBudgetSnapshot;
   proposals?: ProposalSnapshot[];
 };
 
@@ -124,6 +150,13 @@ export function buildReplanRequest(
   lastAuditorReport?: AuditorReportSnapshot,
 ): ReplanRequest | null {
   const issues: ReplanIssue[] = [];
+  const executorRequirementIds = Array.from(
+    new Set(
+      (lastExecutorStep?.step_intent?.requirement_ids ?? []).concat(
+        lastExecutorStep?.step_audit?.requirement_ids ?? [],
+      ),
+    ),
+  );
 
   if (lastExecutorStep) {
     for (const blocker of lastExecutorStep.step_blocker) {
@@ -133,9 +166,8 @@ export function buildReplanRequest(
       issues.push({
         source: "executor",
         summary: blocker.reason,
-        related_todo_ids:
-          blocker.scope !== "general" ? [blocker.scope] : [],
-        related_requirement_ids: [],
+        related_todo_ids: blocker.scope !== "general" ? [blocker.scope] : [],
+        related_requirement_ids: executorRequirementIds,
       });
     }
   }
@@ -173,6 +205,8 @@ export function parseExecutorStepSnapshot(
   const stepDiff: ExecutorDiffSnapshot[] = [];
   const stepCmd: ExecutorCmdSnapshot[] = [];
   const stepBlocker: ExecutorBlockerSnapshot[] = [];
+  let stepIntent: ExecutorIntentSnapshot | undefined;
+  let stepVerify: ExecutorVerificationSnapshot | undefined;
   let stepAudit: ExecutorAuditSnapshot | undefined;
 
   const lines = stdout.split(/\r?\n/);
@@ -191,10 +225,12 @@ export function parseExecutorStepSnapshot(
       if (lastParen !== -1 && lastClose !== -1 && lastClose > lastParen) {
         before = restAll.slice(0, lastParen).trim();
         const statusPart = restAll.slice(lastParen + 1, lastClose).trim();
-        const arrow = statusPart.indexOf("->");
+        const unicodeArrow = statusPart.indexOf("→");
+        const asciiArrow = statusPart.indexOf("->");
+        const arrow = unicodeArrow !== -1 ? unicodeArrow : asciiArrow;
         if (arrow !== -1) {
           from = statusPart.slice(0, arrow).trim();
-          to = statusPart.slice(arrow + 2).trim();
+          to = statusPart.slice(arrow + (unicodeArrow !== -1 ? 1 : 2)).trim();
         }
       }
       const firstSpace = before.indexOf(" ");
@@ -300,6 +336,72 @@ export function parseExecutorStepSnapshot(
       continue;
     }
 
+    if (trimmed.startsWith("STEP_INTENT:")) {
+      const rest = trimmed.slice("STEP_INTENT:".length).trim();
+      if (!rest) continue;
+      const firstSpace = rest.indexOf(" ");
+      if (firstSpace === -1) continue;
+      const intent = rest.slice(0, firstSpace).trim() as
+        | "implement"
+        | "verify"
+        | "replan"
+        | "blocked";
+      const afterIntent = rest.slice(firstSpace + 1).trim();
+      if (!afterIntent) continue;
+      const idList = splitLeadingIdList(afterIntent);
+      if (!idList) continue;
+      const { idsPart, summary } = idList;
+      if (
+        intent !== "implement" &&
+        intent !== "verify" &&
+        intent !== "replan" &&
+        intent !== "blocked"
+      ) {
+        continue;
+      }
+      const requirementIds =
+        idsPart && idsPart !== "-"
+          ? idsPart
+              .split(",")
+              .map((s) => s.trim())
+              .filter((s) => s.length > 0)
+          : [];
+      stepIntent = { intent, requirement_ids: requirementIds, summary };
+      continue;
+    }
+
+    if (trimmed.startsWith("STEP_VERIFY:")) {
+      const rest = trimmed.slice("STEP_VERIFY:".length).trim();
+      if (!rest) continue;
+      const firstSpace = rest.indexOf(" ");
+      if (firstSpace === -1) continue;
+      const statusVal = rest.slice(0, firstSpace).trim() as
+        | "ready"
+        | "not_ready"
+        | "blocked";
+      const afterStatus = rest.slice(firstSpace + 1).trim();
+      if (!afterStatus) continue;
+      const idList = splitLeadingIdList(afterStatus);
+      if (!idList) continue;
+      const { idsPart, summary } = idList;
+      if (
+        statusVal !== "ready" &&
+        statusVal !== "not_ready" &&
+        statusVal !== "blocked"
+      ) {
+        continue;
+      }
+      const commandIds =
+        idsPart && idsPart !== "-"
+          ? idsPart
+              .split(",")
+              .map((s) => s.trim())
+              .filter((s) => s.length > 0)
+          : [];
+      stepVerify = { status: statusVal, command_ids: commandIds, summary };
+      continue;
+    }
+
     if (trimmed.startsWith("STEP_AUDIT:")) {
       const rest = trimmed.slice("STEP_AUDIT:".length).trim();
       if (!rest) continue;
@@ -307,6 +409,9 @@ export function parseExecutorStepSnapshot(
       if (firstSpace === -1) continue;
       const statusVal = rest.slice(0, firstSpace).trim();
       const idsPart = rest.slice(firstSpace + 1).trim();
+      if (statusVal !== "ready" && statusVal !== "in_progress") {
+        continue;
+      }
       const requirementIds =
         idsPart && idsPart !== "-"
           ? idsPart
@@ -326,7 +431,35 @@ export function parseExecutorStepSnapshot(
     step_diff: stepDiff,
     step_cmd: stepCmd,
     step_blocker: stepBlocker,
+    step_intent: stepIntent,
+    step_verify: stepVerify,
     step_audit: stepAudit,
     raw_stdout: stdout,
+  };
+}
+
+function splitLeadingIdList(
+  input: string,
+): { idsPart: string; summary: string } | null {
+  if (!input) {
+    return null;
+  }
+
+  if (input === "-") {
+    return { idsPart: "-", summary: "" };
+  }
+
+  if (input.startsWith("- ")) {
+    return { idsPart: "-", summary: input.slice(2).trim() };
+  }
+
+  const match = input.match(/^([^,\s]+(?:,\s*[^,\s]+)*)(?:\s+(.*))?$/);
+  if (!match) {
+    return null;
+  }
+
+  return {
+    idsPart: match[1],
+    summary: match[2]?.trim() ?? "",
   };
 }

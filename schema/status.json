@@ -27,7 +27,7 @@
     },
     "replan_required": {
       "type": "boolean",
-      "description": "Whether the executor has requested replanning via a STEP_BLOCKER marker."
+      "description": "Whether the loop currently requires a todo-writer replanning pass due to executor blockers, repeated protocol gaps, or auditor failures."
     },
     "replan_reason": {
       "type": [
@@ -58,6 +58,9 @@
         "$ref": "#/definitions/ProposalSnapshot"
       },
       "description": "List of proposals emitted by the executor/auditor that require manual intervention."
+    },
+    "failure_budget": {
+      "$ref": "#/definitions/FailureBudgetSnapshot"
     }
   },
   "additionalProperties": true,
@@ -178,6 +181,65 @@
       },
       "additionalProperties": true
     },
+    "ExecutorIntentSnapshot": {
+      "type": "object",
+      "required": [
+        "intent",
+        "requirement_ids",
+        "summary"
+      ],
+      "properties": {
+        "intent": {
+          "type": "string",
+          "enum": [
+            "implement",
+            "verify",
+            "replan",
+            "blocked"
+          ]
+        },
+        "requirement_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Requirement IDs emitted by STEP_INTENT. The raw protocol accepts comma-separated IDs with optional spaces after commas."
+        },
+        "summary": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    },
+    "ExecutorVerificationSnapshot": {
+      "type": "object",
+      "required": [
+        "status",
+        "command_ids",
+        "summary"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "ready",
+            "not_ready",
+            "blocked"
+          ]
+        },
+        "command_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Command IDs emitted by STEP_VERIFY. The raw protocol accepts comma-separated IDs with optional spaces after commas."
+        },
+        "summary": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    },
     "ExecutorStepSnapshot": {
       "type": "object",
       "required": [
@@ -219,6 +281,20 @@
           "items": {
             "$ref": "#/definitions/ExecutorBlockerSnapshot"
           }
+        },
+        "step_intent": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/ExecutorIntentSnapshot"
+            }
+          ]
+        },
+        "step_verify": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/ExecutorVerificationSnapshot"
+            }
+          ]
         },
         "step_audit": {
           "allOf": [
@@ -358,6 +434,46 @@
           "type": "string"
         },
         "details": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    },
+    "FailureBudgetSnapshot": {
+      "type": "object",
+      "required": [
+        "todo_writer_safety_restarts",
+        "executor_safety_restarts",
+        "consecutive_env_blocked",
+        "consecutive_audit_failures",
+        "consecutive_verification_gaps",
+        "consecutive_contract_gaps"
+      ],
+      "properties": {
+        "todo_writer_safety_restarts": {
+          "type": "integer"
+        },
+        "executor_safety_restarts": {
+          "type": "integer"
+        },
+        "consecutive_env_blocked": {
+          "type": "integer"
+        },
+        "consecutive_audit_failures": {
+          "type": "integer"
+        },
+        "consecutive_verification_gaps": {
+          "type": "integer",
+          "description": "Count of consecutive steps that emitted STEP_AUDIT: ready without STEP_VERIFY: ready. Clean non-audit-ready steps reset this counter."
+        },
+        "consecutive_contract_gaps": {
+          "type": "integer",
+          "description": "Count of consecutive steps where the executor omitted required STEP_INTENT / STEP_VERIFY metadata."
+        },
+        "last_failure_kind": {
+          "type": "string"
+        },
+        "last_failure_summary": {
           "type": "string"
         }
       },

@@ -94,6 +94,13 @@ export async function restartSession(
   return { newSessionId, newTitle: restartTitle };
 }
 
+export function appendFileArg(fileArgs: string[], filePath: string): string[] {
+  if (fileArgs.includes(filePath)) {
+    return fileArgs;
+  }
+  return [...fileArgs, "--file", filePath];
+}
+
 export function buildFileArgs(opts: LoopOptions, stateDir: string): string[] {
   const files: string[] = [];
 
@@ -110,7 +117,7 @@ export function buildFileArgs(opts: LoopOptions, stateDir: string): string[] {
   }
 
   const todoPath = path.join(stateDir, "todo.json");
-  if (fs.existsSync(todoPath)) {
+  if (isValidTodoAttachment(todoPath)) {
     files.push(todoPath);
   }
 
@@ -118,7 +125,48 @@ export function buildFileArgs(opts: LoopOptions, stateDir: string): string[] {
     return [];
   }
 
-  return ["--file", ...Array.from(new Set(files))];
+  return Array.from(new Set(files)).flatMap((filePath) => ["--file", filePath]);
+}
+
+function isValidTodoAttachment(todoPath: string): boolean {
+  if (!fs.existsSync(todoPath)) {
+    return false;
+  }
+
+  try {
+    const raw = fs.readFileSync(todoPath, "utf8");
+    const parsed = JSON.parse(raw) as { todos?: unknown } | unknown[];
+    const todos = Array.isArray(parsed)
+      ? parsed
+      : Array.isArray((parsed as { todos?: unknown }).todos)
+        ? (parsed as { todos: unknown[] }).todos
+        : null;
+    return Array.isArray(todos) && todos.every(isCanonicalTodoLike);
+  } catch {
+    return false;
+  }
+}
+
+function isCanonicalTodoLike(value: unknown): boolean {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const todo = value as {
+    id?: unknown;
+    summary?: unknown;
+    status?: unknown;
+    related_requirement_ids?: unknown;
+  };
+  return (
+    typeof todo.id === "string" &&
+    typeof todo.summary === "string" &&
+    (todo.status === "pending" ||
+      todo.status === "in_progress" ||
+      todo.status === "completed" ||
+      todo.status === "cancelled") &&
+    Array.isArray(todo.related_requirement_ids) &&
+    todo.related_requirement_ids.every((rid) => typeof rid === "string")
+  );
 }
 
 export async function findSessionIdByTitle(

@@ -53,6 +53,21 @@ Key concepts:
     - Do **not** mark a requirement as "done"; that is the Auditor's job, based on
       observable evidence and test/build/lint results.
 
+- **Execution contract metadata**:
+  - When you persist canonical todos via `orch_todo_write`, you may attach an optional
+    `execution_contract` object to each todo.
+  - Use this metadata to make the handoff to the Executor more decision-complete when helpful.
+    Supported fields are:
+    - `intent`: one of `implement`, `verify`, or `investigate`.
+    - `expected_evidence`: short strings describing the concrete evidence the Executor should
+      leave behind before considering the todo completed.
+    - `command_ids`: stable command ids from `command-policy.json` that are most relevant to this
+      todo's implementation or verification.
+    - `audit_ready_when`: short conditions describing when the todo's work is strong enough to be
+      presented to the Auditor.
+  - This metadata is optional, but for higher-risk, auditor-sensitive, or repeatedly failing work,
+    you should populate it so that the Executor has fewer judgment calls left.
+
 - **Derived planning cache (`todo.json`)**:
   - Treat `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/todo.json` as a **mirror** of your planned todo
     structure, not as an independent source of truth.
@@ -115,6 +130,9 @@ Planning workflow:
    - A good todo should tell the Executor both the work surface and the completion shape.
      Favor summaries like "Implement X and cover it with Y" over vague labels like
      "Handle X".
+   - For todos that are likely to reach audit soon, prefer including `execution_contract`
+     metadata so that the expected evidence and audit-ready boundary are explicit in state,
+     not only implied by prose.
    - Avoid todo anti-patterns that often make agents feel unhelpful:
      - giant catch-all todos,
      - orphan todos with no clear requirement mapping,
@@ -154,6 +172,10 @@ Planning workflow:
      - verification evidence,
      - and any necessary docs/config glue.
        These can live in one todo or a few tightly related todos, but should not be left implicit.
+   - When `status.json.replan_request` or recent failures indicate weak audit handoff
+     (for example, work reached audit without enough verification evidence), sharpen the todo set
+     by adding or refining `execution_contract.expected_evidence`, `command_ids`, and
+     `audit_ready_when` instead of merely rewording summaries.
 
 3. **Maintain canonical todos and filtered views**
    - Treat acceptance-index.json plus your internal plan as the **authoritative source** for

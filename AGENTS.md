@@ -84,6 +84,8 @@
 - Orchestrator ループ
   - 旧シェル版 `orchestrator-loop.sh` は Orchestrator / Auditor のハングや安全装置トリップを検出し、ウォッチドッグ + timeout で保護します。
   - 新 CLI 版 `opencode-orchestrator loop` でも同様に `MAX_LOOP` / `MAX_RESTARTS` 相当の制御を行います。デフォルト値を変える場合は README とコメントを更新してください。
+  - `status.json` には `replan_request` に加えて `failure_budget` も保存されます。`consecutive_verification_gaps` は `STEP_AUDIT: ready` に `STEP_VERIFY: ready` が伴わないケースのみ連続カウントし、通常の非監査ステップではリセットされます。
+  - Executor プロトコルでは各 step で `STEP_INTENT:` と `STEP_VERIFY:` を必ず出力する前提です。ID 列はカンマ区切りで、`R1,R2` / `R1, R2` の両方を許容します。
 
 ## 7. エディタ / 補完ツールルール
 

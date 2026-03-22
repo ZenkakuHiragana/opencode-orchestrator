@@ -5,6 +5,7 @@ import * as path from "node:path";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
 import {
+  appendFileArg,
   buildFileArgs,
   findSessionIdByTitle,
 } from "../src/orchestrator-session.js";
@@ -27,13 +28,35 @@ describe("buildFileArgs", () => {
 
     fs.writeFileSync(acceptancePath, "{}", "utf8");
     fs.writeFileSync(specPath, "# Spec", "utf8");
-    fs.writeFileSync(todoPath, "[]", "utf8");
+    fs.writeFileSync(
+      todoPath,
+      JSON.stringify({
+        todos: [
+          {
+            id: "T1",
+            summary: "valid todo",
+            status: "pending",
+            related_requirement_ids: ["R1"],
+          },
+        ],
+      }),
+      "utf8",
+    );
 
     const opts = { files: ["extra.txt"] } as any;
     const args = buildFileArgs(opts, stateDir);
 
-    expect(args[0]).toBe("--file");
-    const files = args.slice(1);
+    expect(args).toEqual([
+      "--file",
+      "extra.txt",
+      "--file",
+      acceptancePath,
+      "--file",
+      specPath,
+      "--file",
+      todoPath,
+    ]);
+    const files = args.filter((arg) => arg !== "--file");
     expect(files).toContain("extra.txt");
     expect(files).toContain(acceptancePath);
     expect(files).toContain(specPath);
@@ -43,6 +66,18 @@ describe("buildFileArgs", () => {
     expect(unique.size).toBe(files.length);
   });
 
+  it("does not attach invalid todo.json artifacts", () => {
+    const tmpDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), "orch-session-invalid-"),
+    );
+    const todoPath = path.join(tmpDir, "todo.json");
+    fs.writeFileSync(todoPath, JSON.stringify({ todos: [{}] }), "utf8");
+
+    const args = buildFileArgs({ files: [] } as any, tmpDir);
+
+    expect(args).not.toContain(todoPath);
+  });
+
   it("returns empty array when no files are available", () => {
     const tmpDir = fs.mkdtempSync(
       path.join(os.tmpdir(), "orch-session-empty-"),
@@ -50,6 +85,19 @@ describe("buildFileArgs", () => {
     const opts = { files: [] } as any;
     const args = buildFileArgs(opts, tmpDir);
     expect(args).toEqual([]);
+  });
+
+  it("appends additional file attachments with their own --file flag", () => {
+    expect(appendFileArg(["--file", "a.txt"], "b.txt")).toEqual([
+      "--file",
+      "a.txt",
+      "--file",
+      "b.txt",
+    ]);
+    expect(appendFileArg(["--file", "a.txt"], "a.txt")).toEqual([
+      "--file",
+      "a.txt",
+    ]);
   });
 });
 

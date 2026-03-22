@@ -15,10 +15,12 @@ import {
 describe("parseExecutorStepSnapshot", () => {
   it("parses STEP_* lines into a structured snapshot", () => {
     const stdout = [
-      "STEP_TODO: T1 R1,R2 implement feature (pending->completed)",
+      "STEP_TODO: T1 R1,R2 implement feature (pending → completed)",
       "STEP_DIFF: src/foo.ts added endpoint",
       "STEP_CMD: npm test (cmd-npm-test) success テスト成功",
       "STEP_BLOCKER: general need_replan タスクが大きすぎる",
+      "STEP_INTENT: implement R1,R2 auth flow を修正した",
+      "STEP_VERIFY: ready cmd-npm-test テスト根拠が揃った",
       "STEP_AUDIT: ready R1,R2",
       "some unrelated log line",
     ].join("\n");
@@ -56,12 +58,76 @@ describe("parseExecutorStepSnapshot", () => {
       reason: "タスクが大きすぎる",
     });
 
+    expect(snapshot.step_intent).toEqual({
+      intent: "implement",
+      requirement_ids: ["R1", "R2"],
+      summary: "auth flow を修正した",
+    });
+
+    expect(snapshot.step_verify).toEqual({
+      status: "ready",
+      command_ids: ["cmd-npm-test"],
+      summary: "テスト根拠が揃った",
+    });
+
     expect(snapshot.step_audit).toEqual({
       status: "ready",
       requirement_ids: ["R1", "R2"],
     });
 
     expect(snapshot.raw_stdout).toBe(stdout);
+  });
+
+  it("also accepts legacy ASCII arrows in STEP_TODO transitions", () => {
+    const snapshot = parseExecutorStepSnapshot(
+      "STEP_TODO: T2 R7 migrate flow (pending->in_progress)",
+      "sess-legacy",
+      4,
+    );
+
+    expect(snapshot.step_todo[0]).toMatchObject({
+      id: "T2",
+      from: "pending",
+      to: "in_progress",
+    });
+  });
+
+  it("ignores malformed STEP_INTENT, STEP_VERIFY, and STEP_AUDIT status tokens", () => {
+    const snapshot = parseExecutorStepSnapshot(
+      [
+        "STEP_INTENT: impl R1 malformed",
+        "STEP_VERIFY: rdy cmd-npm-test malformed",
+        "STEP_AUDIT: done R1",
+      ].join("\n"),
+      "sess-bad",
+      5,
+    );
+
+    expect(snapshot.step_intent).toBeUndefined();
+    expect(snapshot.step_verify).toBeUndefined();
+    expect(snapshot.step_audit).toBeUndefined();
+  });
+
+  it("accepts comma-space separated ids in STEP_INTENT and STEP_VERIFY", () => {
+    const snapshot = parseExecutorStepSnapshot(
+      [
+        "STEP_INTENT: implement R1, R2 auth flow を修正した",
+        "STEP_VERIFY: ready cmd-a, cmd-b テスト根拠が揃った",
+      ].join("\n"),
+      "sess-comma-space",
+      6,
+    );
+
+    expect(snapshot.step_intent).toEqual({
+      intent: "implement",
+      requirement_ids: ["R1", "R2"],
+      summary: "auth flow を修正した",
+    });
+    expect(snapshot.step_verify).toEqual({
+      status: "ready",
+      command_ids: ["cmd-a", "cmd-b"],
+      summary: "テスト根拠が揃った",
+    });
   });
 });
 
@@ -88,6 +154,16 @@ describe("loadStatusJson / saveStatusJson", () => {
         ],
       },
       consecutive_env_blocked: 1,
+      failure_budget: {
+        todo_writer_safety_restarts: 0,
+        executor_safety_restarts: 1,
+        consecutive_env_blocked: 1,
+        consecutive_audit_failures: 2,
+        consecutive_verification_gaps: 1,
+        consecutive_contract_gaps: 1,
+        last_failure_kind: "audit_failed",
+        last_failure_summary: "missing docs",
+      },
       proposals: [],
     };
 
@@ -111,6 +187,16 @@ describe("loadStatusJson / saveStatusJson", () => {
       ],
     });
     expect(loaded.consecutive_env_blocked).toBe(1);
+    expect(loaded.failure_budget).toEqual({
+      todo_writer_safety_restarts: 0,
+      executor_safety_restarts: 1,
+      consecutive_env_blocked: 1,
+      consecutive_audit_failures: 2,
+      consecutive_verification_gaps: 1,
+      consecutive_contract_gaps: 1,
+      last_failure_kind: "audit_failed",
+      last_failure_summary: "missing docs",
+    });
   });
 
   it("returns default status when file is missing or invalid", () => {
@@ -141,6 +227,8 @@ describe("buildReplanRequest", () => {
       [
         "STEP_BLOCKER: general need_replan タスクが大きすぎる",
         "STEP_BLOCKER: T4-auth need_replan 認証周りを分割したい",
+        "STEP_INTENT: replan R3-auth,R4-ui 要件単位で再計画したい",
+        "STEP_AUDIT: in_progress R3-auth,R4-ui",
       ].join("\n"),
       "sess-1",
       7,
@@ -150,7 +238,11 @@ describe("buildReplanRequest", () => {
       cycle: 6,
       done: false,
       requirements: [
-        { id: "R3-auth", passed: false, reason: "認証要件の証拠が不足している" },
+        {
+          id: "R3-auth",
+          passed: false,
+          reason: "認証要件の証拠が不足している",
+        },
         { id: "R4-ui", passed: true },
       ],
     });
@@ -162,13 +254,13 @@ describe("buildReplanRequest", () => {
           source: "executor",
           summary: "タスクが大きすぎる",
           related_todo_ids: [],
-          related_requirement_ids: [],
+          related_requirement_ids: ["R3-auth", "R4-ui"],
         },
         {
           source: "executor",
           summary: "認証周りを分割したい",
           related_todo_ids: ["T4-auth"],
-          related_requirement_ids: [],
+          related_requirement_ids: ["R3-auth", "R4-ui"],
         },
         {
           source: "auditor",

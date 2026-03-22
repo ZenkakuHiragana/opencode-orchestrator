@@ -11,9 +11,11 @@ import {
 import { parseAuditResult } from "./orchestrator-audit.js";
 import type {
   AuditorRequirementSnapshot,
+  FailureBudgetSnapshot,
   AuditorReportSnapshot,
   ExecutorStepSnapshot,
   OrchestratorStatus,
+  ReplanIssue,
 } from "./orchestrator-status.js";
 import {
   buildReplanRequest,
@@ -22,6 +24,7 @@ import {
   ProposalSnapshot,
 } from "./orchestrator-status.js";
 import {
+  appendFileArg,
   findSessionIdByTitle,
   restartSession,
 } from "./orchestrator-session.js";
@@ -57,6 +60,7 @@ export async function maybeRunTodoWriterStep(
   restartCount: number,
   forceTodoWriterNextStep: boolean,
 ): Promise<TodoWriterStepResult> {
+  const failureBudget = ensureFailureBudget(status);
   const needReplan = status.replan_required === true || forceTodoWriterNextStep;
   if (!fs.existsSync(acceptanceIndexPath) || (step !== 1 && !needReplan)) {
     return {
@@ -69,7 +73,7 @@ export async function maybeRunTodoWriterStep(
   }
 
   const todowriterLog = path.join(logDir, `todowriter_step_${stepId}.txt`);
-  const todowriterPrompt = buildTodoWriterPrompt();
+  const todowriterPrompt = buildTodoWriterPrompt(status);
   const planRes = await runOpencode(
     [
       "run",
@@ -77,8 +81,7 @@ export async function maybeRunTodoWriterStep(
       "orch-todo-write",
       "--session",
       sessionId,
-      ...fileArgs,
-      statusPath,
+      ...appendFileArg(fileArgs, statusPath),
       "--",
       todowriterPrompt,
     ],
@@ -89,6 +92,11 @@ export async function maybeRunTodoWriterStep(
     "I'm sorry, but I can't assist with that request.",
   );
   if (todowriterSafety) {
+    failureBudget.todo_writer_safety_restarts += 1;
+    failureBudget.last_failure_kind = "todo_writer_safety";
+    failureBudget.last_failure_summary =
+      "todo-writer が safety trip を起こしたためセッションを再開した";
+    saveStatusJson(statusPath, status);
     console.error(
       "[opencode-orchestrator] SAFETY trip detected in todo-writer output; restarting session.",
     );
@@ -110,7 +118,7 @@ export async function maybeRunTodoWriterStep(
       "todo-writer",
       opts,
       logDir,
-      [...fileArgs, statusPath],
+      appendFileArg(fileArgs, statusPath),
       sessionId,
       status,
       statusPath,
@@ -127,47 +135,60 @@ export async function maybeRunTodoWriterStep(
   }
 
   if (planRes.code !== 0) {
+    failureBudget.last_failure_kind = "todo_writer_failed";
+    failureBudget.last_failure_summary =
+      "todo-writer が non-zero exit を返したため再計画状態を維持する";
+    status.replan_required = true;
+    status.replan_reason =
+      status.replan_reason ??
+      "general: todo-writer が失敗したため既存の再計画要求を維持したい";
+    saveStatusJson(statusPath, status);
     console.error(
       "[opencode-orchestrator] todo-writer step exited with non-zero status",
     );
+    return {
+      sessionId,
+      restartCount,
+      forceTodoWriterNextStep: true,
+      restartedSession: false,
+      abortLoop: false,
+    };
   }
 
   const todoPath = path.join(stateDir, "todo.json");
-  if (fs.existsSync(todoPath)) {
-    try {
-      const todoRaw = fs.readFileSync(todoPath, "utf8");
-      const parsed = JSON.parse(todoRaw) as { todos?: any[] } | any[];
-      const todos = Array.isArray(parsed)
-        ? parsed
-        : Array.isArray((parsed as { todos?: any[] }).todos)
-          ? (parsed as { todos?: any[] }).todos!
-          : [];
-      const total = todos.length;
-      const pending = todos.filter((t) => t && t.status === "pending").length;
-      const inProgress = todos.filter(
-        (t) => t && t.status === "in_progress",
-      ).length;
-      const completed = todos.filter(
-        (t) => t && t.status === "completed",
-      ).length;
-      const cancelled = todos.filter(
-        (t) => t && t.status === "cancelled",
-      ).length;
-      console.error(
-        `[opencode-orchestrator] todo-writer todos: total=${total} ` +
-          `pending=${pending} in_progress=${inProgress} ` +
-          `completed=${completed} cancelled=${cancelled}`,
-      );
-    } catch {
-      console.error(
-        "[opencode-orchestrator] todo-writer todos: unknown (failed to parse todo.json)",
-      );
-    }
+  const todoSummary = readTodoSummary(todoPath);
+  if (!todoSummary.ok) {
+    failureBudget.last_failure_kind = "todo_writer_invalid_todo_cache";
+    failureBudget.last_failure_summary =
+      "todo-writer が有効な todo.json を残さなかったため再計画状態を維持する";
+    status.replan_required = true;
+    status.replan_reason =
+      status.replan_reason ??
+      "general: todo-writer が有効な todo.json を生成できなかったため再計画を継続したい";
+    saveStatusJson(statusPath, status);
+    console.error(
+      `[opencode-orchestrator] todo-writer todos: invalid (${todoSummary.reason})`,
+    );
+    return {
+      sessionId,
+      restartCount,
+      forceTodoWriterNextStep: true,
+      restartedSession: false,
+      abortLoop: false,
+    };
   }
+
+  console.error(
+    `[opencode-orchestrator] todo-writer todos: total=${todoSummary.total} ` +
+      `pending=${todoSummary.pending} in_progress=${todoSummary.inProgress} ` +
+      `completed=${todoSummary.completed} cancelled=${todoSummary.cancelled}`,
+  );
 
   status.replan_required = false;
   status.replan_reason = null;
   status.replan_request = null;
+  failureBudget.consecutive_contract_gaps = 0;
+  failureBudget.consecutive_verification_gaps = 0;
   saveStatusJson(statusPath, status);
 
   return {
@@ -192,6 +213,7 @@ export async function runExecutorAndAuditorStep(
   forceTodoWriterNextStep: boolean,
   logDir: string,
 ): Promise<ExecutorAuditorStepResult> {
+  const failureBudget = ensureFailureBudget(status);
   // Decide whether to attach status.json to the executor for this step.
   // We only do this for the cycle immediately following an auditor run
   // (status.last_auditor_report.cycle + 1 === current step) and only when
@@ -204,17 +226,10 @@ export async function runExecutorAndAuditorStep(
     if (!isNextAfterAudit) {
       return fileArgs;
     }
-
-    if (fileArgs.length === 0) {
-      return ["--file", statusPath];
-    }
-    if (fileArgs.includes(statusPath)) {
-      return fileArgs;
-    }
-    return [...fileArgs, statusPath];
+    return appendFileArg(fileArgs, statusPath);
   })();
 
-  const execPrompt = buildExecutorPrompt(isNextAfterAudit);
+  const execPrompt = buildExecutorPrompt(isNextAfterAudit, status);
   const execRes = await runOpencode(
     [
       "run",
@@ -233,6 +248,11 @@ export async function runExecutorAndAuditorStep(
     "I'm sorry, but I can't assist with that request.",
   );
   if (safetyTripped) {
+    failureBudget.executor_safety_restarts += 1;
+    failureBudget.last_failure_kind = "executor_safety";
+    failureBudget.last_failure_summary =
+      "executor が safety trip を起こしたためセッションを再開した";
+    saveStatusJson(statusPath, status);
     console.error(
       "[opencode-orchestrator] SAFETY trip detected in executor output.",
     );
@@ -284,6 +304,32 @@ export async function runExecutorAndAuditorStep(
     step,
   );
   status.last_executor_step = stepSnapshot;
+  let contractGapIssue: ReplanIssue | null = null;
+
+  if (!stepSnapshot.step_intent || !stepSnapshot.step_verify) {
+    failureBudget.consecutive_contract_gaps += 1;
+    failureBudget.last_failure_kind = "executor_contract_gap";
+    failureBudget.last_failure_summary =
+      "executor が必須の STEP_INTENT / STEP_VERIFY 行を出力しなかった";
+    contractGapIssue = {
+      source: "executor",
+      summary:
+        "executor の出力が不足している。各 step で STEP_INTENT と STEP_VERIFY を必ず出力できるように todo と検証境界を明確にしたい",
+      related_todo_ids: [],
+      related_requirement_ids:
+        stepSnapshot.step_audit?.requirement_ids ??
+        stepSnapshot.step_intent?.requirement_ids ??
+        [],
+    };
+    if (failureBudget.consecutive_contract_gaps >= 2) {
+      status.replan_required = true;
+      status.replan_reason =
+        "general: executor の step 出力契約が連続で不足しているため、todo と検証境界を再計画したい";
+      forceTodoWriterNextStep = true;
+    }
+  } else {
+    failureBudget.consecutive_contract_gaps = 0;
+  }
 
   const replanBlocker = stepSnapshot.step_blocker.find(
     (b) => b.tag === "need_replan",
@@ -300,6 +346,11 @@ export async function runExecutorAndAuditorStep(
   if (hasEnvBlocked) {
     const prevEnvBlocked = status.consecutive_env_blocked ?? 0;
     status.consecutive_env_blocked = prevEnvBlocked + 1;
+    failureBudget.consecutive_env_blocked = status.consecutive_env_blocked;
+    failureBudget.last_failure_kind = "env_blocked";
+    failureBudget.last_failure_summary =
+      otherBlockers.find((b) => b.tag === "env_blocked")?.reason ||
+      "executor が env_blocked を報告した";
     if (status.consecutive_env_blocked >= 3) {
       const proposals: ProposalSnapshot[] = Array.isArray(status.proposals)
         ? status.proposals.slice()
@@ -321,6 +372,7 @@ export async function runExecutorAndAuditorStep(
     }
   } else {
     status.consecutive_env_blocked = 0;
+    failureBudget.consecutive_env_blocked = 0;
   }
 
   for (const line of execRes.stdout.split(/\r?\n/)) {
@@ -347,6 +399,7 @@ export async function runExecutorAndAuditorStep(
   let shouldAudit = false;
   let lastAuditStatus: string | null = null;
   let lastAuditIds: string | null = null;
+  let verificationGapIssue: ReplanIssue | null = null;
   for (const line of execRes.stdout.split(/\r?\n/)) {
     const trimmed = line.trim();
     if (!trimmed.startsWith("STEP_AUDIT:")) continue;
@@ -361,16 +414,48 @@ export async function runExecutorAndAuditorStep(
   }
 
   if (lastAuditStatus === "ready") {
-    shouldAudit = true;
-    if (lastAuditIds && lastAuditIds !== "-") {
-      console.error(
-        `[opencode-orchestrator] executor reports audit-ready requirements: ${lastAuditIds}`,
-      );
+    if (stepSnapshot.step_verify?.status === "ready") {
+      failureBudget.consecutive_verification_gaps = 0;
+      shouldAudit = true;
+      if (lastAuditIds && lastAuditIds !== "-") {
+        console.error(
+          `[opencode-orchestrator] executor reports audit-ready requirements: ${lastAuditIds}`,
+        );
+      } else {
+        console.error(
+          "[opencode-orchestrator] executor reports audit-ready state (no specific requirement ids).",
+        );
+      }
     } else {
+      failureBudget.consecutive_verification_gaps += 1;
+      failureBudget.last_failure_kind = "verification_gap";
+      failureBudget.last_failure_summary =
+        "STEP_AUDIT: ready が出たが STEP_VERIFY: ready が不足している";
+      verificationGapIssue = {
+        source: "executor",
+        summary:
+          "監査準備を宣言したが自己検証の根拠が不足している。STEP_VERIFY を明示し、必要なら todo を監査証拠単位で再分解したい",
+        related_todo_ids: [],
+        related_requirement_ids:
+          lastAuditIds && lastAuditIds !== "-"
+            ? lastAuditIds
+                .split(",")
+                .map((s) => s.trim())
+                .filter((s) => s.length > 0)
+            : [],
+      };
       console.error(
-        "[opencode-orchestrator] executor reports audit-ready state (no specific requirement ids).",
+        "[opencode-orchestrator] executor requested audit without STEP_VERIFY: ready; skipping auditor for this step.",
       );
+      if (failureBudget.consecutive_verification_gaps >= 2) {
+        status.replan_required = true;
+        status.replan_reason =
+          "general: 監査準備の自己検証が連続で不足しているため、todo の証拠境界を再計画したい";
+        forceTodoWriterNextStep = true;
+      }
     }
+  } else {
+    failureBudget.consecutive_verification_gaps = 0;
   }
 
   let stepDone = false;
@@ -411,6 +496,14 @@ export async function runExecutorAndAuditorStep(
       passed,
     } = parseAuditResult(auditRes.stdout);
     stepDone = auditDone;
+    if (auditDone) {
+      failureBudget.consecutive_audit_failures = 0;
+    } else {
+      failureBudget.consecutive_audit_failures += 1;
+      failureBudget.last_failure_kind = "audit_failed";
+      failureBudget.last_failure_summary =
+        failed[0]?.reason || "auditor が未達要件を報告した";
+    }
     console.error(`[opencode-orchestrator] auditor done = ${stepDone}`);
 
     const reporter: AuditorReportSnapshot = {
@@ -470,12 +563,32 @@ export async function runExecutorAndAuditorStep(
   }
 
   if (status.replan_required === true) {
+    const baseRequest = buildReplanRequest(
+      step,
+      status.last_executor_step,
+      status.last_auditor_report,
+    );
+    const issues = baseRequest?.issues ? baseRequest.issues.slice() : [];
+    if (contractGapIssue) {
+      issues.push(contractGapIssue);
+    }
+    if (verificationGapIssue) {
+      issues.push(verificationGapIssue);
+    }
     status.replan_request =
-      buildReplanRequest(
-        step,
-        status.last_executor_step,
-        status.last_auditor_report,
-      ) ?? null;
+      issues.length > 0
+        ? {
+            requested_at_cycle: step,
+            issues,
+          }
+        : null;
+  } else if (verificationGapIssue || contractGapIssue) {
+    status.replan_request = {
+      requested_at_cycle: step,
+      issues: [contractGapIssue, verificationGapIssue].filter(
+        (issue): issue is ReplanIssue => issue !== null,
+      ),
+    };
   }
   saveStatusJson(statusPath, status);
 
@@ -501,6 +614,95 @@ export async function runExecutorAndAuditorStep(
     abortLoop: false,
     skipAuditorThisStep: false,
   };
+}
+
+function ensureFailureBudget(
+  status: OrchestratorStatus,
+): FailureBudgetSnapshot {
+  if (!status.failure_budget) {
+    status.failure_budget = {
+      todo_writer_safety_restarts: 0,
+      executor_safety_restarts: 0,
+      consecutive_env_blocked: status.consecutive_env_blocked ?? 0,
+      consecutive_audit_failures: 0,
+      consecutive_verification_gaps: 0,
+      consecutive_contract_gaps: 0,
+    };
+  }
+  return status.failure_budget;
+}
+
+type TodoSummary =
+  | {
+      ok: true;
+      total: number;
+      pending: number;
+      inProgress: number;
+      completed: number;
+      cancelled: number;
+    }
+  | {
+      ok: false;
+      reason: string;
+    };
+
+function readTodoSummary(todoPath: string): TodoSummary {
+  if (!fs.existsSync(todoPath)) {
+    return { ok: false, reason: "todo.json missing" };
+  }
+
+  try {
+    const todoRaw = fs.readFileSync(todoPath, "utf8");
+    const parsed = JSON.parse(todoRaw) as { todos?: unknown } | unknown[];
+    const todos = Array.isArray(parsed)
+      ? parsed
+      : Array.isArray((parsed as { todos?: unknown }).todos)
+        ? (parsed as { todos: unknown[] }).todos
+        : null;
+    if (!todos || !todos.every(isCanonicalTodoLike)) {
+      return { ok: false, reason: "todo.json has invalid shape" };
+    }
+    return {
+      ok: true,
+      total: todos.length,
+      pending: todos.filter(
+        (t) => t && (t as { status?: string }).status === "pending",
+      ).length,
+      inProgress: todos.filter(
+        (t) => t && (t as { status?: string }).status === "in_progress",
+      ).length,
+      completed: todos.filter(
+        (t) => t && (t as { status?: string }).status === "completed",
+      ).length,
+      cancelled: todos.filter(
+        (t) => t && (t as { status?: string }).status === "cancelled",
+      ).length,
+    };
+  } catch {
+    return { ok: false, reason: "todo.json parse failed" };
+  }
+}
+
+function isCanonicalTodoLike(value: unknown): boolean {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const todo = value as {
+    id?: unknown;
+    summary?: unknown;
+    status?: unknown;
+    related_requirement_ids?: unknown;
+  };
+  return (
+    typeof todo.id === "string" &&
+    typeof todo.summary === "string" &&
+    (todo.status === "pending" ||
+      todo.status === "in_progress" ||
+      todo.status === "completed" ||
+      todo.status === "cancelled") &&
+    Array.isArray(todo.related_requirement_ids) &&
+    todo.related_requirement_ids.every((rid) => typeof rid === "string")
+  );
 }
 
 async function restartFromSafety(
@@ -550,5 +752,6 @@ async function restartFromSafety(
   console.error(
     `[opencode-orchestrator] WARN: failed to locate new session after ${warnContext}; continuing with previous session.`,
   );
+  saveStatusJson(statusPath, status);
   return sessionId;
 }

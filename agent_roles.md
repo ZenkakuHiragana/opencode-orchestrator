@@ -231,17 +231,22 @@
     - `STEP_DIFF:` 行（0個以上）
     - `STEP_CMD:` 行（0個以上）
     - `STEP_BLOCKER:` 行（0個以上）
+    - `STEP_INTENT:` 行（ちょうど 1 個。必須）
+    - `STEP_VERIFY:` 行（ちょうど 1 個。必須）
     - `STEP_AUDIT:` 行（ちょうど 1 個）
-  - これらは `src/orchestrator-loop.ts` の `parseExecutorStepSnapshot` などでパースされ、
-    `status.json` の `last_executor_step` / `replan_request` / `proposals` などに反映される。
+  - `STEP_INTENT` / `STEP_VERIFY` の ID 列はカンマ区切りで、`R1,R2` と `R1, R2` の両方を受理する。
+  - これらは `src/orchestrator-status.ts` の `parseExecutorStepSnapshot` などでパースされ、
+    `status.json` の `last_executor_step` / `replan_request` / `failure_budget` / `proposals`
+    などに反映される。
 
 ## 8. orch-auditor / orch-audit
 
 - 実体
   - エージェント: `orch-auditor` (`agents/orch-auditor.md`)
   - CLI コマンド: `orch-audit` (`commands/orch-audit.md`)
-  - Orchestrator ループから、Executor が `STEP_AUDIT: ready ...` を返したステップでのみ
-    呼び出される（`src/orchestrator-loop.ts`）。
+  - Orchestrator ループから、Executor が `STEP_AUDIT: ready ...` と
+    `STEP_VERIFY: ready ...` を同時に返したステップでのみ呼び出される
+    （`src/orchestrator-loop.ts`）。
 
 - (A) 役割
   - 開発ストーリーが受け入れ条件とプロジェクトゲート（テスト／ビルド／Lint／Docs）を
@@ -310,7 +315,8 @@
 - (C) 主な出力ファイル
   - `$XDG_STATE_HOME/opencode/orchestrator/<task>/state/status.json`
     - `last_session_id`, `current_cycle`, `last_executor_step`, `last_auditor_report`,
-      `replan_required`, `replan_reason`, `replan_request`, `proposals` などを更新。
+      `replan_required`, `replan_reason`, `replan_request`, `failure_budget`, `proposals`
+      などを更新。
   - `$XDG_STATE_HOME/opencode/orchestrator/<task>/logs/` 配下
     - `orch_step_XXX.txt` / `audit_step_XXX.jsonl` / `todowriter_step_XXX.txt` などのログ。
   - `orchestrator_session_*.json`
@@ -430,7 +436,7 @@
 
 - パス: `$XDG_STATE_HOME/opencode/orchestrator/<task>/state/status.json`
 - オーナー: `orchestrator-loop.ts`（`runLoop()` 内からのみ更新）
-- 型定義: `src/orchestrator-loop.ts` の `OrchestratorStatus`。
+- 型定義: `src/orchestrator-status.ts` の `OrchestratorStatus`。
 
 `status.json` は、CLI（orchestrator-loop）が機械的に書き込むスナップショットのみを持つ、比較的
 小さな JSON です。現時点で CLI が書き込んでいるフィールドは、次の通りです。
@@ -464,6 +470,16 @@
     "step_blocker": [
       { "scope": "general", "tag": "need_replan", "reason": "..." },
     ],
+    "step_intent": {
+      "intent": "implement",
+      "requirement_ids": ["R1", "R2"],
+      "summary": "監査前の修正を完了した",
+    },
+    "step_verify": {
+      "status": "ready",
+      "command_ids": ["cmd-npm-test", "cmd-lint"],
+      "summary": "監査に必要な検証ログが揃った",
+    },
     "step_audit": {
       "status": "ready",
       "requirement_ids": ["R1", "R2"],
@@ -495,6 +511,16 @@
     ],
   },
   "consecutive_env_blocked": 0,
+  "failure_budget": {
+    "todo_writer_safety_restarts": 0,
+    "executor_safety_restarts": 0,
+    "consecutive_env_blocked": 0,
+    "consecutive_audit_failures": 0,
+    "consecutive_verification_gaps": 1,
+    "consecutive_contract_gaps": 0,
+    "last_failure_kind": "verification_gap",
+    "last_failure_summary": "STEP_AUDIT: ready が出たが STEP_VERIFY: ready が不足している",
+  },
   "proposals": [
     {
       "id": "p-...",
@@ -514,6 +540,9 @@
 - `replan_request` は `last_executor_step.step_blocker` と `last_auditor_report.requirements`
   から CLI が正規化して構築する「現在の再計画要求」です。Todo-Writer は、生の履歴スナップショット
   を直接解釈する前に、まずこのフィールドを参照する想定です。
+- `failure_budget.consecutive_verification_gaps` は `STEP_AUDIT: ready` なのに
+  `STEP_VERIFY: ready` が伴わなかったステップだけを連続カウントし、通常の
+  `STEP_AUDIT: in_progress` / 未監査ステップではリセットされます。
 
 ### 11.5 spec-checker 結果 JSON（orch-spec-check 出力）
 
