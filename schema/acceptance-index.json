@@ -2,24 +2,22 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "AcceptanceIndex",
   "type": "object",
-  "required": [
-    "version",
-    "requirements"
-  ],
+  "required": ["version", "north_star", "requirements"],
   "properties": {
     "version": {
       "type": "integer",
       "description": "Schema version for the acceptance index (currently 1)."
+    },
+    "north_star": {
+      "type": "string",
+      "description": "A 1–2 line statement of the highest-priority outcome for this task. Separate from individual acceptance criteria, it serves as the top-level alignment anchor so that Todo-Writer and Executor remain on-course during re-planning and purpose re-read checks."
     },
     "requirements": {
       "type": "array",
       "description": "List of acceptance requirements for this task.",
       "items": {
         "type": "object",
-        "required": [
-          "id",
-          "description"
-        ],
+        "required": ["id", "description"],
         "properties": {
           "id": {
             "type": "string",

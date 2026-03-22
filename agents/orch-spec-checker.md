@@ -100,6 +100,15 @@ Behavior when reading `acceptance-index.json`:
 - Also detect missing decomposition cues. If the requirement set gives no clear clue how work
   should be sliced into bounded execution units, treat that as a quality issue even if the
   high-level intent is understandable.
+- Check the quality of the required `north_star` field in `acceptance-index.json`:
+  - If `north_star` is missing entirely, report this as an error-level issue. It is a
+    required field; without it, Todo-Writer and Executor have no top-level alignment anchor,
+    and re-planning drift becomes likely.
+  - If `north_star` is present but vague (for example, merely restating "complete the task"
+    or repeating a requirement description), report this as a warning-level issue with a
+    suggestion to sharpen it into a concrete priority statement.
+  - If `north_star` contradicts the acceptance criteria or `spec.md` goals, report this as
+    an error-level structural issue.
 
 Diagnostic stance:
 

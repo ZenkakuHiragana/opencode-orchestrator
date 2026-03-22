@@ -564,6 +564,7 @@ sequenceDiagram
 ```jsonc
 {
   "version": 1,
+  "north_star": "このタスクの最重要目的を1-2行で（例: パフォーマンス劣化を許容せずAPIを追加する）",
   "requirements": [
     {
       "id": "R1-some-requirement", // 安定 ID（文字列）
@@ -586,6 +587,8 @@ sequenceDiagram
 
 - 注意: `requirements[]` の各要素には少なくとも `id` と自然言語説明 (`description` 等) が存在し、
   ID はタスク内で安定して再利用されることが前提。
+- `north_star` は必須フィールド。Todo-Writer と Executor の purpose re-read 自己点検で
+  必ず参照される。1–2行でこのタスクの最重要目的を明記する。
 
 ### 11.2 command-policy.json
 

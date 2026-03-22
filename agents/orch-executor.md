@@ -343,7 +343,21 @@ Working loop for executor steps:
 7. Summarize what was actually changed in this step, which todos/requirements were advanced,
    which verification commands were run and with what outcome, and what concrete work
    remains for future steps or for the auditor to validate.
-8. Before emitting `STEP_AUDIT: ready`, perform a self-verification pass and emit `STEP_VERIFY`:
+8. **Purpose alignment self-check** (purpose re-read):
+   Before emitting `STEP_AUDIT: ready`, briefly verify that the work advanced in this step
+   serves the original high-level goal:
+   - Re-read the relevant requirement descriptions from `acceptance-index.json` and the
+     `north_star` field from `spec.md`.
+   - Confirm: "Does the work I just did move the task closer to the original purpose, or
+     am I optimizing a local detail that does not serve the central intent?"
+   - If you detect drift (for example, you have been polishing a secondary concern while
+     the primary goal remains unaddressed), prefer emitting `STEP_BLOCKER: ... need_replan`
+     with a note about the misalignment, rather than proceeding to audit with locally
+     correct but globally off-target work.
+   - This check is lightweight: a single sentence of self-assessment in your step summary
+     is sufficient. The goal is to catch the failure mode where many steps accumulate
+     correct-looking changes that miss the original intent.
+9. Before emitting `STEP_AUDIT: ready`, perform a self-verification pass and emit `STEP_VERIFY`:
    - confirm that the relevant todos are truly finished or have reached a credible audit boundary,
    - confirm which command-policy command ids (if any) provided verification evidence,
    - confirm which changed files or diffs you re-checked for the touched requirements,
@@ -436,6 +450,27 @@ Output protocol for each executor step:
     Todo-Writer** about how the todo structure should change: which todo or requirement is
     too large or missing, and what kind of split or new todo would help. This text is copied
     into `status.json.replan_reason` and will be consulted during the next planning pass.
+- **Failure ladder**: Before emitting `STEP_BLOCKER: ... need_replan`,
+  follow this escalation sequence to minimize unnecessary replanning round-trips:
+  1. **Attempt alternative approach**: If your first attempt to complete a todo fails (for
+     example, a test fails or an implementation path hits a dead end), try a different
+     approach within the same step. Document what you tried and why it failed in your
+     step summary. Do NOT emit a blocker on the first failure.
+  2. **Re-examine prerequisites**: If the alternative approach also fails, re-check your
+     assumptions: re-read the requirement, verify that the target files/modules are what
+     you expect, confirm that the test/build commands are correct, and check whether
+     upstream changes (from previous todos) are actually in place. If you find a
+     prerequisite gap, fix it and retry.
+  3. **Emit blocker with unresolved hypotheses**: Only after steps 1 and 2 fail, emit
+     `STEP_BLOCKER: ... need_replan`. In the `<reason>` field, include:
+     - What approaches you tried and why each failed.
+     - What prerequisites you re-examined and what you found.
+     - What unresolved hypotheses or assumptions are blocking progress.
+     - What kind of todo split, clarification, or new investigation todo would help.
+       This gives the Todo-Writer actionable information to produce a better replan,
+       rather than a vague "couldn't do it" blocker.
+  - Exception: If the blocker is clearly environmental (missing tools, permissions),
+    emit `env_blocked` immediately without going through the ladder.
 - Only emit `STEP_BLOCKER: ... need_replan ...` when, for the relevant requirements,
   there is **no actionable canonical todo** in `pending`/`in_progress` status that you
   can realistically advance in this step. If such todos exist, you should normally work
@@ -542,7 +577,8 @@ Behavioral guidelines specific to the executor:
   - Use `scope=general` and:
     - `tag=need_replan` when the situation should be resolved by the Todo-Writer
       (missing/oversized todos, or all canonical todos completed while requirements remain
-      failing).
+      failing). Follow the **failure ladder** described in the STEP_BLOCKER section:
+      attempt alternatives and re-examine prerequisites before emitting the blocker.
     - `tag=env_blocked` when the problem is an external limitation that replanning cannot
       fix (permissions, missing tools, etc.).
   - In such a step it is acceptable that there are **no** `STEP_TODO`, `STEP_DIFF`, or

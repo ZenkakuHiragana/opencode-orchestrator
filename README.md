@@ -154,6 +154,10 @@ npx opencode-orchestrator loop --task my-task-key \
    - Auditor が `done: true` を返した時点でループ終了
    - `--commit` 指定時は、完了後に追加の executor ステップを使って `autocommit` ツール経由のコミットを依頼
 
+各コマンドがどのエージェントを起動し、どのツールを内部的に使うかの詳細は
+[`agent-roles.md`](./agent-roles.md) を参照してください。コマンド名 → エージェント名の対応は
+`src/orchestrator-commands.ts` に定義されています。
+
 ## ディレクトリ構成
 
 - `src/`
