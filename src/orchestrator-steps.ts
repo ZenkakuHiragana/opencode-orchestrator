@@ -19,6 +19,7 @@ import type {
 } from "./orchestrator-status.js";
 import {
   buildReplanRequest,
+  getExecutorVerificationEvidence,
   parseExecutorStepSnapshot,
   saveStatusJson,
   ProposalSnapshot,
@@ -414,7 +415,11 @@ export async function runExecutorAndAuditorStep(
   }
 
   if (lastAuditStatus === "ready") {
-    if (stepSnapshot.step_verify?.status === "ready") {
+    const verificationEvidence = getExecutorVerificationEvidence(stepSnapshot);
+    if (
+      stepSnapshot.step_verify?.status === "ready" &&
+      verificationEvidence.hasEvidence
+    ) {
       failureBudget.consecutive_verification_gaps = 0;
       shouldAudit = true;
       if (lastAuditIds && lastAuditIds !== "-") {
@@ -430,11 +435,14 @@ export async function runExecutorAndAuditorStep(
       failureBudget.consecutive_verification_gaps += 1;
       failureBudget.last_failure_kind = "verification_gap";
       failureBudget.last_failure_summary =
-        "STEP_AUDIT: ready が出たが STEP_VERIFY: ready が不足している";
+        "STEP_AUDIT: ready が出たが STEP_VERIFY の根拠が不足している";
+      const evidenceHint =
+        verificationEvidence.reason === "missing"
+          ? "command id・差分確認・no-command 理由のいずれかを明示したい"
+          : `verification evidence=${verificationEvidence.reason}`;
       verificationGapIssue = {
         source: "executor",
-        summary:
-          "監査準備を宣言したが自己検証の根拠が不足している。STEP_VERIFY を明示し、必要なら todo を監査証拠単位で再分解したい",
+        summary: `監査準備を宣言したが自己検証の根拠が不足している。STEP_VERIFY に command id・差分確認・no-command 理由を結び付け、必要なら todo を監査証拠単位で再分解したい (${evidenceHint})`,
         related_todo_ids: [],
         related_requirement_ids:
           lastAuditIds && lastAuditIds !== "-"
@@ -445,7 +453,7 @@ export async function runExecutorAndAuditorStep(
             : [],
       };
       console.error(
-        "[opencode-orchestrator] executor requested audit without STEP_VERIFY: ready; skipping auditor for this step.",
+        "[opencode-orchestrator] executor requested audit without sufficient STEP_VERIFY evidence; skipping auditor for this step.",
       );
       if (failureBudget.consecutive_verification_gaps >= 2) {
         status.replan_required = true;

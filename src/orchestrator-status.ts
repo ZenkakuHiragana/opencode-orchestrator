@@ -44,11 +44,22 @@ export type ExecutorVerificationSnapshot = {
   summary: string;
 };
 
+export type ExecutorVerificationEvidence = {
+  hasEvidence: boolean;
+  reason: "command_ids" | "diffs" | "no_command_reason" | "missing";
+};
+
+export type RequirementDiffTrace = {
+  requirement_id: string;
+  representative_files: string[];
+};
+
 export type ExecutorStepSnapshot = {
   step: number;
   session_id: string;
   step_todo: ExecutorTodoSnapshot[];
   step_diff: ExecutorDiffSnapshot[];
+  requirement_traceability: RequirementDiffTrace[];
   step_cmd: ExecutorCmdSnapshot[];
   step_blocker: ExecutorBlockerSnapshot[];
   step_intent?: ExecutorIntentSnapshot;
@@ -429,6 +440,12 @@ export function parseExecutorStepSnapshot(
     session_id: sessionId,
     step_todo: stepTodo,
     step_diff: stepDiff,
+    requirement_traceability: buildRequirementDiffTrace({
+      step_todo: stepTodo,
+      step_diff: stepDiff,
+      step_intent: stepIntent,
+      step_audit: stepAudit,
+    }),
     step_cmd: stepCmd,
     step_blocker: stepBlocker,
     step_intent: stepIntent,
@@ -436,6 +453,57 @@ export function parseExecutorStepSnapshot(
     step_audit: stepAudit,
     raw_stdout: stdout,
   };
+}
+
+export function getExecutorVerificationEvidence(
+  step: Pick<ExecutorStepSnapshot, "step_verify" | "step_diff">,
+): ExecutorVerificationEvidence {
+  const verify = step.step_verify;
+  if (!verify || verify.status !== "ready") {
+    return { hasEvidence: false, reason: "missing" };
+  }
+
+  if (verify.command_ids.length > 0) {
+    return { hasEvidence: true, reason: "command_ids" };
+  }
+
+  if (step.step_diff.length > 0) {
+    return { hasEvidence: true, reason: "diffs" };
+  }
+
+  if (/(^|\W)no-command(\W|$)/i.test(verify.summary)) {
+    return { hasEvidence: true, reason: "no_command_reason" };
+  }
+
+  return { hasEvidence: false, reason: "missing" };
+}
+
+export function buildRequirementDiffTrace(
+  step: Pick<
+    ExecutorStepSnapshot,
+    "step_todo" | "step_diff" | "step_intent" | "step_audit"
+  >,
+): RequirementDiffTrace[] {
+  const files = Array.from(new Set(step.step_diff.map((diff) => diff.path)));
+  if (files.length === 0) {
+    return [];
+  }
+
+  const requirementIds = Array.from(
+    new Set(
+      step.step_todo
+        .flatMap((todo) => todo.requirements)
+        .concat(
+          step.step_intent?.requirement_ids ?? [],
+          step.step_audit?.requirement_ids ?? [],
+        ),
+    ),
+  );
+
+  return requirementIds.map((requirementId) => ({
+    requirement_id: requirementId,
+    representative_files: files,
+  }));
 }
 
 function splitLeadingIdList(

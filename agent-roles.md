@@ -17,6 +17,10 @@
 - `src/orchestrator-commands.ts`
   - `orchestratorCommands` テーブルで、`orch-todo-write` などのコマンド名 → 紐づくエージェント名
     （`agent` フィールド）を定義。
+- **コマンドとツールの違い（重要）**
+  - **カスタムコマンド**（例：`orch-todo-write`、`orch-exec`）は OpenCode が `opencode run --command <name>` で起動する単位。引数の概念はなく、プロンプトは `commands/<name>.md` に定義される。
+  - **カスタムツール**（例：`orch_todo_write`、`preflight-cli`）は LLM が内部的に呼び出す関数で、`mode` などの引数を持つ。実装は `src/orchestrator-*.ts` に定義される。
+  - Orchestrator-loop は**コマンド**を呼び出してサブエージェントを起動し、サブエージェントが**ツール**を内部的に使って state を読み書きする。
 - `src/orchestrator-loop.ts`
   - 実際の Orchestrator ループ本体。`orch-todo-write`/`orch-exec`/`orch-audit` を組み合わせて
     セッションを進行し、`state/` 配下の各種ファイルを読み書きする。
@@ -33,6 +37,191 @@
 
 以下、エージェント／コマンドごとに、(A) 役割, (B) 主な入力ファイル, (C) 主な出力ファイル,
 (D) プロンプト上の出力仕様 を整理します。
+
+## 1.5. シーケンス図
+
+> **前提：コマンドとツールの違い**
+>
+> - **カスタムコマンド**（例：`orch-todo-write`）は OpenCode TUI や Planner（LLM）が `opencode run --command orch-todo-write` で呼び出すもの。引数の概念はない。対応するプロンプトは `commands/orch-todo-write.md`（「plan your tasks\n$ARGUMENTS」のみ）。
+> - **カスタムツール**（例：`orch_todo_write`）は LLM が内部的に使うツールで、`mode` などの引数を持つ。対応する実装は `src/orchestrator-todo.ts`。
+> - Orchestrator-loop は**コマンド**を呼び出してサブエージェントを起動し、サブエージェントが**ツール**を内部的に使って state を読み書きする。
+
+---
+
+### 1.5.1. TUI 計画フェーズ（Planning Loop）
+
+```mermaid
+sequenceDiagram
+    participant Human as 開発者
+    participant Planner as orch-planner（LLM）
+    participant RefinerAgent as orch-refiner（サブエージェント）
+    participant SpecCheckerAgent as orch-spec-checker（サブエージェント）
+    participant PreflightAgent as orch-preflight-runner（サブエージェント）
+    participant PreflightTool as preflight-cli（ツール）
+    participant StateDir as state/<task>/
+
+    rect rgba(200, 220, 240, 0.15)
+        Note over Human,StateDir: 計画フェーズ：Refiner → Spec-Checker → Preflight を繰り返す
+    end
+
+    Human->>Planner: 高レベルゴールを提示
+    Planner->>Planner: 既存の state ファイルを走査
+
+    alt 新規タスクまたは既存の state が古すぎる場合
+        Planner->>RefinerAgent: orch-refine コマンドで高レベルゴールを転送
+        RefinerAgent-->>Human: question ツールで質問
+        Human-->>RefinerAgent: 質問への回答
+        RefinerAgent->>StateDir: acceptance-index.json を書き込み
+        RefinerAgent->>StateDir: spec.md を書き込み
+        RefinerAgent->>StateDir: command-policy.json（初期版）を書き込み
+        RefinerAgent-->>Planner: 要件 ID 一覧とコマンド定義を返す
+    else 既存の state を再利用する場合
+        Note over Planner: 既存の acceptance-index.json と spec.md をそのまま使う
+    end
+
+    Planner->>SpecCheckerAgent: orch-spec-check コマンドで spec の分析を依頼
+    SpecCheckerAgent-->>Planner: JSON: { status, feasible_for_loop, issues[] }
+
+    alt status が "needs_revision" または feasible_for_loop が false の場合
+        Planner-->>Human: issues[] を要約して提示
+        Planner->>RefinerAgent: orch-refine コマンドで修正依頼
+        RefinerAgent->>StateDir: 修正した acceptance-index.json と spec.md を上書き
+        RefinerAgent-->>Planner: 修正結果を返す
+        Planner->>SpecCheckerAgent: orch-spec-check コマンドで再分析を依頼
+        SpecCheckerAgent-->>Planner: { status, feasible_for_loop, issues[] }
+    end
+
+    alt コマンド一覧に実質的な変更がある場合
+        Planner-->>Human: question ツールで具体的なコマンド一覧を提示して確認
+        Human-->>Planner: 確認応答
+    else 同一コマンド一覧での preflight 再実行の場合
+        Note over Planner: 確認不要。直接 preflight に進む
+    end
+
+    Planner->>PreflightTool: preflight-cli ツールで各コマンドを非対話チェック
+    PreflightTool-->>Planner: JSON: { results[]: { id, available, exit_code } }
+
+    Planner->>StateDir: command-policy.json を更新（availability 付与・loop_status 設定）
+    Planner-->>Human: 計画サマリを提示（Execution readiness / command-policy status / Next actions）
+```
+
+**図 1.5.1 補足：TUI 計画フェーズのポイント**
+
+- Planner（LLM）は **orch-refine / orch-spec-check / orch-preflight** などの**カスタムコマンド**を呼び出して各サブエージェントを起動する。コマンド自体に引数の概念はない。
+- PreflightRunner の呼び出しだけは `preflight-cli` **ツール**経由（非対話実行専用）。
+- Refiner / Spec-Checker のサイクルは、`status === "ok"` かつ `feasible_for_loop === true` になるまで何度でも回る。
+- `command-policy.json` を更新できるのは、Planner が担当するこのフェーズだけである。
+
+---
+
+### 1.5.2. Executor ループ実行フェーズ（Execution Loop）
+
+```mermaid
+sequenceDiagram
+    participant CLI as opencode-orchestrator
+    participant TWCommand as /orch-todo-write
+    participant TWAgent as orch-todo-writer
+    participant TWTool as ⚙orch_todo_write
+    participant EXCommand as /orch-exec
+    participant EXAgent as orch-executor
+    participant AUTool as /orch-audit
+    participant AUAgent as orch-auditor
+    participant StateDir as state/<task>/
+
+    rect rgba(200, 220, 240, 0.15)
+        Note over CLI,StateDir: ループ本体：Todo-Writer → Executor → Auditor を繰り返す
+    end
+
+    Note over CLI: enforceCommandPolicyGate()<br/>must_exec のコマンド確認
+    Note over CLI: createInitialSession()<br/>新規セッション ID 生成
+    CLI->>StateDir: status.json を初期化（current_cycle=1）
+
+    loop 最大 maxLoop 回まで繰り返し
+        CLI->>StateDir: status.json.replan_request を参照
+
+        alt step === 1 の場合、または replan_required === true の場合
+            CLI->>TWCommand: orch-todo-write コマンドを呼び出し
+            TWCommand-->>TWAgent: orch-todo-writer サブエージェントとして起動
+            TWAgent->>TWTool: orch_todo_write ツール\n（mode=planner_replace_canonical）
+            TWTool->>StateDir: todo.json（canonical todos）を書き込み
+            TWTool-->>TWAgent: { ok: true }
+            TWAgent-->>CLI: 完了通知・restart_count 等を返す
+        end
+
+        CLI->>EXCommand: orch-exec コマンドを呼び出し
+        EXCommand-->>EXAgent: orch-executor サブエージェントとして起動
+        Note over EXAgent: canonical todo を読み込んで batch を選択
+        Note over EXAgent: glob / grep / read で周囲のコンテキストを把握
+        Note over EXAgent: edit / write / patch で実装
+        EXAgent->>CLI: ビルドコマンド / テストコマンドを実行（may_exec / must_exec）
+        CLI-->>EXAgent: コマンド実行結果を返す
+
+        Note over EXAgent: STEP_* を生成
+
+        alt STEP_VERIFY に根拠がある場合
+            EXAgent-->>CLI: STEP_AUDIT: ready と STEP_VERIFY: ready を返す
+            CLI->>AUTool: orch-audit コマンドで Auditor を起動
+            AUTool-->>AUAgent: orch-auditor サブエージェントとして起動
+            AUAgent->>StateDir: spec.md と acceptance-index.json と status.json を参照
+            Note over AUAgent: git status / git diff / ログを調査
+            AUAgent-->>CLI: JSON: { done, requirements\[{ id, passed }\] }
+            CLI->>StateDir: status.json.last_auditor_report を更新
+            alt done === true
+                Note over CLI: done = true を返却
+            end
+        else STEP_VERIFY に根拠がない場合
+            EXAgent-->>CLI: STEP_AUDIT: ready を返したが STEP_VERIFY の根拠不足
+            CLI->>StateDir: failure_budget.consecutive_verification_gaps を加算
+            CLI->>StateDir: replan_request.issues に verification_gap を追加
+            alt consecutive_verification_gaps が 2 以上の時
+                CLI->>StateDir: replan_required = true を設定
+            end
+            Note over CLI: このステップでは Auditor は起動されない
+        end
+
+        CLI->>StateDir: status.json.last_executor_step を更新\n（step_todo、step_diff、requirement_traceability、\nstep_verify、step_audit 等）
+        CLI->>CLI: requirement_traceability\[\] をログ出力：\n「requirement diff trace: R1 -> src/foo.ts, src/foo.test.ts」
+        CLI->>StateDir: current_cycle を加算
+
+        break [done === true]
+            Note over CLI: ループ終了
+        end
+    end
+
+    alt maxLoop に到達
+        Note over CLI: 上限到達を標準エラー出力に通知
+    else commitOnDone === true
+        CLI->>EXAgent: autocommit ツールでコミットを作成
+        EXAgent-->>CLI:
+    end
+```
+
+**図 1.5.2 補足：Executor ループ実行フェーズのポイント**
+
+コマンド層とツール層の区別：
+
+| 呼び出し元                           | 呼び出し先      | 種類         | 備考                                                        |
+| ------------------------------------ | --------------- | ------------ | ----------------------------------------------------------- |
+| CLI（orchestrator-loop）             | orch-todo-write | **コマンド** | `runOpencode(["run", "--command", "orch-todo-write", ...])` |
+| CLI（orchestrator-loop）             | orch-exec       | **コマンド** | 同上                                                        |
+| CLI（orchestrator-loop）             | orch-audit      | **コマンド** | JSON 出力で Auditor を起動                                  |
+| orch-todo-writer（サブエージェント） | orch_todo_write | **ツール**   | `mode=planner_replace_canonical`                            |
+| orch-executor（サブエージェント）    | orch_todo_write | **ツール**   | `mode=executor_update_statuses`                             |
+
+各ステップで `status.json` に書き込まれる主なデータ:
+
+| フィールド            | 内容                                                                                                               |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `last_executor_step`  | `step_todo` / `step_diff` / `step_cmd` / `step_intent` / `step_verify` / `step_audit` / `requirement_traceability` |
+| `last_auditor_report` | `{ done, requirements[{id, passed, reason}] }`                                                                     |
+| `replan_request`      | ブロック事由・失敗種別の正規化されたリスト（Todo-Writer の次パスで参照）                                           |
+| `failure_budget`      | verification_gap・audit_failed 等の連続カウント                                                                    |
+| `replan_required`     | failure_budget の閾値超過で true                                                                                   |
+| `current_cycle`       | ステップ番号（1 始まり）                                                                                           |
+
+`requirement_traceability` は `parseExecutorStepSnapshot()` の中で `buildRequirementDiffTrace()` により `step_todo` / `step_diff` / `step_intent` / `step_audit` から自動導出される。各ステップで Auditor が requirement から代表ファイルへ追跡できる道筋が確保されている。
+
+---
 
 ## 2. orch-planner
 
@@ -84,6 +273,8 @@
     コマンド ID やテンプレートの単一のソース・オブ・トゥルースになる。
   - `command-policy.json` の `commands[]` に含まれるコマンド定義は Refiner が唯一のオーナーであり、
     Planner や Spec-Checker はこれを読み取り専用で扱う。
+  - goal / scope / non-goals / confirmed facts / defaults / プロジェクト指示 (`AGENTS.md` など) を
+    別ソースとして明示的に区別し、下流エージェントが要件とデフォルトを混同しないようにする。
 
 - (B) 主な入力
   - 高レベルゴール（CLI 引数 / 添付ファイルで渡される）
@@ -119,6 +310,12 @@
   - acceptance-index / spec / command-policy.json の構造問題・抜け・矛盾を検査し、
     JSON レポートの `issues[]` にコマンド候補の不足・過剰・安全性・テンプレート化の
     観点を含めて返す。
+  - 以下の追加観点も検出する:
+    - spec.md 内で指示ソース（goal / non-goals / confirmed facts / defaults / プロジェクト指示）
+      が曖昧にブレンドされている構造的問題
+    - 弱い証拠境界（requirement の完了証明にファイル・コマンド・状態変化の hook がないもの）
+    - wrapper script や複合 shell エントリポイントを隠す unsafe なコマンド定義
+    - command-policy 変更時の Planner 確認ルールの曖昧さ
 
 - (B) 主な入力
   - `$XDG_STATE_HOME/opencode/orchestrator/<task>/state/acceptance-index.json`
@@ -174,6 +371,12 @@
   - Refiner が作成した受け入れ要件から「Executor が実行する Todo」を構造化して作る。
   - Todo は `id` / `summary` / `status` / `related_requirement_ids[]` を持ち、
     acceptance-index 内の要件とのトレーサビリティを確保する。
+  - 各 Todo を 15-30 分程度で完了する bounded unit に保ち、
+    主作業面・橋渡し作業・期待証拠・完了境界を decision-complete な形で明示する。
+  - `execution_contract` メタデータ (`intent`, `expected_evidence`, `command_ids`, `audit_ready_when`)
+    を添付することで、Executor と Auditor が todo だけで証拠境界を推測なしに把握できるようにする。
+  - 大きい requirement は垂直スライス（実装 + テスト + 関連する docs/prompt を一并に完了境界まで持っていく）
+    で分解し、layer-only な巨大 todo バケットを避ける。
 
 - (B) 主な入力
   - `$XDG_STATE_HOME/opencode/orchestrator/<task>/state/acceptance-index.json`
@@ -206,6 +409,14 @@
   - 実装＋検証担当エージェント。コード／テスト／ドキュメントへの具体的な変更と、
     ローカルのビルドやテスト実行を担う。
   - Todo 構造そのものは変更せず、`status` 更新のみを行う。
+  - 各 step の開始時に短い preamble と tiny step-local plan を持ち、`STEP_INTENT` は具体的変更単位を名乗る。
+  - `STEP_VERIFY: ready` は command IDs・明示的に再確認した diffs・no-command 理由のうち
+    少なくとも 1 つを根拠として要求する（根拠なしでは audit handoff できない）。
+  - 主要 requirement の作業では requirement-to-diff トレーサビリティを残し、`git status --short` や
+    `git diff -- <path>` で Auditor が requirement から代表ファイルへ追跡可能にする。
+  - ビルドコマンドやテストコマンドは回帰確認の補助証拠であり、requirement ごとの diff 証拠の代替ではない。
+  - ルーティングは軽量・逐次的: 委譲は広範な read-only 探索に使い、実装自体は local で担う。
+    並列 executor 分岐や外部キューを前提にした振る舞いは禁止。
 
 - (B) 主な入力
   - `$XDG_STATE_HOME/opencode/orchestrator/<task>/state/acceptance-index.json`
@@ -303,6 +514,9 @@
     - Auditor 実行 (`orch-audit`)
     - 安全装置（SAFETY トリガでのセッション再起動、`command-policy.json` ゲートなど）
   - ループ状態は `status.json` に保存し、UI や他エージェントが参照できるようにする。
+  - 起動時に "loop mode: sequential executor/auditor flow with only lightweight read-only delegation" をログ出力する。
+  - 各 Executor ステップ後、`last_executor_step.requirement_traceability` をパースして
+    `requirement diff trace: <req-id> -> <file1>, <file2>` をログ出力し、トレーサビリティを可視化する。
 
 - (B) 主な入力ファイル
   - `$XDG_STATE_HOME/opencode/orchestrator/<task>/state/command-policy.json`
@@ -423,7 +637,13 @@
       "id": "T1-r1-setup-api",                  // 安定 Todo ID
       "summary": "R1 用の API エンドポイントを作成する", // 自然言語説明（日本語）
       "status": "pending" | "in_progress" | "completed" | "cancelled",
-      "related_requirement_ids": ["R1", "R2-ui"]
+      "related_requirement_ids": ["R1", "R2-ui"],
+      "execution_contract": {                    // 任意・監査向け証拠境界
+        "intent": "implement" | "verify" | "investigate",
+        "expected_evidence": ["... 具体的な証拠の文字列 ..."],
+        "command_ids": ["cmd-npm-test"],         // 任意・最も関連するコマンド policy ID
+        "audit_ready_when": ["..."]              // 任意・監査 ready 条件
+      }
     }
   ]
 }
@@ -459,6 +679,9 @@
       },
     ],
     "step_diff": [{ "path": "src/api.ts", "summary": "add endpoint" }],
+    "requirement_traceability": [
+      { "requirement_id": "R1", "representative_files": ["src/api.ts"] },
+    ],
     "step_cmd": [
       {
         "command": "npm test",
@@ -519,7 +742,7 @@
     "consecutive_verification_gaps": 1,
     "consecutive_contract_gaps": 0,
     "last_failure_kind": "verification_gap",
-    "last_failure_summary": "STEP_AUDIT: ready が出たが STEP_VERIFY: ready が不足している",
+    "last_failure_summary": "監査準備を宣言したが STEP_VERIFY の根拠が不足している",
   },
   "proposals": [
     {
@@ -534,9 +757,10 @@
 }
 ```
 
-- 上記以外のフィールドは現時点では CLI からは書き込まれていません。スキーマ (`schema/status.json`) も
-  この構造に合わせており、今後フィールドを追加する場合はまず CLI 実装側を更新してからスキーマを
-  拡張する想定です。
+- `requirement_traceability` は `parseExecutorStepSnapshot` 内で `buildRequirementDiffTrace()` により
+  自動的に導出される。`STEP_TODO` / `STEP_DIFF` / `STEP_INTENT` / `STEP_AUDIT` から requirement ID と
+  代表ファイル一覧を抽出し、各 requirement に対して `representative_files` を対応づける。
+  Auditor や Planner が「どのファイルがどの requirement を満たすか」を todo だけで追跡できる。
 - `replan_request` は `last_executor_step.step_blocker` と `last_auditor_report.requirements`
   から CLI が正規化して構築する「現在の再計画要求」です。Todo-Writer は、生の履歴スナップショット
   を直接解釈する前に、まずこのフィールドを参照する想定です。

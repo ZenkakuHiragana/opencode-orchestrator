@@ -38,11 +38,6 @@ export function buildExecutorPrompt(
   shouldEmphasizeAuditRead: boolean,
   status?: OrchestratorStatus,
 ): string {
-  // The executor normally relies solely on its system prompt and attached
-  // state files (acceptance-index.json, todo.json, status.json, etc.).
-  // In the rare case immediately after an auditor run, the orchestrator may
-  // set shouldEmphasizeAuditRead=true to explicitly remind the executor to
-  // read the latest auditor result from status.json.
   const parts: string[] = [];
 
   if (shouldEmphasizeAuditRead) {

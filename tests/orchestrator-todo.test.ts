@@ -109,6 +109,50 @@ describe("orchTodoReadTool", () => {
       process.env.XDG_STATE_HOME = previousXdgStateHome;
     }
   });
+
+  it("returns SPEC_ERROR when execution_contract has an invalid shape", async () => {
+    const baseDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), "orch-todo-bad-contract-"),
+    );
+    const previousXdgStateHome = process.env.XDG_STATE_HOME;
+    process.env.XDG_STATE_HOME = baseDir;
+    const stateDir = getOrchestratorStateDir("bad-contract");
+    fs.mkdirSync(stateDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(stateDir, "todo.json"),
+      JSON.stringify({
+        todos: [
+          {
+            id: "T1",
+            summary: "invalid execution contract",
+            status: "pending",
+            related_requirement_ids: ["R3"],
+            execution_contract: {
+              expected_evidence: ["ok"],
+              command_ids: "cmd-npm-test",
+            },
+          },
+        ],
+      }),
+      "utf8",
+    );
+
+    const result = await orchTodoReadTool.execute({ task: "bad-contract" }, {
+      agent: "orch-executor",
+    } as any);
+
+    expect(JSON.parse(result)).toEqual({
+      ok: false,
+      error:
+        "SPEC_ERROR: canonical todo cache is invalid: todo.json has invalid shape",
+    });
+
+    if (previousXdgStateHome === undefined) {
+      delete process.env.XDG_STATE_HOME;
+    } else {
+      process.env.XDG_STATE_HOME = previousXdgStateHome;
+    }
+  });
 });
 
 describe("orchTodoWriteTool", () => {
@@ -180,6 +224,69 @@ describe("orchTodoWriteTool", () => {
       fs.readFileSync(path.join(stateDir, "todo.json"), "utf8"),
     ) as { todos: Array<{ id: string }> };
     expect(saved.todos[0]?.id).toBe("T1-r1-api-docs-set-up-api-endpoint-docs");
+
+    if (previousXdgStateHome === undefined) {
+      delete process.env.XDG_STATE_HOME;
+    } else {
+      process.env.XDG_STATE_HOME = previousXdgStateHome;
+    }
+  });
+
+  it("preserves execution_contract metadata in planner_replace_canonical output", async () => {
+    const baseDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), "orch-todo-replace-"),
+    );
+    const previousXdgStateHome = process.env.XDG_STATE_HOME;
+    process.env.XDG_STATE_HOME = baseDir;
+
+    const result = await orchTodoWriteTool.execute(
+      {
+        task: "replace-shape",
+        mode: "planner_replace_canonical",
+        canonicalTodos: [
+          {
+            id: "TW-004",
+            summary: "Persist audit-ready execution contract fields",
+            status: "pending",
+            related_requirement_ids: ["R3-todo-bounded-decomposition"],
+            execution_contract: {
+              intent: "implement",
+              expected_evidence: ["todo.json keeps expected proof strings"],
+              command_ids: ["cmd-git-diff-file"],
+              audit_ready_when: [
+                "auditor can inspect proof boundary from state",
+              ],
+            },
+          },
+        ],
+      },
+      { agent: "orch-todo-writer" } as any,
+    );
+
+    expect(JSON.parse(result)).toEqual({ ok: true });
+
+    const saved = JSON.parse(
+      fs.readFileSync(
+        path.join(getOrchestratorStateDir("replace-shape"), "todo.json"),
+        "utf8",
+      ),
+    ) as {
+      todos: Array<{
+        execution_contract?: {
+          intent?: string;
+          expected_evidence?: string[];
+          command_ids?: string[];
+          audit_ready_when?: string[];
+        };
+      }>;
+    };
+
+    expect(saved.todos[0]?.execution_contract).toEqual({
+      intent: "implement",
+      expected_evidence: ["todo.json keeps expected proof strings"],
+      command_ids: ["cmd-git-diff-file"],
+      audit_ready_when: ["auditor can inspect proof boundary from state"],
+    });
 
     if (previousXdgStateHome === undefined) {
       delete process.env.XDG_STATE_HOME;

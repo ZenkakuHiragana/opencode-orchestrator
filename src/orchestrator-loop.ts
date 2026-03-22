@@ -4,13 +4,10 @@ import * as path from "node:path";
 
 import {
   getOrchestratorLogsDir,
-  getOrchestratorRoot,
   getOrchestratorStateDir,
 } from "./orchestrator-paths.js";
 import type { LoopOptions } from "./cli-args.js";
 import { runOpencode } from "./orchestrator-process.js";
-import type { AuditSummary } from "./orchestrator-audit.js";
-import { parseAuditResult } from "./orchestrator-audit.js";
 import { buildCommitPrompt } from "./orchestrator-prompts.js";
 import {
   loadStatusJson,
@@ -30,7 +27,6 @@ import { buildFileArgs, createInitialSession } from "./orchestrator-session.js";
 export { buildFileArgs };
 
 export async function runLoop(opts: LoopOptions): Promise<boolean> {
-  const rootDir = getOrchestratorRoot(opts.task);
   const logDir = getOrchestratorLogsDir(opts.task);
   const stateDir = getOrchestratorStateDir(opts.task);
   const statusPath = path.join(stateDir, "status.json");
@@ -81,6 +77,9 @@ export async function runLoop(opts: LoopOptions): Promise<boolean> {
   }
 
   console.error(`[opencode-orchestrator] session id: ${sessionId}`);
+  console.error(
+    "[opencode-orchestrator] loop mode: the executor and auditor do the job sequentially.",
+  );
 
   status.last_session_id = sessionId!;
   status.proposals = [];
@@ -150,6 +149,16 @@ export async function runLoop(opts: LoopOptions): Promise<boolean> {
     restartCount = execAuditResult.restartCount;
     forceTodoWriterNextStep = execAuditResult.forceTodoWriterNextStep;
     done = execAuditResult.done;
+
+    const traceability =
+      status.last_executor_step?.requirement_traceability ?? [];
+    if (traceability.length > 0) {
+      for (const item of traceability) {
+        console.error(
+          `[opencode-orchestrator] requirement diff trace: ${item.requirement_id} -> ${item.representative_files.join(", ")}`,
+        );
+      }
+    }
 
     if (execAuditResult.abortLoop) {
       break;

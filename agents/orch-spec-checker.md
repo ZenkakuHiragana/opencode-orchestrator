@@ -85,11 +85,18 @@ Behavior when reading `acceptance-index.json`:
     current task, record this as a high-severity issue.
   - If key acceptance criteria suggested by the task/goals or by `spec.md` are missing from the
     acceptance index, record them as **missing or ambiguous requirements**.
+- Treat `spec.md` source sections as meaningful structure, not decoration. If goal, scope,
+  non-goals, confirmed facts / hard constraints, defaults / preferences, and project instructions
+  are blended together so that downstream agents would need to reinterpret them, report that as a
+  structural issue.
 - Also look for requirements that are technically present but operationally weak, for example:
   - descriptions too broad for actionable todos,
   - no obvious observable evidence for audit,
   - overlapping requirements that will cause duplicated work,
   - or missing non-goal boundaries that invite scope creep.
+- Explicitly flag weak evidence hooks. If a requirement or surrounding spec does not make it clear
+  what files, commands, visible outputs, or state changes would prove completion, report that as a
+  quality issue even when the high-level intent is understandable.
 - Also detect missing decomposition cues. If the requirement set gives no clear clue how work
   should be sliced into bounded execution units, treat that as a quality issue even if the
   high-level intent is understandable.
@@ -149,12 +156,18 @@ Behavior when reading `command-policy.json`:
     - Commands that include shell pipelines (`|`), concatenation (`&&`, `||`, `;`), redirection
       (`>`, `2>&1`, etc.), or other shell scripting constructs that would violate the orchestrator
       safety assumptions.
+    - Commands that hide their real behavior behind wrapper scripts or compound shell entrypoints
+      instead of a single base CLI.
   - **Templating opportunities**:
     - Many commands that share the same base CLI and differ only in arguments, where a small
       number of parameterized templates would be clearer and safer.
   - **Weak execution support**:
     - Commands exist, but they do not provide a realistic path for exploration, implementation
       validation, or acceptance verification implied by the spec.
+  - **Planner confirmation gaps**:
+    - The policy and surrounding planning guidance do not make it clear when humans must confirm a
+      changed preflight command set versus when an unchanged command list can be re-probed without
+      another confirmation.
 - For each such finding, create one or more `issues[]` entries with:
   - an appropriate `target` (for example `"commands"` or `"command-policy"`),
   - a Japanese `summary` explaining the problem, and

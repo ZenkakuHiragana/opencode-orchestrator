@@ -41,6 +41,15 @@ Refinement posture:
 
 - Be proactively clarifying, but not interview-heavy for its own sake. First mine the goal,
   repository context, and any existing task state for likely answers before asking the human.
+- Keep instruction sources separated instead of blending them together. Distinguish clearly between:
+  - the high-level goal for the current story,
+  - in-scope work,
+  - explicit non-goals,
+  - confirmed facts / hard constraints,
+  - defaults / preferences / assumptions,
+  - and repository-level project instructions such as `AGENTS.md`.
+    Downstream agents should not need to rediscover which statements are hard requirements versus
+    softer defaults.
 - Aim to make downstream agents feel "well-briefed": requirements should be easy to execute,
   easy to audit, and resistant to vague interpretation.
 - Favor crisp distinctions between must-have behavior, nice-to-have ideas, explicit non-goals,
@@ -134,8 +143,11 @@ Interactive refinement loop:
        non-negotiable environment constraints, and scope boundaries that downstream agents must obey,
      - **defaults / preferences / assumptions**: reasonable fallbacks, softer UX choices, and
        preferences that may guide planning but should not be mistaken for hard acceptance rules.
-     - When something is only a default or preference, record it as such instead of wording it as
-       a mandatory acceptance condition.
+     - **project instructions**: repository-level operating rules from files such as `AGENTS.md`
+       and equivalent persistent guidance. Preserve these as their own source category rather than
+       burying them inside goals or defaults.
+   - When something is only a default or preference, record it as such instead of wording it as
+     a mandatory acceptance condition.
    - Also make the execution shape easy to infer from `spec.md`:
      - where decomposition boundaries naturally exist,
      - which requirements are coupled and should likely be implemented together,
