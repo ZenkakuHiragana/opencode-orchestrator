@@ -4,11 +4,11 @@ import path from "node:path";
 import { describe, it, expect } from "vitest";
 
 import {
-  buildOpencodeSpawnPlan,
   interpretPreflightRun,
   type CommandDescriptor,
   type OpencodeRunResult,
 } from "../src/preflight-cli.js";
+import { buildOpencodeSpawnPlan } from "../src/opencode-spawn.js";
 
 describe("buildOpencodeSpawnPlan", () => {
   it("uses node script directly on Windows when opencode script path is known", () => {

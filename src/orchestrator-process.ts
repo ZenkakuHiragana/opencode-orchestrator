@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import * as fs from "node:fs";
+import { buildOpencodeSpawnPlan } from "./opencode-spawn.js";
 
 export interface RunResult {
   code: number | null;
@@ -13,11 +14,12 @@ export function runOpencode(
   mirrorToStdout: boolean = true,
 ): Promise<RunResult> {
   return new Promise((resolve, reject) => {
-    // Allow Windows callers to override the executable to `opencode.cmd`,
-    // `pwsh`, or another launcher when plain `opencode` is not spawnable.
     const opencodeBin = process.env.OPENCODE_BIN || "opencode";
-    const child = spawn(opencodeBin, args, {
+    const spawnPlan = buildOpencodeSpawnPlan(opencodeBin, args);
+    const child = spawn(spawnPlan.command, spawnPlan.args, {
+      shell: spawnPlan.shell,
       stdio: ["inherit", "pipe", "pipe"],
+      windowsVerbatimArguments: spawnPlan.windowsVerbatimArguments,
     });
 
     let stdout = "";

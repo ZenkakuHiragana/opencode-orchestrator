@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { spawn } from "node:child_process";
 
 import { runOpencode } from "../src/orchestrator-process.js";
+import { buildOpencodeSpawnPlan } from "../src/opencode-spawn.js";
 
 vi.mock("node:child_process", () => ({
   spawn: vi.fn(),
@@ -47,8 +48,11 @@ describe("runOpencode", () => {
       stderr: "",
     });
 
-    expect(mockSpawn).toHaveBeenCalledWith("opencode", ["--version"], {
+    const plan = buildOpencodeSpawnPlan("opencode", ["--version"]);
+    expect(mockSpawn).toHaveBeenCalledWith(plan.command, plan.args, {
+      shell: plan.shell,
       stdio: ["inherit", "pipe", "pipe"],
+      windowsVerbatimArguments: plan.windowsVerbatimArguments,
     });
   });
 
@@ -69,8 +73,11 @@ describe("runOpencode", () => {
       stderr: "warn",
     });
 
-    expect(mockSpawn).toHaveBeenCalledWith("opencode.cmd", ["run", "--help"], {
+    const plan = buildOpencodeSpawnPlan("opencode.cmd", ["run", "--help"]);
+    expect(mockSpawn).toHaveBeenCalledWith(plan.command, plan.args, {
+      shell: plan.shell,
       stdio: ["inherit", "pipe", "pipe"],
+      windowsVerbatimArguments: plan.windowsVerbatimArguments,
     });
   });
 });
