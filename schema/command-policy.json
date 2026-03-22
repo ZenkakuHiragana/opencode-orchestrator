@@ -2,11 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "CommandPolicy",
   "type": "object",
-  "required": [
-    "version",
-    "summary",
-    "commands"
-  ],
+  "required": ["version", "summary", "commands"],
   "properties": {
     "version": {
       "type": "integer",
@@ -14,9 +10,7 @@
     },
     "summary": {
       "type": "object",
-      "required": [
-        "loop_status"
-      ],
+      "required": ["loop_status"],
       "properties": {
         "loop_status": {
           "type": "string",
@@ -35,12 +29,7 @@
       "description": "List of allowed commands (or templates) for this task.",
       "items": {
         "type": "object",
-        "required": [
-          "id",
-          "command",
-          "role",
-          "usage"
-        ],
+        "required": ["id", "command", "role", "usage"],
         "properties": {
           "id": {
             "type": "string",
@@ -57,19 +46,12 @@
           },
           "usage": {
             "type": "string",
-            "enum": [
-              "must_exec",
-              "may_exec",
-              "doc_only"
-            ],
+            "enum": ["must_exec", "may_exec", "doc_only"],
             "description": "How critical this command is for the story."
           },
           "availability": {
             "type": "string",
-            "enum": [
-              "available",
-              "unavailable"
-            ],
+            "enum": ["available", "unavailable"],
             "description": "Preflight result for this command as recorded by the planner."
           },
           "related_requirements": {
@@ -88,9 +70,7 @@
             "description": "Metadata for template parameters such as {{pattern}} or {{subdir}}.",
             "additionalProperties": {
               "type": "object",
-              "required": [
-                "description"
-              ],
+              "required": ["description"],
               "properties": {
                 "description": {
                   "type": "string",
@@ -99,6 +79,10 @@
               },
               "additionalProperties": true
             }
+          },
+          "usage_notes": {
+            "type": "string",
+            "description": "Optional human-readable notes about how this command should be used (typically in Japanese)."
           }
         },
         "additionalProperties": true

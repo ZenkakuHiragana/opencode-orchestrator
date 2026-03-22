@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CanonicalTodoFile",
+  "type": "object",
+  "required": ["todos"],
+  "properties": {
+    "todos": {
+      "type": "array",
+      "description": "List of canonical todos for this task.",
+      "items": {
+        "$ref": "#/definitions/CanonicalTodo"
+      }
+    }
+  },
+  "additionalProperties": true,
+  "definitions": {
+    "CanonicalTodo": {
+      "type": "object",
+      "required": ["id", "summary", "status", "related_requirement_ids"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "description": "Stable todo identifier (for example T1-r1-setup-api)."
+        },
+        "summary": {
+          "type": "string",
+          "description": "Natural-language description of the todo (typically in Japanese)."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "in_progress", "completed", "cancelled"],
+          "description": "Current status of the todo."
+        },
+        "related_requirement_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Requirement IDs from acceptance-index.json that this todo covers."
+        },
+        "execution_contract": {
+          "type": "object",
+          "description": "Optional contract describing how this todo should be executed and audited.",
+          "properties": {
+            "intent": {
+              "type": "string",
+              "enum": ["implement", "verify", "investigate"],
+              "description": "Primary intent of this todo."
+            },
+            "expected_evidence": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Concrete evidence expected upon completion (test names, log snippets, etc.)."
+            },
+            "command_ids": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Command policy IDs most relevant to this todo."
+            },
+            "audit_ready_when": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Conditions that must be satisfied before the auditor can evaluate this todo."
+            },
+            "artifact_schema": {
+              "type": "string",
+              "description": "Schema name for the artifact produced by this todo (if any)."
+            },
+            "artifact_filename": {
+              "type": "string",
+              "description": "Filename for the artifact produced by this todo (if any)."
+            }
+          },
+          "additionalProperties": true
+        },
+        "result_artifacts": {
+          "type": "array",
+          "description": "Optional list of artifacts produced by this todo.",
+          "items": {
+            "type": "object",
+            "required": ["kind", "path", "summary"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "description": "Artifact kind identifier (for example investigation_v1)."
+              },
+              "path": {
+                "type": "string",
+                "description": "Relative path under the artifacts directory."
+              },
+              "summary": {
+                "type": "string",
+                "description": "One-line description of the artifact (typically in Japanese)."
+              }
+            },
+            "additionalProperties": true
+          }
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}

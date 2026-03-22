@@ -124,7 +124,7 @@ sequenceDiagram
     participant TWTool as ⚙orch_todo_write
     participant EXCommand as /orch-exec
     participant EXAgent as orch-executor
-    participant AUTool as /orch-audit
+    participant AUCommand as /orch-audit
     participant AUAgent as orch-auditor
     participant StateDir as state/<task>/
 
@@ -160,8 +160,8 @@ sequenceDiagram
 
         alt STEP_VERIFY に根拠がある場合
             EXAgent-->>CLI: STEP_AUDIT: ready と STEP_VERIFY: ready を返す
-            CLI->>AUTool: orch-audit コマンドで Auditor を起動
-            AUTool-->>AUAgent: orch-auditor サブエージェントとして起動
+            CLI->>AUCommand: orch-audit コマンドで Auditor を起動
+            AUCommand-->>AUAgent: orch-auditor サブエージェントとして起動
             AUAgent->>StateDir: spec.md と acceptance-index.json と status.json を参照
             Note over AUAgent: git status / git diff / ログを調査
             AUAgent-->>CLI: JSON: { done, requirements\[{ id, passed }\] }
@@ -659,15 +659,24 @@ sequenceDiagram
       "summary": "R1 用の API エンドポイントを作成する", // 自然言語説明（日本語）
       "status": "pending" | "in_progress" | "completed" | "cancelled",
       "related_requirement_ids": ["R1", "R2-ui"],
-      "execution_contract": {                    // 任意・監査向け証拠境界
-        "intent": "implement" | "verify" | "investigate",
-        "expected_evidence": ["... 具体的な証拠の文字列 ..."],
-        "command_ids": ["cmd-npm-test"],         // 任意・最も関連するコマンド policy ID
-        "audit_ready_when": ["..."]              // 任意・監査 ready 条件
-      }
-    }
-  ]
-}
+       "execution_contract": {                    // 任意・監査向け証拠境界
+         "intent": "implement" | "verify" | "investigate",
+         "expected_evidence": ["... 具体的な証拠の文字列 ..."],
+         "command_ids": ["cmd-npm-test"],         // 任意・最も関連するコマンド policy ID
+         "audit_ready_when": ["..."],             // 任意・監査 ready 条件
+         "artifact_schema": "...",                // 任意・成果物のスキーマ名
+         "artifact_filename": "..."               // 任意・成果物のファイル名
+       },
+       "result_artifacts": [                      // 任意・成果物のメタデータ
+         {
+           "kind": "investigation_v1",
+           "path": "artifacts/investigation.md",
+           "summary": "調査結果ドキュメント"
+         }
+       ]
+     }
+   ]
+ }
 ```
 
 - 互換性のため、Reader 側は `CanonicalTodo[]` だけがトップにある配列形式も許容しているが、

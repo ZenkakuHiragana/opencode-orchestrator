@@ -2,9 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "OrchestratorStatus",
   "type": "object",
-  "required": [
-    "version"
-  ],
+  "required": ["version"],
   "properties": {
     "version": {
       "type": "integer",
@@ -30,17 +28,11 @@
       "description": "Whether the loop currently requires a todo-writer replanning pass due to executor blockers, repeated protocol gaps, or auditor failures."
     },
     "replan_reason": {
-      "type": [
-        "string",
-        "null"
-      ],
+      "type": ["string", "null"],
       "description": "Short reason for the replan_required flag, if true."
     },
     "replan_request": {
-      "type": [
-        "object",
-        "null"
-      ],
+      "type": ["object", "null"],
       "allOf": [
         {
           "$ref": "#/definitions/ReplanRequest"
@@ -67,11 +59,7 @@
   "definitions": {
     "ExecutorTodoSnapshot": {
       "type": "object",
-      "required": [
-        "id",
-        "requirements",
-        "description"
-      ],
+      "required": ["id", "requirements", "description"],
       "properties": {
         "id": {
           "type": "string"
@@ -86,26 +74,17 @@
           "type": "string"
         },
         "from": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "to": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         }
       },
       "additionalProperties": true
     },
     "ExecutorDiffSnapshot": {
       "type": "object",
-      "required": [
-        "path",
-        "summary"
-      ],
+      "required": ["path", "summary"],
       "properties": {
         "path": {
           "type": "string"
@@ -118,20 +97,13 @@
     },
     "ExecutorCmdSnapshot": {
       "type": "object",
-      "required": [
-        "command",
-        "status",
-        "outcome"
-      ],
+      "required": ["command", "status", "outcome"],
       "properties": {
         "command": {
           "type": "string"
         },
         "command_id": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "status": {
           "type": "string"
@@ -144,11 +116,7 @@
     },
     "ExecutorBlockerSnapshot": {
       "type": "object",
-      "required": [
-        "scope",
-        "tag",
-        "reason"
-      ],
+      "required": ["scope", "tag", "reason"],
       "properties": {
         "scope": {
           "type": "string"
@@ -164,10 +132,7 @@
     },
     "ExecutorAuditSnapshot": {
       "type": "object",
-      "required": [
-        "status",
-        "requirement_ids"
-      ],
+      "required": ["status", "requirement_ids"],
       "properties": {
         "status": {
           "type": "string"
@@ -183,20 +148,11 @@
     },
     "ExecutorIntentSnapshot": {
       "type": "object",
-      "required": [
-        "intent",
-        "requirement_ids",
-        "summary"
-      ],
+      "required": ["intent", "requirement_ids", "summary"],
       "properties": {
         "intent": {
           "type": "string",
-          "enum": [
-            "implement",
-            "verify",
-            "replan",
-            "blocked"
-          ]
+          "enum": ["implement", "verify", "replan", "blocked"]
         },
         "requirement_ids": {
           "type": "array",
@@ -213,19 +169,11 @@
     },
     "ExecutorVerificationSnapshot": {
       "type": "object",
-      "required": [
-        "status",
-        "command_ids",
-        "summary"
-      ],
+      "required": ["status", "command_ids", "summary"],
       "properties": {
         "status": {
           "type": "string",
-          "enum": [
-            "ready",
-            "not_ready",
-            "blocked"
-          ]
+          "enum": ["ready", "not_ready", "blocked"]
         },
         "command_ids": {
           "type": "array",
@@ -247,6 +195,7 @@
         "session_id",
         "step_todo",
         "step_diff",
+        "requirement_traceability",
         "step_cmd",
         "step_blocker",
         "raw_stdout"
@@ -269,6 +218,13 @@
           "items": {
             "$ref": "#/definitions/ExecutorDiffSnapshot"
           }
+        },
+        "requirement_traceability": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/RequirementDiffTrace"
+          },
+          "description": "Mapping of requirement IDs to representative file paths derived from step_todo, step_diff, step_intent, and step_audit."
         },
         "step_cmd": {
           "type": "array",
@@ -311,10 +267,7 @@
     },
     "AuditorRequirementSnapshot": {
       "type": "object",
-      "required": [
-        "id",
-        "passed"
-      ],
+      "required": ["id", "passed"],
       "properties": {
         "id": {
           "type": "string"
@@ -330,11 +283,7 @@
     },
     "AuditorReportSnapshot": {
       "type": "object",
-      "required": [
-        "cycle",
-        "done",
-        "requirements"
-      ],
+      "required": ["cycle", "done", "requirements"],
       "properties": {
         "cycle": {
           "type": "integer"
@@ -362,10 +311,7 @@
       "properties": {
         "source": {
           "type": "string",
-          "enum": [
-            "executor",
-            "auditor"
-          ]
+          "enum": ["executor", "auditor"]
         },
         "summary": {
           "type": "string"
@@ -387,10 +333,7 @@
     },
     "ReplanRequest": {
       "type": "object",
-      "required": [
-        "requested_at_cycle",
-        "issues"
-      ],
+      "required": ["requested_at_cycle", "issues"],
       "properties": {
         "requested_at_cycle": {
           "type": "integer"
@@ -406,23 +349,14 @@
     },
     "ProposalSnapshot": {
       "type": "object",
-      "required": [
-        "id",
-        "source",
-        "cycle",
-        "kind",
-        "summary"
-      ],
+      "required": ["id", "source", "cycle", "kind", "summary"],
       "properties": {
         "id": {
           "type": "string"
         },
         "source": {
           "type": "string",
-          "enum": [
-            "executor",
-            "auditor"
-          ]
+          "enum": ["executor", "auditor"]
         },
         "cycle": {
           "type": "integer"
@@ -435,6 +369,24 @@
         },
         "details": {
           "type": "string"
+        }
+      },
+      "additionalProperties": true
+    },
+    "RequirementDiffTrace": {
+      "type": "object",
+      "required": ["requirement_id", "representative_files"],
+      "properties": {
+        "requirement_id": {
+          "type": "string",
+          "description": "Requirement ID from acceptance-index.json."
+        },
+        "representative_files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "File paths that are directly relevant to this requirement in the current step."
         }
       },
       "additionalProperties": true
