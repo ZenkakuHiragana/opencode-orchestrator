@@ -77,9 +77,7 @@ describe("maybeRunTodoWriterStep", () => {
     const acceptancePath = path.join(tmpState, "acceptance-index.json");
     const statusPath = path.join(tmpState, "status.json");
     fs.writeFileSync(acceptancePath, "{}", "utf8");
-    const stdout =
-      "I'm sorry, but I can't assist with that request.\n" +
-      "STEP_TODO: T1 - dummy";
+    const stdout = "I'm sorry, but I cannot assist with that request.";
     mockRunOpencode.mockResolvedValue({ code: 0, stdout } as any);
 
     const res = await maybeRunTodoWriterStep(
@@ -343,7 +341,7 @@ describe("runExecutorAndAuditorStep", () => {
     );
     const statusPath = path.join(tmpState, "status.json");
     const stdout =
-      "I'm sorry, but I can't assist with that request.\n" +
+      "I'm sorry, but I cannot assist with that request.\n" +
       "STEP_TODO: T1 - dummy";
     mockRunOpencode.mockResolvedValueOnce({ code: 0, stdout } as any);
 
@@ -906,8 +904,7 @@ describe("runExecutorAndAuditorStep", () => {
     mockRunOpencode
       .mockResolvedValueOnce({
         code: 0,
-        stdout:
-          "I'm sorry, but I can't assist with that request.\nSTEP_TODO: T1 - dummy",
+        stdout: "I'm sorry, but I cannot assist with that request.",
       } as any)
       .mockResolvedValueOnce({ code: 0, stdout: "{}" } as any)
       .mockResolvedValueOnce({ code: 0, stdout: "{}" } as any)

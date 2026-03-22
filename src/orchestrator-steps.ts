@@ -90,7 +90,7 @@ export async function maybeRunTodoWriterStep(
   );
 
   const todowriterSafety = planRes.stdout.includes(
-    "I'm sorry, but I can't assist with that request.",
+    "I'm sorry, but I cannot assist with that request.",
   );
   if (todowriterSafety) {
     failureBudget.todo_writer_safety_restarts += 1;
@@ -246,7 +246,7 @@ export async function runExecutorAndAuditorStep(
   );
 
   const safetyTripped = execRes.stdout.includes(
-    "I'm sorry, but I can't assist with that request.",
+    "I'm sorry, but I cannot assist with that request.",
   );
   if (safetyTripped) {
     failureBudget.executor_safety_restarts += 1;
@@ -490,7 +490,7 @@ export async function runExecutorAndAuditorStep(
     );
 
     const auditSafety = auditRes.stdout.includes(
-      "I'm sorry, but I can't assist with that request.",
+      "I'm sorry, but I cannot assist with that request.",
     );
     if (auditSafety) {
       console.error(

@@ -544,7 +544,7 @@ const preflightCliTool = tool({
       ];
 
       // Simple retry loop to handle transient assistant failures such as
-      // "I'm sorry, but I can't assist with that request" or cases where the
+      // "I'm sorry, but I cannot assist with that request" or cases where the
       // agent stops without emitting JSON. We keep this very conservative:
       // a small fixed number of retries with the same arguments.
       emitPreflightMetadata(context, {
