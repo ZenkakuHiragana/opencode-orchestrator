@@ -39,9 +39,11 @@ describe("buildFileArgs", () => {
   it("includes user files and orchestrator artifacts when present", () => {
     withTempStateDir("taskX", (stateDir) => {
       const homedir = os.homedir();
+      const policy = path.join(stateDir, "command-policy.json");
       const acc = path.join(stateDir, "acceptance-index.json");
       const todo = path.join(stateDir, "todo.json");
       const spec = path.join(stateDir, "spec.md");
+      fs.writeFileSync(policy, JSON.stringify({ summary: {} }), "utf8");
       fs.writeFileSync(acc, "{}", "utf8");
       fs.writeFileSync(
         todo,
@@ -77,6 +79,8 @@ describe("buildFileArgs", () => {
         "--file",
         "user.txt",
         "--file",
+        policy,
+        "--file",
         acc,
         "--file",
         spec,
@@ -85,6 +89,7 @@ describe("buildFileArgs", () => {
       ]);
       const files = args.filter((arg) => arg !== "--file");
       expect(files).toContain("user.txt");
+      expect(files).toContain(policy);
       expect(files).toContain(acc);
       expect(files).toContain(todo);
       expect(files).toContain(spec);

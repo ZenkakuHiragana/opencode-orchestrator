@@ -156,7 +156,7 @@ export const orchestratorAgents: Record<string, OrchestratorAgentConfig> = {
       question: false,
       read: true,
       skill: true,
-      task: false,
+      task: true,
       todoread: false,
       todowrite: true,
       orch_todo_read: true,
@@ -166,7 +166,10 @@ export const orchestratorAgents: Record<string, OrchestratorAgentConfig> = {
       write: true,
     },
     permission: {
-      task: "deny",
+      task: {
+        "*": "deny",
+        explore: "allow",
+      },
       external_directory: {
         "$XDG_STATE_HOME/opencode/orchestrator/**": "allow",
       },

@@ -106,6 +106,11 @@ export function buildFileArgs(opts: LoopOptions, stateDir: string): string[] {
 
   files.push(...opts.files);
 
+  const commandPolicyPath = path.join(stateDir, "command-policy.json");
+  if (fs.existsSync(commandPolicyPath)) {
+    files.push(commandPolicyPath);
+  }
+
   const acceptanceIndexPath = path.join(stateDir, "acceptance-index.json");
   if (fs.existsSync(acceptanceIndexPath)) {
     files.push(acceptanceIndexPath);
