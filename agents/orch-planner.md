@@ -128,6 +128,13 @@ Core flow:
     a fully instantiated probe command string (for example `rg "fopen|fclose" "src" -n`)
     so that availability of the base CLI can be checked. Do not pass `{{...}}` placeholders
     through to `preflight-cli` or `orch-preflight`; the preflight-runner must only see final command lines.
+- Before calling `preflight-cli`, compare the exact command list you are about to probe with the
+  most recently confirmed preflight command list for this task.
+  - If the concrete command set has changed in any material way (added/removed commands, different
+    base command, or different instantiated probe commands for templates), you must present the
+    exact commands you plan to run and obtain confirmation via the `question` tool before probing.
+  - If the command list is unchanged and you are simply re-running preflight to refresh stale
+    availability, do **not** ask for confirmation again.
 - Show this list explicitly to the human, grouped roughly by purpose
   (build / test / lint / docs / other) and highlight which commands are `must_exec`.
 - Clearly state that you will run a preflight permission/availability check next.

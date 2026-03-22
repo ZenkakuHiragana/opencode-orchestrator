@@ -6,6 +6,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildReplanRequest,
+  buildRequirementDiffTrace,
+  getExecutorVerificationEvidence,
   parseExecutorStepSnapshot,
   loadStatusJson,
   saveStatusJson,
@@ -43,6 +45,17 @@ describe("parseExecutorStepSnapshot", () => {
       path: "src/foo.ts",
       summary: "added endpoint",
     });
+
+    expect(snapshot.requirement_traceability).toEqual([
+      {
+        requirement_id: "R1",
+        representative_files: ["src/foo.ts"],
+      },
+      {
+        requirement_id: "R2",
+        representative_files: ["src/foo.ts"],
+      },
+    ]);
 
     expect(snapshot.step_cmd).toHaveLength(1);
     const cmd = snapshot.step_cmd[0];
@@ -128,6 +141,68 @@ describe("parseExecutorStepSnapshot", () => {
       command_ids: ["cmd-a", "cmd-b"],
       summary: "テスト根拠が揃った",
     });
+  });
+});
+
+describe("getExecutorVerificationEvidence", () => {
+  it("accepts diff-only verification when STEP_VERIFY is ready", () => {
+    const snapshot = parseExecutorStepSnapshot(
+      [
+        "STEP_DIFF: agents/orch-executor.md tighten audit gate",
+        "STEP_VERIFY: ready - diff evidence re-checked",
+      ].join("\n"),
+      "sess-diff",
+      7,
+    );
+
+    expect(getExecutorVerificationEvidence(snapshot)).toEqual({
+      hasEvidence: true,
+      reason: "diffs",
+    });
+  });
+
+  it("accepts explicit no-command reasons when no command ids are present", () => {
+    const snapshot = parseExecutorStepSnapshot(
+      "STEP_VERIFY: ready - no-command prompt-only wording was re-checked locally",
+      "sess-no-command",
+      8,
+    );
+
+    expect(getExecutorVerificationEvidence(snapshot)).toEqual({
+      hasEvidence: true,
+      reason: "no_command_reason",
+    });
+  });
+});
+
+describe("buildRequirementDiffTrace", () => {
+  it("falls back to intent/audit requirement ids when no STEP_TODO lines exist", () => {
+    const trace = buildRequirementDiffTrace({
+      step_todo: [],
+      step_diff: [
+        { path: "src/orchestrator-loop.ts", summary: "log traceability" },
+      ],
+      step_intent: {
+        intent: "implement",
+        requirement_ids: ["R6", "R8"],
+        summary: "traceability and regression evidence",
+      },
+      step_audit: {
+        status: "in_progress",
+        requirement_ids: ["R8"],
+      },
+    });
+
+    expect(trace).toEqual([
+      {
+        requirement_id: "R6",
+        representative_files: ["src/orchestrator-loop.ts"],
+      },
+      {
+        requirement_id: "R8",
+        representative_files: ["src/orchestrator-loop.ts"],
+      },
+    ]);
   });
 });
 

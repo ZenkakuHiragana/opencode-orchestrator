@@ -761,7 +761,7 @@ describe("runExecutorAndAuditorStep", () => {
         {
           source: "executor",
           summary:
-            "監査準備を宣言したが自己検証の根拠が不足している。STEP_VERIFY を明示し、必要なら todo を監査証拠単位で再分解したい",
+            "監査準備を宣言したが自己検証の根拠が不足している。STEP_VERIFY に command id・差分確認・no-command 理由を結び付け、必要なら todo を監査証拠単位で再分解したい (command id・差分確認・no-command 理由のいずれかを明示したい)",
           related_todo_ids: [],
           related_requirement_ids: ["R4-ui"],
         },

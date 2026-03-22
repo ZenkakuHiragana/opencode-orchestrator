@@ -27,6 +27,40 @@ type CanonicalTodoFile = {
   todos: CanonicalTodo[];
 };
 
+function isCanonicalTodoExecutionContractLike(
+  value: unknown,
+): value is CanonicalTodoExecutionContract {
+  if (value === undefined) {
+    return true;
+  }
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const contract = value as {
+    intent?: unknown;
+    expected_evidence?: unknown;
+    command_ids?: unknown;
+    audit_ready_when?: unknown;
+  };
+
+  const isStringArray = (input: unknown): input is string[] =>
+    Array.isArray(input) && input.every((item) => typeof item === "string");
+
+  return (
+    (contract.intent === undefined ||
+      contract.intent === "implement" ||
+      contract.intent === "verify" ||
+      contract.intent === "investigate") &&
+    (contract.expected_evidence === undefined ||
+      isStringArray(contract.expected_evidence)) &&
+    (contract.command_ids === undefined ||
+      isStringArray(contract.command_ids)) &&
+    (contract.audit_ready_when === undefined ||
+      isStringArray(contract.audit_ready_when))
+  );
+}
+
 function loadCanonicalTodos(task: string): {
   todos: CanonicalTodo[];
   stateDir: string;
@@ -77,6 +111,7 @@ function isCanonicalTodoLike(value: unknown): value is CanonicalTodo {
     summary?: unknown;
     status?: unknown;
     related_requirement_ids?: unknown;
+    execution_contract?: unknown;
   };
   return (
     typeof todo.id === "string" &&
@@ -86,7 +121,8 @@ function isCanonicalTodoLike(value: unknown): value is CanonicalTodo {
       todo.status === "completed" ||
       todo.status === "cancelled") &&
     Array.isArray(todo.related_requirement_ids) &&
-    todo.related_requirement_ids.every((rid) => typeof rid === "string")
+    todo.related_requirement_ids.every((rid) => typeof rid === "string") &&
+    isCanonicalTodoExecutionContractLike(todo.execution_contract)
   );
 }
 

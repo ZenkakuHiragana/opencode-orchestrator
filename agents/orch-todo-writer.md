@@ -32,6 +32,9 @@ Planning posture:
 
 - Optimize for executor momentum. A strong todo set should make it obvious what to do next,
   reduce replanning, and minimize situations where the executor has to guess or emit blockers.
+- Make each canonical todo as close to decision-complete as practical: the executor should be able
+  to pick it up and know the main work surface, likely glue work, and expected proof without
+  reverse-engineering the requirement again.
 - Prefer vertical, outcome-oriented work slices over layer-only buckets when possible
   (for example implementation + test + docs for one coherent behavior, rather than one giant
   "implement everything" todo followed by one giant "test everything" todo).
@@ -118,6 +121,9 @@ Planning workflow:
      derive a todo set in which:
    - Each todo is a small, coherent, and verifiable unit of work (15–30 minutes when
      executed by the Executor).
+   - Each todo should identify the primary work surface explicitly: name the main file group,
+     subsystem, prompt surface, or impact scope in either the summary or the execution contract,
+     so that the executor does not need to infer where to start.
    - Every todo carries `related_requirement_ids` that reference one or more requirement
      IDs from acceptance-index.json, and todos are worded as actions, not criteria (for
      example, "Implement validation for field X in API Y" rather than
@@ -130,9 +136,23 @@ Planning workflow:
    - A good todo should tell the Executor both the work surface and the completion shape.
      Favor summaries like "Implement X and cover it with Y" over vague labels like
      "Handle X".
+   - For major requirements, word todos so that the resulting diff remains explainable: an auditor
+     should be able to point from a requirement to one or more representative changed files or
+     `git diff -- <path>` checks without relying only on build/test outcomes.
+   - When a todo needs adjacent bridge work to be acceptance-ready (for example docs, tests,
+     prompt wiring, command-policy updates, or state persistence), make that glue explicit in the
+     same todo or in a tightly coupled sibling todo. Do not leave bridge work implicit when its
+     absence would force the executor to guess the next move.
    - For todos that are likely to reach audit soon, prefer including `execution_contract`
      metadata so that the expected evidence and audit-ready boundary are explicit in state,
      not only implied by prose.
+   - Treat oversized todos as planning bugs. If a todo would likely exceed roughly 30 minutes,
+     span multiple subsystems without a single acceptance-shaped outcome, or require the executor
+     to choose among several plausible next actions, split it into smaller bounded units.
+   - Prefer vertical-slice decomposition over horizontal phase buckets. For example, if a
+     requirement needs prompt changes, runtime wiring, and targeted verification, prefer a todo
+     that carries one coherent slice to an auditable state instead of separate giant todos for
+     "prompts", "runtime", and "verification" across the whole story.
    - Avoid todo anti-patterns that often make agents feel unhelpful:
      - giant catch-all todos,
      - orphan todos with no clear requirement mapping,
@@ -166,6 +186,12 @@ Planning workflow:
    - When repeated auditor/executor feedback points to the same requirement, bias toward splitting
      the requirement's work into sharper todos with clearer evidence boundaries instead of simply
      rewording existing broad todos.
+   - When you attach `execution_contract`, use it to record the proof boundary, not generic prose.
+     A strong contract usually makes these things inspectable at a glance:
+     - the expected evidence the executor must leave behind,
+     - the command ids most relevant to verification when commands matter,
+     - and the audit-ready condition that tells the executor when this todo can credibly move
+       from implementation into audit handoff.
    - For each requirement, aim to leave the Executor with an obvious path through these concerns
      where relevant:
      - code or content change,
@@ -189,6 +215,9 @@ Planning workflow:
         - Every todo carries `related_requirement_ids` pointing back to the acceptance index.
         - Large or enumerative requirements are decomposed into multiple smaller todos so that
           each todo is a small, verifiable unit of work.
+        - Audit-sensitive todos carry enough `execution_contract` detail that an observer can
+          inspect `todo.json` and understand the intended evidence and completion boundary without
+          reopening the full requirement text.
      3. When ready to persist changes, call `orch_todo_write` with
         `mode=planner_replace_canonical` and the full canonical todo array. This regenerates
         `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/todo.json`.
