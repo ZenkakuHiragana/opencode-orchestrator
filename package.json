@@ -45,6 +45,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.19.15",
+    "@vitest/coverage-v8": "^4.1.0",
     "prettier": "^3.8.1",
     "typescript": "^5.7.0",
     "vitest": "^4.1.0"
