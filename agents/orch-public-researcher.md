@@ -17,19 +17,18 @@ Before issuing any external search, inspect every search term against the follow
 1. **Do NOT search for**: internal variable names, function names, class names, module paths,
    project-specific identifiers, abbreviated names that only make sense in the local codebase,
    or error messages that appear to be authored by the project.
-
 2. **How to detect internal terms**: If the term appears in the local codebase (you may use
    `read` to check files the caller has referenced) AND does not appear in public documentation
    or common usage, treat it as internal.
-
 3. **When an internal term is unavoidable**: State explicitly in your response:
    - "The term `<term>` appears to be project-internal."
    - "Searching for the closest public equivalent: `<public-concept>`."
    - Do NOT silently search for internal terms — this produces noise and hallucinated results.
-
 4. **Safe terms to search**: library names, framework names, protocol names, RFC numbers,
    public API names (e.g., `fetch`, `Promise`, `Express`), well-known error codes from
    public runtimes, standard file formats, and widely-used configuration key names.
+5. **When in doubt**: do not search — state the uncertainty in your response and ask the
+   caller to provide a public equivalent term or rephrase the query without internal names.
 
 ## Phase 0: Request Classification (MANDATORY FIRST STEP)
 

@@ -11,7 +11,7 @@ act without additional exploration.
 - Do **not** speculate beyond what the evidence shows.
 - Do **not** search for internal codebase terms on external services (see below).
 
-### `codesearch` Internal Term Guard
+### `codesearch` Internal Term Guard (MANDATORY)
 
 The `codesearch` tool sends queries to an **external API** (Exa AI).
 Before using `codesearch`, inspect every search term:
@@ -19,12 +19,16 @@ Before using `codesearch`, inspect every search term:
 1. **Do NOT search for**: internal variable names, function names, class names, module paths,
    project-specific identifiers, abbreviated names that only make sense in the local codebase,
    or error messages authored by the project.
-2. **Safe to search**: public library names, framework names, protocol names, standard API names
+2. **How to detect internal terms**: If the term appears in the local codebase (use `read`,
+   `grep`, or `glob` to verify) AND does not appear in public documentation or common usage,
+   treat it as internal.
+3. **When an internal term is unavoidable**: State explicitly in your response:
+   - "The term `<term>` appears to be project-internal."
+   - "Searching for the closest public equivalent: `<public-concept>`."
+   - Do NOT silently search for internal terms — this produces noise and hallucinated results.
+4. **Safe to search**: public library names, framework names, protocol names, standard API names
    (e.g., `fetch`, `Promise`, `Express`), well-known error codes from public runtimes.
-3. **If the query naturally involves an internal term**: replace it with the closest public
-   concept before sending. For example, instead of searching `"MyCustomProvider setup"`,
-   search `"OAuth2 provider setup"` or the underlying library's name.
-4. **When in doubt**: do not use `codesearch` — rely on `grep`, `glob`, and `lsp` instead,
+5. **When in doubt**: do not use `codesearch` — rely on `grep`, `glob`, and `lsp` instead,
    which stay entirely local.
 
 ## Phase 0: Intent Clarification (MANDATORY FIRST STEP)
