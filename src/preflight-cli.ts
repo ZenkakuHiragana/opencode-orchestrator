@@ -7,6 +7,39 @@ import {
   buildOpencodeSpawnPlan,
   type OpencodeSpawnPlan,
 } from "./opencode-spawn.js";
+import { getOpencodeClient } from "./opencode-client-store.js";
+
+type ToastVariant = "info" | "success" | "warning" | "error";
+
+/**
+ * Show a toast notification in the OpenCode TUI.
+ * Best-effort: failures are silently ignored so that preflight logic
+ * is never disrupted by notification issues.
+ */
+function emitToast(input: {
+  title?: string;
+  message: string;
+  variant: ToastVariant;
+  duration?: number;
+}): void {
+  try {
+    const client = getOpencodeClient();
+    if (!client?.tui?.showToast) return;
+    // Fire-and-forget; do not await.
+    void client.tui.showToast({
+      body: {
+        ...(input.title ? { title: input.title } : {}),
+        message: input.message,
+        variant: input.variant,
+        ...(typeof input.duration === "number"
+          ? { duration: input.duration }
+          : {}),
+      },
+    });
+  } catch {
+    // Toast failures must never break preflight behavior.
+  }
+}
 
 const z = tool.schema;
 
@@ -447,6 +480,12 @@ const preflightCliTool = tool({
       total: args.commands.length,
       status: "running",
     });
+    emitToast({
+      title: "preflight-cli",
+      message: `Starting ${args.commands.length} command(s) for "${args.task}"`,
+      variant: "info",
+      duration: 5000,
+    });
 
     async function runOpencode(
       argv: string[],
@@ -558,6 +597,12 @@ const preflightCliTool = tool({
         attempt: 1,
         status: "running",
       });
+      emitToast({
+        title: "preflight-cli",
+        message: `Probing ${descriptor.command} (${progress.completed + 1}/${progress.total})`,
+        variant: "info",
+        duration: 5000,
+      });
 
       let runResult = await runOpencode(runArgs);
       let { result, sessionID } = interpretPreflightRun(descriptor, runResult);
@@ -588,6 +633,12 @@ const preflightCliTool = tool({
           commandId: descriptor.id,
           attempt,
           status: "running",
+        });
+        emitToast({
+          title: "preflight-cli",
+          message: `Retrying ${descriptor.command} (attempt ${attempt}/${maxAttempts})`,
+          variant: "warning",
+          duration: 5000,
         });
         // eslint-disable-next-line no-await-in-loop
         runResult = await runOpencode(runArgs);
@@ -722,6 +773,15 @@ const preflightCliTool = tool({
       completed: results.length,
       total: args.commands.length,
       status,
+    });
+    emitToast({
+      title: "preflight-cli",
+      message:
+        status === "ok"
+          ? `All ${results.length} command(s) passed`
+          : `${mustExecFailures.length} must_exec command(s) failed out of ${results.length}`,
+      variant: status === "ok" ? "success" : "error",
+      duration: status === "ok" ? 5000 : 8000,
     });
 
     return JSON.stringify(aggregated, null, 2);

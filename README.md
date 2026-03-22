@@ -151,8 +151,8 @@ npx opencode-orchestrator loop --task my-task-key \
 1. (必要に応じて) Todo-Writer ステップ: `opencode run --command orch-todo-write ...`
 2. Executor ステップ: `opencode run --command orch-exec ...`
 3. Auditor ステップ: `opencode run --command orch-audit --format json ...`
-   * Auditor が `done: true` を返した時点でループ終了
-   * `--commit` 指定時は、完了後に追加の executor ステップを使って `autocommit` ツール経由のコミットを依頼
+   - Auditor が `done: true` を返した時点でループ終了
+   - `--commit` 指定時は、完了後に追加の executor ステップを使って `autocommit` ツール経由のコミットを依頼
 
 ## ディレクトリ構成
 

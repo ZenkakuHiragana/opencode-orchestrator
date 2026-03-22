@@ -2,6 +2,7 @@ import type { Plugin } from "@opencode-ai/plugin";
 import autocommit from "./autocommit.js";
 import preflightCli from "./preflight-cli.js";
 import { orchTodoReadTool, orchTodoWriteTool } from "./orchestrator-todo.js";
+import { setOpencodeClient } from "./opencode-client-store.js";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { orchestratorAgents } from "./orchestrator-agents.js";
@@ -22,7 +23,11 @@ function loadMarkdownBody(fullPath: string): string {
   return text;
 }
 
-export const OrchestratorPlugin: Plugin = async () => {
+export const OrchestratorPlugin: Plugin = async (input) => {
+  // Store the OpenCode client so that tools can call the API directly
+  // (e.g. tui.showToast for toast notifications).
+  setOpencodeClient(input.client);
+
   const baseDir = path.dirname(__dirname);
   const agentsDir = path.join(baseDir, "agents");
   const commandsDir = path.join(baseDir, "commands");
