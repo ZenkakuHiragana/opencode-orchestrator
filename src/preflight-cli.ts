@@ -11,9 +11,9 @@ const z = tool.schema;
 // `PREFLIGHT_CLI_TIMEOUT_MS`.
 const DEFAULT_PREFLIGHT_TIMEOUT_MS: number = (() => {
   const raw = process.env.PREFLIGHT_CLI_TIMEOUT_MS;
-  if (!raw) return 60_000;
+  if (!raw) return 10_000;
   const parsed = Number(raw);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 60_000;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 10_000;
 })();
 
 export type CommandUsage = "must_exec" | "may_exec" | "doc_only";
