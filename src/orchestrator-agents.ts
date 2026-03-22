@@ -89,7 +89,11 @@ export const orchestratorAgents: Record<string, OrchestratorAgentConfig> = {
       task: true,
     },
     permission: {
-      task: "deny",
+      task: {
+        "*": "deny",
+        "orch-local-investigator": "allow",
+        "orch-public-researcher": "allow",
+      },
       bash: "deny",
       write: {
         "*": "deny",

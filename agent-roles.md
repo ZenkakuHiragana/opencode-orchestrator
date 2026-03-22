@@ -275,6 +275,21 @@ sequenceDiagram
     Planner や Spec-Checker はこれを読み取り専用で扱う。
   - goal / scope / non-goals / confirmed facts / defaults / プロジェクト指示 (`AGENTS.md` など) を
     別ソースとして明示的に区別し、下流エージェントが要件とデフォルトを混同しないようにする。
+  - **補助エージェントの利用**: 要件精査の補強として、以下の 2 つの読み取り専用サブエージェントを
+    `task` ツール経由で起動できる。ただし、これらの調査結果は「要件の根拠補助と選択肢整理」にのみ
+    用い、それ単体を acceptance criteria に昇格させてはならない。
+    - **Public Researcher** (`orch-public-researcher`): 外部のベストプラクティス候補、最近の慣行、
+      比較軸を収集。技術選定が未確定な場合や最新性が重要な場合に使用。
+    - **Local Investigator** (`orch-local-investigator`): リポジトリ内の既存慣行、流用可能パターン、
+      自然な実装位置を収集。既存コードベース整合性が重要な場合や、質問前に repo から確定できる
+      事実がある場合に使用。
+  - **4 区分の内部表現**: 収集した情報を以下の 4 種類に分類し、混同しないようにする。
+    - **user-stated requirement**: ユーザーが明示した要求
+    - **repo-derived constraint**: リポジトリから読める制約や既存慣行
+    - **public best-practice candidate**: 公開情報から得た候補や推奨（ユーザー確認後に要件化可能）
+    - **open decision**: まだユーザー確認や trade-off 判断が必要な点
+  - `spec.md` には調査結果を専用セクション（Confirmed from repository / Relevant public guidance /
+    Candidate approaches / Decisions requiring user confirmation）に分離して記録する。
 
 - (B) 主な入力
   - 高レベルゴール（CLI 引数 / 添付ファイルで渡される）
@@ -282,6 +297,9 @@ sequenceDiagram
   - `$XDG_STATE_HOME/opencode/orchestrator/<task>/state/spec.md`（既存があれば）
   - `$XDG_STATE_HOME/opencode/orchestrator/<task>/state/command-policy.json`（既存があれば）
   - リポジトリのコード／ドキュメント（`read`/`glob`/`grep`）
+  - 補助エージェントからの調査結果（`task` ツール経由）:
+    - `orch-public-researcher`: 外部ベストプラクティス候補・比較軸
+    - `orch-local-investigator`: リポジトリ内既存パターン・制約
 
 - (C) 主な出力
   - `$XDG_STATE_HOME/opencode/orchestrator/<task>/state/acceptance-index.json`
