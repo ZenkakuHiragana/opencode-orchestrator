@@ -294,4 +294,342 @@ describe("orchTodoWriteTool", () => {
       process.env.XDG_STATE_HOME = previousXdgStateHome;
     }
   });
+
+  it("preserves artifact_schema and artifact_filename in execution_contract", async () => {
+    const baseDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), "orch-todo-artifact-contract-"),
+    );
+    const previousXdgStateHome = process.env.XDG_STATE_HOME;
+    process.env.XDG_STATE_HOME = baseDir;
+
+    const result = await orchTodoWriteTool.execute(
+      {
+        task: "artifact-contract",
+        mode: "planner_replace_canonical",
+        canonicalTodos: [
+          {
+            id: "T12-api-survey",
+            summary: "Investigate public API surface",
+            status: "pending",
+            related_requirement_ids: ["R1"],
+            execution_contract: {
+              intent: "investigate",
+              artifact_schema: "investigation_v1",
+              artifact_filename: "T12-api-survey.json",
+              expected_evidence: ["API inventory", "stability classification"],
+            },
+          },
+        ],
+      },
+      { agent: "orch-todo-writer" } as any,
+    );
+
+    expect(JSON.parse(result)).toEqual({ ok: true });
+
+    const saved = JSON.parse(
+      fs.readFileSync(
+        path.join(getOrchestratorStateDir("artifact-contract"), "todo.json"),
+        "utf8",
+      ),
+    ) as {
+      todos: Array<{
+        execution_contract?: {
+          intent?: string;
+          artifact_schema?: string;
+          artifact_filename?: string;
+        };
+      }>;
+    };
+
+    expect(saved.todos[0]?.execution_contract).toEqual({
+      intent: "investigate",
+      artifact_schema: "investigation_v1",
+      artifact_filename: "T12-api-survey.json",
+      expected_evidence: ["API inventory", "stability classification"],
+    });
+
+    if (previousXdgStateHome === undefined) {
+      delete process.env.XDG_STATE_HOME;
+    } else {
+      process.env.XDG_STATE_HOME = previousXdgStateHome;
+    }
+  });
+
+  it("records result_artifacts when status is completed", async () => {
+    const baseDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), "orch-todo-artifact-done-"),
+    );
+    const previousXdgStateHome = process.env.XDG_STATE_HOME;
+    process.env.XDG_STATE_HOME = baseDir;
+    const stateDir = getOrchestratorStateDir("artifact-done");
+    fs.mkdirSync(stateDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(stateDir, "todo.json"),
+      JSON.stringify({
+        todos: [
+          {
+            id: "T12-api-survey",
+            summary: "Investigate public API surface",
+            status: "in_progress",
+            related_requirement_ids: ["R1"],
+          },
+        ],
+      }),
+      "utf8",
+    );
+
+    const result = await orchTodoWriteTool.execute(
+      {
+        task: "artifact-done",
+        mode: "executor_update_statuses",
+        statusUpdates: [
+          {
+            id: "T12-api-survey",
+            status: "completed",
+            result_artifacts: [
+              {
+                kind: "investigation_v1",
+                path: "/state/artifacts/T12-api-survey.json",
+                summary: "12 call sites, 3 risky dependency edges",
+              },
+            ],
+          },
+        ],
+      },
+      { agent: "orch-executor" } as any,
+    );
+
+    expect(JSON.parse(result)).toEqual({ ok: true });
+
+    const saved = JSON.parse(
+      fs.readFileSync(path.join(stateDir, "todo.json"), "utf8"),
+    ) as {
+      todos: Array<{
+        status: string;
+        result_artifacts?: Array<{
+          kind: string;
+          path: string;
+          summary: string;
+        }>;
+      }>;
+    };
+
+    expect(saved.todos[0]?.status).toBe("completed");
+    expect(saved.todos[0]?.result_artifacts).toEqual([
+      {
+        kind: "investigation_v1",
+        path: "/state/artifacts/T12-api-survey.json",
+        summary: "12 call sites, 3 risky dependency edges",
+      },
+    ]);
+
+    if (previousXdgStateHome === undefined) {
+      delete process.env.XDG_STATE_HOME;
+    } else {
+      process.env.XDG_STATE_HOME = previousXdgStateHome;
+    }
+  });
+
+  it("allows multiple result_artifacts in a single update", async () => {
+    const baseDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), "orch-todo-multi-artifact-"),
+    );
+    const previousXdgStateHome = process.env.XDG_STATE_HOME;
+    process.env.XDG_STATE_HOME = baseDir;
+    const stateDir = getOrchestratorStateDir("multi-artifact");
+    fs.mkdirSync(stateDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(stateDir, "todo.json"),
+      JSON.stringify({
+        todos: [
+          {
+            id: "T18-verify",
+            summary: "Verify config loader",
+            status: "in_progress",
+            related_requirement_ids: ["R4"],
+          },
+        ],
+      }),
+      "utf8",
+    );
+
+    const result = await orchTodoWriteTool.execute(
+      {
+        task: "multi-artifact",
+        mode: "executor_update_statuses",
+        statusUpdates: [
+          {
+            id: "T18-verify",
+            status: "completed",
+            result_artifacts: [
+              {
+                kind: "verification_v1",
+                path: "/state/artifacts/T18-verify-1.json",
+                summary: "Unit test results",
+              },
+              {
+                kind: "verification_v1",
+                path: "/state/artifacts/T18-verify-2.json",
+                summary: "Integration test results",
+              },
+            ],
+          },
+        ],
+      },
+      { agent: "orch-executor" } as any,
+    );
+
+    expect(JSON.parse(result)).toEqual({ ok: true });
+
+    const saved = JSON.parse(
+      fs.readFileSync(path.join(stateDir, "todo.json"), "utf8"),
+    ) as {
+      todos: Array<{
+        result_artifacts?: Array<{ kind: string }>;
+      }>;
+    };
+
+    expect(saved.todos[0]?.result_artifacts).toHaveLength(2);
+
+    if (previousXdgStateHome === undefined) {
+      delete process.env.XDG_STATE_HOME;
+    } else {
+      process.env.XDG_STATE_HOME = previousXdgStateHome;
+    }
+  });
+
+  it("rejects result_artifacts when status is not completed", async () => {
+    const baseDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), "orch-todo-artifact-reject-"),
+    );
+    const previousXdgStateHome = process.env.XDG_STATE_HOME;
+    process.env.XDG_STATE_HOME = baseDir;
+    const stateDir = getOrchestratorStateDir("artifact-reject");
+    fs.mkdirSync(stateDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(stateDir, "todo.json"),
+      JSON.stringify({
+        todos: [
+          {
+            id: "T12-api-survey",
+            summary: "Investigate public API surface",
+            status: "pending",
+            related_requirement_ids: ["R1"],
+          },
+        ],
+      }),
+      "utf8",
+    );
+
+    const result = await orchTodoWriteTool.execute(
+      {
+        task: "artifact-reject",
+        mode: "executor_update_statuses",
+        statusUpdates: [
+          {
+            id: "T12-api-survey",
+            status: "in_progress",
+            result_artifacts: [
+              {
+                kind: "investigation_v1",
+                path: "/state/artifacts/T12-api-survey.json",
+                summary: "partial results",
+              },
+            ],
+          },
+        ],
+      },
+      { agent: "orch-executor" } as any,
+    );
+
+    const parsed = JSON.parse(result);
+    expect(parsed.ok).toBe(false);
+    expect(parsed.error).toContain(
+      "result_artifacts may only be recorded when status is 'completed'",
+    );
+    expect(parsed.error).toContain("T12-api-survey");
+    expect(parsed.error).toContain("in_progress");
+
+    if (previousXdgStateHome === undefined) {
+      delete process.env.XDG_STATE_HOME;
+    } else {
+      process.env.XDG_STATE_HOME = previousXdgStateHome;
+    }
+  });
+
+  it("appends result_artifacts to existing artifacts", async () => {
+    const baseDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), "orch-todo-artifact-append-"),
+    );
+    const previousXdgStateHome = process.env.XDG_STATE_HOME;
+    process.env.XDG_STATE_HOME = baseDir;
+    const stateDir = getOrchestratorStateDir("artifact-append");
+    fs.mkdirSync(stateDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(stateDir, "todo.json"),
+      JSON.stringify({
+        todos: [
+          {
+            id: "T12-api-survey",
+            summary: "Investigate public API surface",
+            status: "in_progress",
+            related_requirement_ids: ["R1"],
+            result_artifacts: [
+              {
+                kind: "investigation_v1",
+                path: "/state/artifacts/T12-phase1.json",
+                summary: "Phase 1 results",
+              },
+            ],
+          },
+        ],
+      }),
+      "utf8",
+    );
+
+    const result = await orchTodoWriteTool.execute(
+      {
+        task: "artifact-append",
+        mode: "executor_update_statuses",
+        statusUpdates: [
+          {
+            id: "T12-api-survey",
+            status: "completed",
+            result_artifacts: [
+              {
+                kind: "investigation_v1",
+                path: "/state/artifacts/T12-phase2.json",
+                summary: "Phase 2 results",
+              },
+            ],
+          },
+        ],
+      },
+      { agent: "orch-executor" } as any,
+    );
+
+    expect(JSON.parse(result)).toEqual({ ok: true });
+
+    const saved = JSON.parse(
+      fs.readFileSync(path.join(stateDir, "todo.json"), "utf8"),
+    ) as {
+      todos: Array<{
+        result_artifacts?: Array<{ path: string }>;
+      }>;
+    };
+
+    expect(saved.todos[0]?.result_artifacts).toHaveLength(2);
+    expect(saved.todos[0]?.result_artifacts?.[0]?.path).toBe(
+      "/state/artifacts/T12-phase1.json",
+    );
+    expect(saved.todos[0]?.result_artifacts?.[1]?.path).toBe(
+      "/state/artifacts/T12-phase2.json",
+    );
+
+    if (previousXdgStateHome === undefined) {
+      delete process.env.XDG_STATE_HOME;
+    } else {
+      process.env.XDG_STATE_HOME = previousXdgStateHome;
+    }
+  });
 });

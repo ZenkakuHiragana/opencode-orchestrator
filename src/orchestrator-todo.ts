@@ -8,11 +8,19 @@ const z = tool.schema;
 
 export type TodoStatus = "pending" | "in_progress" | "completed" | "cancelled";
 
+export type ResultArtifact = {
+  kind: string;
+  path: string;
+  summary: string;
+};
+
 export type CanonicalTodoExecutionContract = {
   intent?: "implement" | "verify" | "investigate";
   expected_evidence?: string[];
   command_ids?: string[];
   audit_ready_when?: string[];
+  artifact_schema?: string;
+  artifact_filename?: string;
 };
 
 export type CanonicalTodo = {
@@ -21,6 +29,7 @@ export type CanonicalTodo = {
   status: TodoStatus;
   related_requirement_ids: string[];
   execution_contract?: CanonicalTodoExecutionContract;
+  result_artifacts?: ResultArtifact[];
 };
 
 type CanonicalTodoFile = {
@@ -42,6 +51,8 @@ function isCanonicalTodoExecutionContractLike(
     expected_evidence?: unknown;
     command_ids?: unknown;
     audit_ready_when?: unknown;
+    artifact_schema?: unknown;
+    artifact_filename?: unknown;
   };
 
   const isStringArray = (input: unknown): input is string[] =>
@@ -57,7 +68,11 @@ function isCanonicalTodoExecutionContractLike(
     (contract.command_ids === undefined ||
       isStringArray(contract.command_ids)) &&
     (contract.audit_ready_when === undefined ||
-      isStringArray(contract.audit_ready_when))
+      isStringArray(contract.audit_ready_when)) &&
+    (contract.artifact_schema === undefined ||
+      typeof contract.artifact_schema === "string") &&
+    (contract.artifact_filename === undefined ||
+      typeof contract.artifact_filename === "string")
   );
 }
 
@@ -112,7 +127,19 @@ function isCanonicalTodoLike(value: unknown): value is CanonicalTodo {
     status?: unknown;
     related_requirement_ids?: unknown;
     execution_contract?: unknown;
+    result_artifacts?: unknown;
   };
+
+  const isResultArtifactLike = (input: unknown): input is ResultArtifact => {
+    if (!input || typeof input !== "object") return false;
+    const obj = input as { kind?: unknown; path?: unknown; summary?: unknown };
+    return (
+      typeof obj.kind === "string" &&
+      typeof obj.path === "string" &&
+      typeof obj.summary === "string"
+    );
+  };
+
   return (
     typeof todo.id === "string" &&
     typeof todo.summary === "string" &&
@@ -122,7 +149,10 @@ function isCanonicalTodoLike(value: unknown): value is CanonicalTodo {
       todo.status === "cancelled") &&
     Array.isArray(todo.related_requirement_ids) &&
     todo.related_requirement_ids.every((rid) => typeof rid === "string") &&
-    isCanonicalTodoExecutionContractLike(todo.execution_contract)
+    isCanonicalTodoExecutionContractLike(todo.execution_contract) &&
+    (todo.result_artifacts === undefined ||
+      (Array.isArray(todo.result_artifacts) &&
+        todo.result_artifacts.every(isResultArtifactLike)))
   );
 }
 
@@ -243,10 +273,18 @@ export const orchTodoWriteTool = tool({
   description:
     "Update orchestrator todos for a given task. " +
     "Use mode=planner_replace_canonical from orch-todo-writer to replace the canonical todo set, and " +
-    "mode=executor_update_statuses from orch-executor to update statuses only. " +
+    "mode=executor_update_statuses from orch-executor to update statuses and record artifacts. " +
     "When creating or replacing canonical todos (planner_replace_canonical / planner_add_todos), " +
     "new or adjusted todos should normally start with status 'pending'; reserve 'completed' / 'in_progress' / 'cancelled' " +
     "for cases where the underlying work is already known to be finished, currently in-flight, or explicitly not needed. " +
+    "\n\n" +
+    "executor_update_statuses details:\n" +
+    "- Each entry must have an 'id' and 'status'.\n" +
+    "- 'result_artifacts' may only be provided when status is 'completed'. " +
+    "If result_artifacts is provided with any other status, SPEC_ERROR is returned.\n" +
+    "- result_artifacts is an array; you may record multiple artifacts in a single update.\n" +
+    "- Each artifact requires 'kind' (schema version, e.g. investigation_v1), " +
+    "'path' (full path under artifacts/), and 'summary' (one-line Japanese description).\n" +
     "Misuse will return SPEC_ERROR.",
   args: {
     task: z
@@ -285,9 +323,41 @@ export const orchTodoWriteTool = tool({
               expected_evidence: z.array(z.string()).optional(),
               command_ids: z.array(z.string()).optional(),
               audit_ready_when: z.array(z.string()).optional(),
+              artifact_schema: z
+                .string()
+                .describe(
+                  "Schema version for the artifact (e.g., investigation_v1, verification_v1).",
+                )
+                .optional(),
+              artifact_filename: z
+                .string()
+                .describe(
+                  "Filename under artifacts/ directory (e.g., T12-api-survey.json).",
+                )
+                .optional(),
             })
             .describe(
-              "Optional executor-oriented handoff metadata: execution intent, expected evidence, relevant command ids, and audit-ready conditions.",
+              "Optional executor-oriented handoff metadata: execution intent, expected evidence, relevant command ids, audit-ready conditions, and artifact specification.",
+            )
+            .optional(),
+          result_artifacts: z
+            .array(
+              z.object({
+                kind: z
+                  .string()
+                  .describe(
+                    "Schema version of the artifact (e.g., investigation_v1).",
+                  ),
+                path: z.string().describe("Full path to the artifact file."),
+                summary: z
+                  .string()
+                  .describe(
+                    "One-line Japanese summary of the artifact contents.",
+                  ),
+              }),
+            )
+            .describe(
+              "Artifacts produced by the Executor for this todo. Added after completion.",
             )
             .optional(),
         }),
@@ -314,9 +384,21 @@ export const orchTodoWriteTool = tool({
               expected_evidence: z.array(z.string()).optional(),
               command_ids: z.array(z.string()).optional(),
               audit_ready_when: z.array(z.string()).optional(),
+              artifact_schema: z
+                .string()
+                .describe(
+                  "Schema version for the artifact (e.g., investigation_v1, verification_v1).",
+                )
+                .optional(),
+              artifact_filename: z
+                .string()
+                .describe(
+                  "Filename under artifacts/ directory (e.g., T12-api-survey.json).",
+                )
+                .optional(),
             })
             .describe(
-              "Optional executor-oriented handoff metadata: execution intent, expected evidence, relevant command ids, and audit-ready conditions.",
+              "Optional executor-oriented handoff metadata: execution intent, expected evidence, relevant command ids, audit-ready conditions, and artifact specification.",
             )
             .optional(),
         }),
@@ -334,9 +416,31 @@ export const orchTodoWriteTool = tool({
           status: z
             .enum(["pending", "in_progress", "completed", "cancelled"])
             .describe("New status for this todo."),
+          result_artifacts: z
+            .array(
+              z.object({
+                kind: z
+                  .string()
+                  .describe(
+                    "Schema version of the artifact (e.g., investigation_v1).",
+                  ),
+                path: z.string().describe("Full path to the artifact file."),
+                summary: z
+                  .string()
+                  .describe(
+                    "One-line Japanese summary of the artifact contents.",
+                  ),
+              }),
+            )
+            .describe(
+              "Artifacts produced by the Executor for this todo. Appended to existing artifacts.",
+            )
+            .optional(),
         }),
       )
-      .describe("Status updates to apply when mode=executor_update_statuses.")
+      .describe(
+        "Status and artifact updates to apply when mode=executor_update_statuses.",
+      )
       .optional(),
   },
   async execute(args, context) {
@@ -465,7 +569,29 @@ export const orchTodoWriteTool = tool({
             upd.id,
         });
       }
+      if (
+        upd.result_artifacts &&
+        upd.result_artifacts.length > 0 &&
+        upd.status !== "completed"
+      ) {
+        return JSON.stringify({
+          ok: false,
+          error:
+            "SPEC_ERROR: result_artifacts may only be recorded when status is 'completed'. " +
+            "Todo " +
+            upd.id +
+            " has status '" +
+            upd.status +
+            "' but result_artifacts was provided.",
+        });
+      }
       target.status = upd.status;
+      if (upd.result_artifacts && upd.result_artifacts.length > 0) {
+        target.result_artifacts = [
+          ...(target.result_artifacts ?? []),
+          ...upd.result_artifacts,
+        ];
+      }
       byId.set(upd.id, target);
     }
 

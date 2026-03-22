@@ -68,8 +68,94 @@ Key concepts:
       todo's implementation or verification.
     - `audit_ready_when`: short conditions describing when the todo's work is strong enough to be
       presented to the Auditor.
+    - `artifact_schema`: the schema version for the artifact this todo should produce
+      (e.g., `"investigation_v1"`, `"verification_v1"`). Required for `investigate` and `verify`
+      intents; optional for `implement`.
+    - `artifact_filename`: the filename under the artifacts directory where the artifact should
+      be written (e.g., `"T12-api-survey.json"`). Use `<todo-id>-<short-descriptor>.json` naming.
   - This metadata is optional, but for higher-risk, auditor-sensitive, or repeatedly failing work,
     you should populate it so that the Executor has fewer judgment calls left.
+
+- **Artifact storage conventions**:
+  - All investigation and verification artifacts must be stored under:
+    `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/artifacts/`
+  - Do **not** place artifacts in the repository working tree unless the artifact is itself a
+    deliverable required by the acceptance criteria.
+  - Use JSON as the primary format for orchestrator-internal artifacts. Markdown is acceptable only
+    for human-facing final reports explicitly required by the acceptance criteria.
+  - File naming convention: `<todo-id>-<short-descriptor>.json` (e.g.,
+    `T12-api-survey.json`, `T18-regression-results.json`).
+
+- **`execution_contract` vs `result_artifacts`**:
+  - `execution_contract` describes **what artifact the Executor should produce** (the contract).
+  - `result_artifacts` (added by the Executor after completing the todo) records **what was actually
+    produced** (the result).
+  - Example `execution_contract` for an investigate todo:
+    ```json
+    {
+      "intent": "investigate",
+      "artifact_schema": "investigation_v1",
+      "artifact_filename": "T12-api-survey.json",
+      "expected_evidence": [
+        "API inventory",
+        "stability classification",
+        "downstream implementation inputs"
+      ]
+    }
+    ```
+  - Example `result_artifacts` entry (added by Executor):
+    ```json
+    {
+      "kind": "investigation_v1",
+      "path": "$XDG_STATE_HOME/opencode/orchestrator/<task>/artifacts/T12-api-survey.json",
+      "summary": "12 call sites, 3 risky dependency edges, 2 migration groups"
+    }
+    ```
+
+- **Artifact schema selection**:
+  - Map `intent` to schema as follows:
+    - `investigate` → `investigation_v1`
+    - `verify` → `verification_v1`
+    - `implement` → artifact not required by default; use `implementation_note_v1` only when
+      a structured change summary is explicitly needed.
+  - Do not invent fine-grained subtypes (e.g., `impact_survey_v1`, `api_classification_v1`)
+  - unless a specific subtype is required by the acceptance criteria. Start with the two broad
+    schemas and split only when necessary.
+
+- **Intent classification rules**:
+  - When assigning `intent` in `execution_contract`, classify each todo as follows:
+    - **`implement`**: The target surface and change direction are sufficiently identified, and the
+      primary deliverable is a code/config/doc change. Use this when the Executor can proceed to
+      edit files without needing a prior investigation phase.
+    - **`verify`**: The primary deliverable is verification evidence for existing changes. Use this
+      when the todo is about validating correctness, running regression checks, or confirming that
+      prior work meets acceptance criteria.
+    - **`investigate`**: The primary deliverable is an **observation artifact** that will serve as
+      input for subsequent todos. Use this when the Executor must produce an inventory, classification,
+      dependency map, candidate list, or migration boundary **before** implementation or verification
+      can proceed.
+  - Distinguish `investigate` from "unclear so investigate":
+    - Do **not** use `investigate` as a fallback when the requirement is simply vague.
+    - Use `investigate` only when the todo's completion condition is explicitly an observation
+      result (e.g., "list all call sites of X", "classify public APIs by stability", "map
+      dependency edges between Y and Z").
+    - If the requirement is vague, sharpen it or split it; do not paper over vagueness with
+      `investigate`.
+  - Typical cases where you should emit an `investigate` todo **before** the corresponding
+    `implement` todos:
+    - Impact-range survey for a large refactor.
+    - Public-surface classification (stable vs. experimental APIs).
+    - Migration-boundary inventory (what moves together, what can be staged).
+    - Candidate-implementation comparison (evaluate 2+ approaches before committing).
+    - Dependency-relationship mapping before a cross-cutting change.
+  - When you emit an `investigate` todo, also think about what the **downstream `implement` todos**
+    will need from it. Capture that in `expected_evidence` so the Executor knows exactly what
+    observation artifacts to leave behind.
+  - In `expected_evidence`, prefer specifying not only **what** artifact is needed but also
+    **where it should be recorded** (e.g., "call-site inventory as a markdown table in
+    STEP_VERIFY output", "dependency map as a JSON file under docs/", "classification summary
+    in the step reply"). This improves Auditor traceability and prevents the artifact from
+    being lost in transient tool logs.
 
 - **Derived planning cache (`todo.json`)**:
   - Treat `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/todo.json` as a **mirror** of your planned todo

@@ -17,6 +17,29 @@ Inputs you may receive (via attached files or context):
     fields such as `last_executor_step`, `last_auditor_report`, and `proposals`. Treat this
     file as **diagnostic metadata only**: it is useful to understand what the Executor and
     Todo-Writer attempted, but it is **not** evidence of correctness by itself.
+- **Artifact files** stored under
+  `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/artifacts/`. These are JSON files produced
+  by the Executor for `investigate` and `verify` todos. You may read these to verify that
+  investigation and verification work was completed to a sufficient standard.
+
+Reading artifacts:
+
+- Artifacts are stored under `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/artifacts/`
+  with filenames like `<todo-id>-<short-descriptor>.json`.
+- When evaluating an `investigate` todo, read the corresponding `investigation_v1` artifact
+  and check that:
+  - `findings` contains concrete, non-trivial observations (not just "we looked at X").
+  - `downstream_inputs` provides enough detail for subsequent todos to proceed without
+    re-investigating the same surface.
+  - `unknowns` are honest and specific (not vague placeholders).
+- When evaluating a `verify` todo, read the corresponding `verification_v1` artifact and
+  check that:
+  - `commands` entries match what was actually executed (cross-check with `status.json` if
+    available).
+  - `checks` entries are supported by the listed evidence (command ids, diff paths).
+  - `conclusion.status` aligns with the actual test/build/lint outcomes.
+- Treat artifact contents as **supporting evidence**, not as standalone proof. Always
+  cross-check against the repository state (code, diffs, tests) when deciding pass/fail.
 
 Language policy:
 
