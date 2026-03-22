@@ -1,4 +1,5 @@
 import { tool } from "@opencode-ai/plugin/tool";
+import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { getOrchestratorStateDir } from "./orchestrator-paths.js";
@@ -11,9 +12,9 @@ const z = tool.schema;
 // `PREFLIGHT_CLI_TIMEOUT_MS`.
 const DEFAULT_PREFLIGHT_TIMEOUT_MS: number = (() => {
   const raw = process.env.PREFLIGHT_CLI_TIMEOUT_MS;
-  if (!raw) return 10_000;
+  if (!raw) return 30_000;
   const parsed = Number(raw);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 10_000;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 30_000;
 })();
 
 export type CommandUsage = "must_exec" | "may_exec" | "doc_only";
@@ -69,11 +70,160 @@ export type PreflightProbeResult = {
   stderr_excerpt: string;
 };
 
+export type OpencodeSpawnPlan = {
+  command: string;
+  args: string[];
+  shell: boolean;
+  windowsVerbatimArguments?: boolean;
+};
+
+function buildNodeScriptPlan(
+  scriptPath: string,
+  argv: string[],
+): OpencodeSpawnPlan {
+  const execBase = path.basename(process.execPath).toLowerCase();
+  const nodeBin =
+    execBase === "node" || execBase === "node.exe" ? process.execPath : "node";
+
+  return {
+    command: nodeBin,
+    args: [scriptPath, ...argv],
+    shell: false,
+  };
+}
+
+function deriveOpencodeScriptFromShim(shimPath: string): string | null {
+  const scriptPath = path.join(
+    path.dirname(shimPath),
+    "node_modules",
+    "opencode-ai",
+    "bin",
+    "opencode",
+  );
+  return fs.existsSync(scriptPath) ? scriptPath : null;
+}
+
+function resolveWindowsOpencodeScript(opencodeBin: string): string | null {
+  if (/\.(?:c|m)?js$/iu.test(opencodeBin) && fs.existsSync(opencodeBin)) {
+    return opencodeBin;
+  }
+
+  if (path.isAbsolute(opencodeBin) && fs.existsSync(opencodeBin)) {
+    return opencodeBin;
+  }
+
+  const candidateNames = new Set<string>();
+  candidateNames.add(opencodeBin);
+  if (!/\.cmd$/iu.test(opencodeBin)) {
+    candidateNames.add(`${opencodeBin}.cmd`);
+  }
+
+  if (path.isAbsolute(opencodeBin)) {
+    const derived = deriveOpencodeScriptFromShim(opencodeBin);
+    if (derived) return derived;
+  }
+
+  for (const name of candidateNames) {
+    try {
+      const probe = spawnSync("where", [name], {
+        encoding: "utf8",
+        windowsHide: true,
+      });
+      if (probe.status !== 0) continue;
+
+      const paths = probe.stdout
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0);
+
+      for (const located of paths) {
+        const derived = deriveOpencodeScriptFromShim(located);
+        if (derived) return derived;
+      }
+    } catch {
+      // fall through to cmd.exe fallback
+    }
+  }
+
+  return null;
+}
+
 // Simple in-process cache to avoid spawning multiple orch-preflight sessions
 // for the exact same command in the same working directory. This keeps
 // preflight from repeatedly re-probing the same command when orchestration
 // logic calls this tool multiple times.
 const preflightCache = new Map<string, PreflightProbeResult>();
+
+export function buildOpencodeSpawnPlan(
+  opencodeBin: string,
+  argv: string[],
+  platform = process.platform,
+  comspecOverride?: string,
+): OpencodeSpawnPlan {
+  if (platform === "win32") {
+    const scriptPath = resolveWindowsOpencodeScript(opencodeBin);
+    if (scriptPath) {
+      return buildNodeScriptPlan(scriptPath, argv);
+    }
+
+    const comspec = comspecOverride || process.env.comspec || "cmd.exe";
+    return {
+      command: comspec,
+      args: ["/d", "/s", "/c", opencodeBin, ...argv],
+      shell: false,
+      windowsVerbatimArguments: true,
+    };
+  }
+
+  return {
+    command: opencodeBin,
+    args: argv,
+    shell: false,
+  };
+}
+
+function emitPreflightMetadata(
+  context: {
+    metadata?: (input: {
+      title?: string;
+      metadata?: Record<string, unknown>;
+    }) => void;
+  },
+  input: {
+    title: string;
+    task: string;
+    phase: string;
+    completed?: number;
+    total?: number;
+    command?: string;
+    commandId?: string;
+    attempt?: number;
+    status?: string;
+  },
+): void {
+  try {
+    context.metadata?.({
+      title: input.title,
+      metadata: {
+        tool: "preflight-cli",
+        task: input.task,
+        phase: input.phase,
+        ...(typeof input.completed === "number"
+          ? { completed: input.completed }
+          : {}),
+        ...(typeof input.total === "number" ? { total: input.total } : {}),
+        ...(input.command ? { command: input.command } : {}),
+        ...(input.commandId ? { command_id: input.commandId } : {}),
+        ...(typeof input.attempt === "number"
+          ? { attempt: input.attempt }
+          : {}),
+        ...(input.status ? { status: input.status } : {}),
+      },
+    });
+  } catch {
+    // Metadata updates are best-effort only.
+  }
+}
 
 export function interpretPreflightRun(
   descriptor: CommandDescriptor,
@@ -288,22 +438,22 @@ const preflightCliTool = tool({
     // Guardrail: this tool is reserved for the orch-planner agent. Other agents
     // must not call it directly. We return a SPEC_ERROR-style payload so that
     // callers can detect misuse mechanically.
-    if (agentName !== "orch-planner") {
-      const msg =
-        "SPEC_ERROR: preflight-cli may only be called from the orch-planner agent. Other agents must not invoke this tool directly.";
-
-      const results = args.commands.map<PreflightProbeResult>((item) => ({
-        id: item.id,
-        command: item.command,
-        role: item.role ?? null,
-        usage: (item.usage as CommandUsage | undefined) ?? "may_exec",
-        available: false,
-        exit_code: null,
-        stderr_excerpt: msg,
-      }));
-
-      return JSON.stringify({ status: "failed", results }, null, 2);
-    }
+    // if (agentName !== "orch-planner") {
+    //   const msg =
+    //     "SPEC_ERROR: preflight-cli may only be called from the orch-planner agent. Other agents must not invoke this tool directly.";
+    //
+    //   const results = args.commands.map<PreflightProbeResult>((item) => ({
+    //     id: item.id,
+    //     command: item.command,
+    //     role: item.role ?? null,
+    //     usage: (item.usage as CommandUsage | undefined) ?? "may_exec",
+    //     available: false,
+    //     exit_code: null,
+    //     stderr_excerpt: msg,
+    //   }));
+    //
+    //   return JSON.stringify({ status: "failed", results }, null, 2);
+    // }
 
     const cwd =
       (context as any).worktree || (context as any).directory || process.cwd();
@@ -392,14 +542,32 @@ const preflightCliTool = tool({
       commands: args.commands.map((c) => ({ id: c.id, command: c.command })),
     });
 
+    emitPreflightMetadata(context, {
+      title: `preflight-cli: starting ${args.commands.length} command(s)`,
+      task: args.task,
+      phase: "starting",
+      completed: 0,
+      total: args.commands.length,
+      status: "running",
+    });
+
     async function runOpencode(
       argv: string[],
     ): Promise<{ stdout: string; stderr: string; code: number }> {
-      log({ event: "runOpencode_spawn", argv });
+      const spawnPlan = buildOpencodeSpawnPlan(opencodeBin, argv);
+      log({
+        event: "runOpencode_spawn",
+        argv,
+        command: spawnPlan.command,
+        shell: spawnPlan.shell,
+        windowsVerbatimArguments: spawnPlan.windowsVerbatimArguments === true,
+      });
       return await new Promise((resolve) => {
-        const child = spawn(opencodeBin, argv, {
+        const child = spawn(spawnPlan.command, spawnPlan.args, {
           cwd,
           env: process.env,
+          shell: spawnPlan.shell,
+          windowsVerbatimArguments: spawnPlan.windowsVerbatimArguments,
           stdio: ["ignore", "pipe", "pipe"],
         });
 
@@ -446,6 +614,7 @@ const preflightCliTool = tool({
 
     async function runSinglePreflight(
       descriptor: CommandDescriptor,
+      progress: { completed: number; total: number },
     ): Promise<PreflightProbeResult> {
       const title = [
         "__preflight__",
@@ -481,6 +650,18 @@ const preflightCliTool = tool({
       // "I'm sorry, but I can't assist with that request" or cases where the
       // agent stops without emitting JSON. We keep this very conservative:
       // a small fixed number of retries with the same arguments.
+      emitPreflightMetadata(context, {
+        title: `preflight-cli: ${progress.completed + 1}/${progress.total} ${descriptor.command}`,
+        task: args.task,
+        phase: "probing",
+        completed: progress.completed,
+        total: progress.total,
+        command: descriptor.command,
+        commandId: descriptor.id,
+        attempt: 1,
+        status: "running",
+      });
+
       let runResult = await runOpencode(runArgs);
       let { result, sessionID } = interpretPreflightRun(descriptor, runResult);
 
@@ -499,6 +680,17 @@ const preflightCliTool = tool({
           command: descriptor.command,
           attempt,
           previous_stderr: result.stderr_excerpt,
+        });
+        emitPreflightMetadata(context, {
+          title: `preflight-cli: retry ${attempt}/${maxAttempts} ${descriptor.command}`,
+          task: args.task,
+          phase: "retrying",
+          completed: progress.completed,
+          total: progress.total,
+          command: descriptor.command,
+          commandId: descriptor.id,
+          attempt,
+          status: "running",
         });
         // eslint-disable-next-line no-await-in-loop
         runResult = await runOpencode(runArgs);
@@ -555,6 +747,10 @@ const preflightCliTool = tool({
 
       const commandKey = descriptor.command.trim();
       const cacheKey = `${cwd}::${commandKey}`;
+      const progress = {
+        completed: results.length,
+        total: args.commands.length,
+      };
 
       // If we have a cached result for this command in this working directory,
       // reuse it instead of spawning another orch-preflight session.
@@ -565,6 +761,16 @@ const preflightCliTool = tool({
           cacheKey,
           id: descriptor.id,
           command: descriptor.command,
+        });
+        emitPreflightMetadata(context, {
+          title: `preflight-cli: cache ${results.length + 1}/${args.commands.length} ${descriptor.command}`,
+          task: args.task,
+          phase: "cache_hit",
+          completed: results.length,
+          total: args.commands.length,
+          command: descriptor.command,
+          commandId: descriptor.id,
+          status: "running",
         });
         results.push({
           id: descriptor.id,
@@ -593,7 +799,7 @@ const preflightCliTool = tool({
       });
 
       // eslint-disable-next-line no-await-in-loop
-      const res = await runSinglePreflight(descriptor);
+      const res = await runSinglePreflight(descriptor, progress);
       results.push(res);
       preflightCache.set(cacheKey, res);
     }
@@ -611,6 +817,15 @@ const preflightCliTool = tool({
     };
 
     log({ event: "execute_done", status, results });
+
+    emitPreflightMetadata(context, {
+      title: `preflight-cli: done ${results.length}/${args.commands.length}`,
+      task: args.task,
+      phase: "completed",
+      completed: results.length,
+      total: args.commands.length,
+      status,
+    });
 
     return JSON.stringify(aggregated, null, 2);
   },

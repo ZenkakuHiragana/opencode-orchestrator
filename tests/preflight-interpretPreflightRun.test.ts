@@ -1,10 +1,84 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { describe, it, expect } from "vitest";
 
 import {
+  buildOpencodeSpawnPlan,
   interpretPreflightRun,
   type CommandDescriptor,
   type OpencodeRunResult,
 } from "../src/preflight-cli.js";
+
+describe("buildOpencodeSpawnPlan", () => {
+  it("uses node script directly on Windows when opencode script path is known", () => {
+    const scriptPath = path.join(
+      fs.mkdtempSync(path.join(os.tmpdir(), "opencode-preflight-")),
+      "opencode",
+    );
+    fs.writeFileSync(scriptPath, "#!/usr/bin/env node\n", "utf8");
+
+    const plan = buildOpencodeSpawnPlan(
+      scriptPath,
+      [
+        "run",
+        "--format",
+        "json",
+        "--command",
+        "orch-preflight",
+        "--title",
+        "test --help:mn1rbwla:7w4czfjf",
+        "--dir",
+        "D:\\repo",
+        '[{"id":"cmd-npm-test","command":"npm test -- --help"}]',
+      ],
+      "win32",
+    );
+
+    expect(plan.command).toBe(process.execPath);
+    expect(plan.args).toEqual([
+      scriptPath,
+      "run",
+      "--format",
+      "json",
+      "--command",
+      "orch-preflight",
+      "--title",
+      "test --help:mn1rbwla:7w4czfjf",
+      "--dir",
+      "D:\\repo",
+      '[{"id":"cmd-npm-test","command":"npm test -- --help"}]',
+    ]);
+    expect(plan.shell).toBe(false);
+    expect(plan.windowsVerbatimArguments).toBeUndefined();
+  });
+
+  it("falls back to cmd.exe wrapping on Windows when script path is unknown", () => {
+    const plan = buildOpencodeSpawnPlan(
+      "C:\\missing\\opencode.cmd",
+      ["run", "--help"],
+      "win32",
+      "C:\\Windows\\System32\\cmd.exe",
+    );
+
+    expect(plan).toEqual({
+      command: "C:\\Windows\\System32\\cmd.exe",
+      args: ["/d", "/s", "/c", "C:\\missing\\opencode.cmd", "run", "--help"],
+      shell: false,
+      windowsVerbatimArguments: true,
+    });
+  });
+
+  it("avoids shell mode on non-Windows platforms", () => {
+    const plan = buildOpencodeSpawnPlan("opencode", ["run", "--help"], "linux");
+
+    expect(plan).toEqual({
+      command: "opencode",
+      args: ["run", "--help"],
+      shell: false,
+    });
+  });
+});
 
 describe("interpretPreflightRun", () => {
   const descriptor: CommandDescriptor = {
