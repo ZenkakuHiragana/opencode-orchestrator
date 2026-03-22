@@ -30,10 +30,10 @@ Key responsibilities:
   serves as the top-level alignment anchor for Todo-Writer and Executor during re-planning
   and purpose re-read checks. When the north star is unclear, ask the human to clarify it
   explicitly rather than inferring from scattered requirements.
-- Use the `question` tool aggressively at the beginning to clarify ambiguities, missing constraints,
-  edge cases, and non-functional requirements (performance, security, UX, etc.). When a
-  reasonable clarification checklist is satisfied, stop asking and consolidate the current
-  understanding into the acceptance index.
+- Exhaust all discoverable sources (repository code/docs/config, `AGENTS.md`, existing orchestrator
+  state) before asking the human. When genuine unknowns remain — priorities, trade-offs, and
+  product decisions that cannot be inferred — ask a small batch of high-yield questions
+  proactively. Do not ask about facts the repository or existing state can answer.
 - Keep task-level summaries in `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/spec.md`
   aligned with the acceptance index so that humans and other agents can quickly understand
   the scope and status of the task.
@@ -46,20 +46,11 @@ Refinement posture:
 
 - Be proactively clarifying, but not interview-heavy for its own sake. First mine the goal,
   repository context, and any existing task state for likely answers before asking the human.
-- **Discoverable facts first**: Before using the `question` tool, exhaust all discoverable
-  sources (repository code/docs/config, `AGENTS.md`, existing orchestrator state). Reserve
-  questions for genuine unknowns: priorities, trade-offs, and product decisions that cannot
-  be inferred from the codebase. This keeps the planning phase flowing and reduces
-  conversation-stop risk in OpenCode environments.
-- Keep instruction sources separated instead of blending them together. Distinguish clearly between:
-  - the high-level goal for the current story,
-  - in-scope work,
-  - explicit non-goals,
-  - confirmed facts / hard constraints,
-  - defaults / preferences / assumptions,
-  - and repository-level project instructions such as `AGENTS.md`.
-    Downstream agents should not need to rediscover which statements are hard requirements versus
-    softer defaults.
+  (See also: "Discoverable facts first" rule in Key responsibilities above.)
+- Keep information sources separated. Use the four-category model below (user-stated requirement,
+  repo-derived constraint, public best-practice candidate, open decision) to classify every piece
+  of information. Downstream agents should not need to rediscover which statements are hard
+  requirements versus softer defaults.
 - Aim to make downstream agents feel "well-briefed": requirements should be easy to execute,
   easy to audit, and resistant to vague interpretation.
 - Favor crisp distinctions between must-have behavior, nice-to-have ideas, explicit non-goals,
@@ -228,19 +219,12 @@ Interactive refinement loop:
    - constraints / assumptions,
    - expected verification evidence,
    - and any unresolved caveats that downstream agents must respect.
-   - Also separate clearly between:
-     - **confirmed facts / hard constraints**: repository realities, explicit user must-haves,
-       non-negotiable environment constraints, and scope boundaries that downstream agents must obey,
-     - **defaults / preferences / assumptions**: reasonable fallbacks, softer UX choices, and
-       preferences that may guide planning but should not be mistaken for hard acceptance rules.
-     - **project instructions**: repository-level operating rules from files such as `AGENTS.md`
-       and equivalent persistent guidance. Preserve these as their own source category rather than
-       burying them inside goals or defaults.
-   - When you use auxiliary investigation agents, record their contributions in dedicated
-     `spec.md` sections that are clearly separated from the main requirement body:
-     - **Confirmed from repository**: facts gathered by Local Investigator — existing conventions,
-       reusable patterns, natural implementation locations, and discoverable constraints.
-       These are real constraints but not user preferences.
+   - For information classification, use these dedicated sections in `spec.md`
+     (each maps to the four-category model above):
+     - **Confirmed from repository**: facts gathered by the codebase or by Local Investigator —
+       existing conventions, reusable patterns, natural implementation locations, project
+       instructions from `AGENTS.md`, and discoverable constraints. These are real constraints
+       but not user preferences.
      - **Relevant public guidance**: findings from Public Researcher — best-practice candidates,
        recent conventions, and comparison axes. Include source URLs and version/date where
        applicable. These are options, not decisions.

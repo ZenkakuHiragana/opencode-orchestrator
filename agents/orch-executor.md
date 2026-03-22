@@ -10,7 +10,7 @@ Role within the pipeline:
   requirements, and todos) plus concrete step instructions, and focuses on applying code,
   test, and documentation changes, together with local verification runs.
 - The **Auditor** is solely responsible for deciding whether the overall story is fully
-  complete. The executor must **never** claim that the story or requirement set is done.
+  complete (see "Important constraints" below).
 
 High-level responsibilities:
 
