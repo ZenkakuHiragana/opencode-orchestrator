@@ -28,8 +28,8 @@
     - `todo.json` … Todo-Writer が生成する canonical todo 一覧
     - `command-policy.json` … Planner が合成するコマンドポリシー
     - `status.json` … `orchestrator-loop` が更新するループ状態
-      - 直近の executor / auditor スナップショットに加えて、Todo-Writer が再計画入力として優先参照する
-        `replan_request` を含む。
+      - 直近の executor / auditor スナップショットに加えて、
+        Todo-Writer が再計画入力として優先参照する `replan_request` を含む。
 
 以下、エージェント／コマンドごとに、(A) 役割, (B) 主な入力ファイル, (C) 主な出力ファイル,
 (D) プロンプト上の出力仕様 を整理します。
@@ -38,7 +38,7 @@
 
 - 実体
   - エージェント: `orch-planner` (`agents/orch-planner.md`)
-  - CLI コマンド: なし
+  - スラッシュコマンド: なし
   - 計画全体を `orch-planner` が `task=orch-refiner` / `task=orch-spec-checker` を使って主導する
     （エージェント設定は `src/orchestrator-agents.ts` 参照）。
 
@@ -75,7 +75,7 @@
 
 - 実体
   - エージェント: `orch-refiner` (`agents/orch-refiner.md`)
-  - CLI コマンド: `orch-refine` (`commands/orch-refine.md`)
+  - スラッシュコマンド: `orch-refine` (`commands/orch-refine.md`)
 
 - (A) 役割
   - 要件の精査エージェント。高レベルゴールを「受け入れ条件付きの要求一覧」に落とし込む。
@@ -112,7 +112,7 @@
 
 - 実体
   - エージェント: `orch-spec-checker` (`agents/orch-spec-checker.md`)
-  - CLI コマンド: `orch-spec-check` (`commands/orch-spec-check.md`)
+  - スラッシュコマンド: `orch-spec-check` (`commands/orch-spec-check.md`)
 
 - (A) 役割
   - 受け入れ仕様と command-policy の構造検査を行う読み取り専用エージェント。
@@ -137,7 +137,7 @@
 
 - 実体
   - エージェント: `orch-preflight-runner` (`agents/orch-preflight-runner.md`)
-  - CLI コマンド: `orch-preflight` (`commands/orch-preflight.md`)
+  - スラッシュコマンド: `orch-preflight` (`commands/orch-preflight.md`)
   - Planner からは `preflight-cli` ツール経由で呼び出される。
 
 - (A) 役割
@@ -167,7 +167,7 @@
 
 - 実体
   - エージェント: `orch-todo-writer` (`agents/orch-todo-writer.md`)
-  - CLI コマンド: `orch-todo-write` (`commands/orch-todo-write.md`)
+  - スラッシュコマンド: `orch-todo-write` (`commands/orch-todo-write.md`)
   - 初回セッション作成やループ内の「プラン更新ステップ」として呼び出される（`src/orchestrator-loop.ts`）。
 
 - (A) 役割
@@ -199,7 +199,7 @@
 
 - 実体
   - エージェント: `orch-executor` (`agents/orch-executor.md`)
-  - CLI コマンド: `orch-exec` (`commands/orch-exec.md`)
+  - スラッシュコマンド: `orch-exec` (`commands/orch-exec.md`)
   - Orchestrator ループ本体から各ステップ毎に呼び出される（`src/orchestrator-loop.ts`）。
 
 - (A) 役割
@@ -243,7 +243,7 @@
 
 - 実体
   - エージェント: `orch-auditor` (`agents/orch-auditor.md`)
-  - CLI コマンド: `orch-audit` (`commands/orch-audit.md`)
+  - スラッシュコマンド: `orch-audit` (`commands/orch-audit.md`)
   - Orchestrator ループから、Executor が `STEP_AUDIT: ready ...` と
     `STEP_VERIFY: ready ...` を同時に返したステップでのみ呼び出される
     （`src/orchestrator-loop.ts`）。
