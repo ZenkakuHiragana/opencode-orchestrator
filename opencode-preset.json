@@ -109,7 +109,7 @@
       "test *": "allow",
       "[": "allow",
       "[ *": "allow",
-      "bash -n *": "allow"
+      "bash -n *": "allow",
     },
     "external_directory": "ask"
   }

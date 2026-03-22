@@ -3,15 +3,41 @@
   "version": "0.1.0-beta.0",
   "private": false,
   "description": "Orchestrator CLI and plugin for OpenCode multi-agent workflows",
+  "repository": "https://github.com/ZenkakuHiragana/opencode-orchestrator",
+  "homepage": "https://github.com/ZenkakuHiragana/opencode-orchestrator",
+  "bugs": "https://github.com/ZenkakuHiragana/opencode-orchestrator/issues",
   "license": "MIT",
+  "keywords": [
+    "opencode",
+    "orchestrator",
+    "multi-agent",
+    "automation",
+    "cli",
+    "plugin"
+  ],
   "type": "module",
   "main": "dist/index.js",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
   "bin": {
     "opencode-orchestrator": "dist/cli.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,md}\"",
     "test": "vitest run"
   },
   "dependencies": {

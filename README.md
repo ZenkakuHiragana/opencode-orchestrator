@@ -50,7 +50,7 @@ flowchart LR
 
   subgraph Execution["実行フェーズ"]
     direction TB
-    Dev2{{"開発者"}} --"シェルスクリプト実行:<br/>npx opencode-orchestrator loop --task task-name"-->
+     Dev2{{"開発者"}} --"シェルスクリプト実行:<br/>npx opencode-orchestrator loop --task task-name"-->
     TodoWriter["Todo-Writer<br/>(Subagent)"]
     --"ToDo リスト"-->
     Executor["Executor<br/>(Subagent)"]
@@ -73,15 +73,27 @@ flowchart LR
 
 ## この OpenCode プラグインの使い方
 
-> [!NOTE]
-> npm に公開していないのでクローンして npm link などでなんとかするしかありません。
-> そのうち公開します。たぶん。
+1. opencode.json のプラグインフィールドに登録します。
+
+```json
+{
+  "plugins": ["@zenorg/opencode-orchestrator"]
+}
+```
+
+2. CLIをインストールします。
+
+```sh
+npm install -g @zenorg/opencode-orchestrator
+```
 
 OpenCode からこのリポジトリをプラグインとして読み込むと、
 
-- orchestrator 用エージェント (`orch-planner`, `orch-executor`, など)
-- orchestrator 用コマンド (`orch-todo-write`, `orch-exec`, など)
-- ツール (`autocommit`, `preflight-cli`)
+- Orch-Planner ... 計画フェーズで対話するエージェント
+- `@orch-local-investigator` ... コードベース探索サブエージェント
+- `@orch-public-researcher` ... Web 検索サブエージェント
+- Orchestrator 用のコマンド各種（`/orch-todo-write`, `/orch-exec`など。非公開にはできない仕様らしいです。)
+- 各種カスタムツール (`autocommit`, `preflight-cli`)
 
 が自動登録されます。
 
