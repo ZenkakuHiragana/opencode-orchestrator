@@ -8,7 +8,7 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { orchestratorAgents } from "./orchestrator-agents.js";
 import { orchestratorCommands } from "./orchestrator-commands.js";
-import { setPreflightRunnerBashPermission } from "./preflight-permission-store.js";
+import { setPreflightRunnerBashPermissionSource } from "./preflight-permission-store.js";
 import {
   rewriteAgentConfigPaths,
   rewritePromptPaths,
@@ -192,10 +192,16 @@ export const OrchestratorPlugin: Plugin = async (input) => {
         config.agent[name] = rewriteAgentConfigPaths(merged);
 
         if (name === "orch-preflight-runner") {
-          const effective = config.agent[name] as {
+          const effectiveAgent = config.agent[name] as {
             permission?: { bash?: unknown };
           };
-          setPreflightRunnerBashPermission(effective?.permission?.bash);
+          const effectiveGlobal = config as {
+            permission?: { bash?: unknown };
+          };
+          setPreflightRunnerBashPermissionSource({
+            globalBash: effectiveGlobal?.permission?.bash,
+            agentBash: effectiveAgent?.permission?.bash,
+          });
         }
       }
 

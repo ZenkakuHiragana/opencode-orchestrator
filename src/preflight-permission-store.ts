@@ -1,11 +1,26 @@
 export type BashPermissionDecision = "allow" | "ask" | "deny";
 
-let _preflightRunnerBashPermission: unknown = undefined;
+export type PreflightRunnerBashPermissionSource = {
+  globalBash: unknown;
+  agentBash: unknown;
+};
 
-export function setPreflightRunnerBashPermission(permission: unknown): void {
-  _preflightRunnerBashPermission = permission;
+let _preflightRunnerBashPermissionSource: PreflightRunnerBashPermissionSource =
+  {
+    globalBash: undefined,
+    agentBash: undefined,
+  };
+
+export function setPreflightRunnerBashPermissionSource(input: {
+  globalBash: unknown;
+  agentBash: unknown;
+}): void {
+  _preflightRunnerBashPermissionSource = {
+    globalBash: input.globalBash,
+    agentBash: input.agentBash,
+  };
 }
 
-export function getPreflightRunnerBashPermission(): unknown {
-  return _preflightRunnerBashPermission;
+export function getPreflightRunnerBashPermissionSource(): PreflightRunnerBashPermissionSource {
+  return _preflightRunnerBashPermissionSource;
 }

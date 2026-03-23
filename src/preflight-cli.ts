@@ -6,7 +6,7 @@ import helperCommandsData from "../resources/helper-commands.json" with { type: 
 import { getOrchestratorStateDir } from "./orchestrator-paths.js";
 import { buildOpencodeSpawnPlan } from "./opencode-spawn.js";
 import { getOpencodeClient } from "./opencode-client-store.js";
-import { getPreflightRunnerBashPermission } from "./preflight-permission-store.js";
+import { getPreflightRunnerBashPermissionSource } from "./preflight-permission-store.js";
 
 type ToastVariant = "info" | "success" | "warning" | "error";
 
@@ -62,8 +62,8 @@ export type CommandDescriptor = {
   // commands without reconstructing them from free-form text.
   id: string;
   command: string;
-  role?: string;
-  usage?: CommandUsage;
+  role: string;
+  usage: CommandUsage;
 };
 
 type RunEvent = {
@@ -143,19 +143,24 @@ export type PermissionEvaluationResult = {
   matchedPattern: string | null;
 };
 
-export function evaluateBashPermission(
+type PermissionLayerEvaluation = {
+  matched: boolean;
+  decision: CommandPermissionDecision;
+  matchedPattern: string | null;
+};
+
+function evaluateBashPermissionLayer(
   command: string,
   permission: unknown,
-): PermissionEvaluationResult {
+): PermissionLayerEvaluation {
   const normalizedCommand = command.trim();
 
-  // OpenCode default: when permission.bash is not configured, bash is allowed.
   if (permission === undefined) {
-    return { decision: "allow", determined: true, matchedPattern: null };
+    return { matched: false, decision: "ask", matchedPattern: null };
   }
 
   if (isBashPermissionDecision(permission)) {
-    return { decision: permission, determined: true, matchedPattern: null };
+    return { matched: true, decision: permission, matchedPattern: null };
   }
 
   if (
@@ -163,7 +168,7 @@ export function evaluateBashPermission(
     typeof permission !== "object" ||
     Array.isArray(permission)
   ) {
-    return { decision: "allow", determined: false, matchedPattern: null };
+    return { matched: false, decision: "ask", matchedPattern: null };
   }
 
   let lastMatch: {
@@ -181,13 +186,57 @@ export function evaluateBashPermission(
   }
 
   if (!lastMatch) {
-    return { decision: "allow", determined: false, matchedPattern: null };
+    return { matched: false, decision: "ask", matchedPattern: null };
+  }
+
+  return {
+    matched: true,
+    decision: lastMatch.decision,
+    matchedPattern: lastMatch.pattern,
+  };
+}
+
+export function evaluateBashPermission(
+  command: string,
+  permission: unknown,
+): PermissionEvaluationResult {
+  const layer = evaluateBashPermissionLayer(command, permission);
+  if (!layer.matched) {
+    return { decision: "ask", determined: true, matchedPattern: null };
+  }
+
+  return {
+    decision: layer.decision,
+    determined: true,
+    matchedPattern: layer.matchedPattern,
+  };
+}
+
+export function evaluateEffectiveBashPermission(
+  command: string,
+  source: { globalBash: unknown; agentBash: unknown },
+): PermissionEvaluationResult {
+  if (source.globalBash === undefined && source.agentBash === undefined) {
+    return { decision: "allow", determined: true, matchedPattern: null };
+  }
+
+  const globalLayer = evaluateBashPermissionLayer(command, source.globalBash);
+  const agentLayer = evaluateBashPermissionLayer(command, source.agentBash);
+
+  const lastMatch = agentLayer.matched
+    ? agentLayer
+    : globalLayer.matched
+      ? globalLayer
+      : null;
+
+  if (!lastMatch) {
+    return { decision: "ask", determined: true, matchedPattern: null };
   }
 
   return {
     decision: lastMatch.decision,
     determined: true,
-    matchedPattern: lastMatch.pattern,
+    matchedPattern: lastMatch.matchedPattern,
   };
 }
 
@@ -250,8 +299,8 @@ export function interpretPreflightRun(
       result: {
         id: descriptor.id,
         command: descriptor.command,
-        role: descriptor.role ?? null,
-        usage: descriptor.usage ?? "may_exec",
+        role: descriptor.role,
+        usage: descriptor.usage,
         available: false,
         exit_code: runResult.code,
         stderr_excerpt:
@@ -356,8 +405,8 @@ export function interpretPreflightRun(
           result: {
             id: descriptor.id,
             command: resultObj.command || descriptor.command,
-            role: resultObj.role ?? descriptor.role ?? null,
-            usage: resultObj.usage ?? descriptor.usage ?? "may_exec",
+            role: resultObj.role ?? descriptor.role,
+            usage: resultObj.usage ?? descriptor.usage,
             available: Boolean(resultObj.available),
             exit_code:
               typeof resultObj.exit_code === "number" ||
@@ -423,8 +472,8 @@ export function interpretPreflightRun(
     result: {
       id: descriptor.id,
       command: descriptor.command,
-      role: descriptor.role ?? null,
-      usage: descriptor.usage ?? "may_exec",
+      role: descriptor.role,
+      usage: descriptor.usage,
       available: false,
       exit_code: null,
       stderr_excerpt: stderrBase,
@@ -449,8 +498,8 @@ const preflightCliTool = tool({
           // command-policy.
           id: z.string(),
           command: z.string(),
-          role: z.string().optional(),
-          usage: z.enum(["must_exec", "may_exec", "doc_only"]).optional(),
+          role: z.string(),
+          usage: z.enum(["must_exec", "may_exec", "doc_only"]),
         }),
       )
       .describe("Candidate commands to probe, as command descriptors."),
@@ -468,8 +517,8 @@ const preflightCliTool = tool({
       const results = args.commands.map<PreflightProbeResult>((item) => ({
         id: item.id,
         command: item.command,
-        role: item.role ?? null,
-        usage: (item.usage as CommandUsage | undefined) ?? "may_exec",
+        role: item.role,
+        usage: item.usage,
         available: false,
         exit_code: null,
         stderr_excerpt: msg,
@@ -540,8 +589,8 @@ const preflightCliTool = tool({
       const results = args.commands.map<PreflightProbeResult>((item) => ({
         id: item.id,
         command: item.command,
-        role: item.role ?? null,
-        usage: (item.usage as CommandUsage | undefined) ?? "may_exec",
+        role: item.role,
+        usage: item.usage,
         available: false,
         exit_code: null,
         stderr_excerpt: msg,
@@ -667,8 +716,8 @@ const preflightCliTool = tool({
         {
           id: descriptor.id,
           command: descriptor.command,
-          ...(descriptor.role ? { role: descriptor.role } : {}),
-          ...(descriptor.usage ? { usage: descriptor.usage } : {}),
+          role: descriptor.role,
+          usage: descriptor.usage,
         },
       ];
 
@@ -786,17 +835,18 @@ const preflightCliTool = tool({
     }[];
 
     const seenCommands = new Set<string>();
-    const preflightRunnerBashPermission = getPreflightRunnerBashPermission();
+    const preflightRunnerBashPermission =
+      getPreflightRunnerBashPermissionSource();
 
     for (const item of allCommands) {
       const descriptor: CommandDescriptor = {
         id: item.id,
         command: item.command,
         role: item.role,
-        usage: item.usage as CommandUsage | undefined,
+        usage: item.usage,
       };
 
-      const permissionCheck = evaluateBashPermission(
+      const permissionCheck = evaluateEffectiveBashPermission(
         descriptor.command,
         preflightRunnerBashPermission,
       );
@@ -804,8 +854,8 @@ const preflightCliTool = tool({
         results.push({
           id: descriptor.id,
           command: descriptor.command,
-          role: descriptor.role ?? null,
-          usage: descriptor.usage ?? "may_exec",
+          role: descriptor.role,
+          usage: descriptor.usage,
           available: permissionCheck.decision === "allow",
           exit_code: permissionCheck.decision === "allow" ? 0 : null,
           stderr_excerpt:
@@ -846,8 +896,8 @@ const preflightCliTool = tool({
         results.push({
           id: descriptor.id,
           command: descriptor.command,
-          role: descriptor.role ?? cached.role,
-          usage: descriptor.usage ?? cached.usage,
+          role: descriptor.role,
+          usage: descriptor.usage,
           available: cached.available,
           exit_code: cached.exit_code,
           stderr_excerpt: cached.stderr_excerpt,
@@ -875,7 +925,7 @@ const preflightCliTool = tool({
     }
 
     const mustExecFailures = results.filter(
-      (r) => (r.usage ?? "must_exec") === "must_exec" && !r.available,
+      (r) => r.usage === "must_exec" && !r.available,
     );
 
     const status: "ok" | "failed" =
