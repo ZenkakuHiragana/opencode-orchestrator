@@ -5,6 +5,7 @@ import { orchTodoReadTool, orchTodoWriteTool } from "./orchestrator-todo.js";
 import { setOpencodeClient } from "./opencode-client-store.js";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { fileURLToPath } from "node:url";
 import { orchestratorAgents } from "./orchestrator-agents.js";
 import { orchestratorCommands } from "./orchestrator-commands.js";
 import {
@@ -28,6 +29,8 @@ export const OrchestratorPlugin: Plugin = async (input) => {
   // (e.g. tui.showToast for toast notifications).
   setOpencodeClient(input.client);
 
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = path.dirname(__filename);
   const baseDir = path.dirname(__dirname);
   const agentsDir = path.join(baseDir, "agents");
   const commandsDir = path.join(baseDir, "commands");
