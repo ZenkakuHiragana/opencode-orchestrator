@@ -1,9 +1,0 @@
-*
-!package.json
-!tsconfig.json
-!README.md
-!opencode-orchestrator-diagram.png
-!dist/**
-!src/**
-!agents/**
-!commands/**

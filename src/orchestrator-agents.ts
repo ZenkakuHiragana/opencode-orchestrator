@@ -377,7 +377,7 @@ export const orchestratorAgents: Record<string, OrchestratorAgentConfig> = {
   },
   "orch-local-investigator": {
     description:
-      "Local codebase investigation specialist. Use this when you need to find where a function, type, or config key is defined and how it connects to other files. Returns absolute paths, call chains, existing patterns to follow, and uncertainties — so you can act without further exploration. Prefer this over doing broad searches yourself when the answer requires mapping multiple files or symbols.",
+      "Local repository investigation specialist. Use this when you need to find where a function, type, config key, or file is defined and how it connects to the rest of the project. Returns absolute paths, call chains, existing patterns to follow, and uncertainties — so you can act without further exploration. Prefer this over doing broad searches yourself when the answer requires mapping multiple files or symbols.",
     mode: "subagent",
     hidden: false,
     temperature: 0.1,
@@ -427,7 +427,7 @@ export const orchestratorAgents: Record<string, OrchestratorAgentConfig> = {
   },
   "orch-public-researcher": {
     description:
-      "Public information research specialist. Use this when you need authoritative answers about external libraries, APIs, frameworks, or OSS projects — official documentation, version-specific behavior, known issues, or implementation examples with permalink citations. Searches the web and public codebases without exposing internal codebase terms. Prefer this over guessing library behavior or reading outdated blog posts.",
+      "Public information research specialist. Use this when you need to look up facts, how-tos, or context that lives outside the codebase — library APIs, error codes, configuration options, protocol specs, version differences, known issues, or general knowledge. Returns answers with source citations so you can trust the result. Prefer this over guessing or relying on training data cutoff when freshness or accuracy matters.",
     mode: "subagent",
     hidden: false,
     temperature: 0.1,
