@@ -257,6 +257,9 @@ Stable command identifiers and templates:
   - `command`: the command line or **command template** (for example,
     `npm test` or `rg {{pattern}} {{subdir}} -n`). Parameter placeholders like `{{name}}`
     will be filled in by the Executor at runtime.
+    Avoid embedding shell pipelines (`|`), connectors (`&&`, `||`, `;`), redirections
+    (`>`, `<`, `2>&1`, etc.), or subshells in these definitions. Keep each command a single base
+    CLI so the Executor can safely compose more complex scripts later.
     Template arguments like `{{name}}` are always treated as a single shell argument
     that are surrounded by `"`s. You can't define part of arguments with template (for example,
     `basedir/{{subdir}}` is invalid as it will be substituted with `basedir/"specific/path"`).

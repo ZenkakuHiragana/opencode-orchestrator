@@ -99,7 +99,7 @@ sequenceDiagram
     end
 
     Planner->>PreflightTool: preflight-cli ツールで各コマンドを非対話チェック
-    PreflightTool-->>Planner: JSON: { results[]: { id, available, exit_code } }
+    PreflightTool-->>Planner: JSON: { results[]: { id, available, exit_code, stderr_excerpt } }
 
     Planner->>StateDir: command-policy.json を更新（availability 付与・loop_status 設定）
     Planner-->>Human: 計画サマリを提示（Execution readiness / command-policy status / Next actions）
@@ -107,8 +107,8 @@ sequenceDiagram
 
 **図 1.5.1 補足：TUI 計画フェーズのポイント**
 
-- Planner（LLM）は **orch-refine / orch-spec-check / orch-preflight** などの**カスタムコマンド**を呼び出して各サブエージェントを起動する。コマンド自体に引数の概念はない。
-- PreflightRunner の呼び出しだけは `preflight-cli` **ツール**経由（非対話実行専用）。
+- Planner（LLM）は主に **orch-refine / orch-spec-check** の**カスタムコマンド**でサブエージェントを起動する。
+- PreflightRunner は Planner から直接コマンド実行せず、`preflight-cli` **ツール**経由で呼び出す（ツール内部で `orch-preflight` コマンドを非対話実行）。
 - Refiner / Spec-Checker のサイクルは、`status === "ok"` かつ `feasible_for_loop === true` になるまで何度でも回る。
 - `command-policy.json` を更新できるのは、Planner が担当するこのフェーズだけである。
 
@@ -358,10 +358,12 @@ sequenceDiagram
 - (A) 役割
   - Spec-checker などが定義した「候補コマンド」が現在の環境で実行可能か、
     破壊的でない範囲で実際に `bash` 経由で試す。
+  - `preflight-cli` から呼ばれる場合、`resources/helper-commands.json` の helper コマンド群も同時に対象になる。
 
 - (B) 主な入力
   - プロンプト中に JSON として埋め込まれたコマンド一覧:
     - `[ { "id": "cmd-dotnet-test", "command": "dotnet test", "role": "test", "usage": "must_exec" }, ... ]`
+    - helper コマンドは `helper:` 接頭辞付き ID（例: `helper:rg`, `helper:jq`）で渡される。
   - 各 `command` はテンプレート展開済みの「最終的な 1 行コマンド」。
 
 - (C) 主な出力（ファイル）
@@ -532,7 +534,7 @@ sequenceDiagram
     - Auditor 実行 (`orch-audit`)
     - 安全装置（SAFETY トリガでのセッション再起動、`command-policy.json` ゲートなど）
   - ループ状態は `status.json` に保存し、UI や他エージェントが参照できるようにする。
-  - 起動時に "loop mode: sequential executor/auditor flow with only lightweight read-only delegation" をログ出力する。
+  - 起動時に "loop mode: the executor and auditor do the job sequentially." をログ出力する。
   - 各 Executor ステップ後、`last_executor_step.requirement_traceability` をパースして
     `requirement diff trace: <req-id> -> <file1>, <file2>` をログ出力し、トレーサビリティを可視化する。
 
@@ -565,7 +567,7 @@ sequenceDiagram
   Auditor が「最終完了判定」を行う、という明確な責務分担になっている。
 - Orchestrator ループ (`orchestrator-loop.ts`) はこれらのエージェントとコマンドを束ね、
   各ステップで state ディレクトリ配下のファイルを読み書きしながらストーリーを前に進める。
-- `agent_roles.md` は、その全体像を俯瞰するためのリファレンスとして利用できる。
+- `agent-roles.md` は、その全体像を俯瞰するためのリファレンスとして利用できる。
 
 ## 11. 主要 JSON ファイルのスキーマ
 
@@ -617,7 +619,11 @@ sequenceDiagram
 ```jsonc
 {
   "summary": {
-    "loop_status": "ready_for_loop" | "needs_refinement" | "blocked_by_environment" | string
+    "loop_status": "ready_for_loop" | "needs_refinement" | "blocked_by_environment" | string,
+    "helper_availability": {
+      "helper:rg": "available" | "unavailable",
+      "helper:grep": "available" | "unavailable"
+    }
   },
   "commands": [
     {

@@ -3,6 +3,7 @@ export interface AuditSummary {
   requirementsJson: string | null;
   failed: { id: string; reason?: string }[];
   passed: string[];
+  parseError?: string | null;
 }
 
 export function parseAuditResult(stdout: string): AuditSummary {
@@ -25,12 +26,18 @@ export function parseAuditResult(stdout: string): AuditSummary {
   }
 
   if (!lastText) {
-    // Auditor did not produce any valid JSON output - this is an error condition
-    // Log for debugging purposes
+    const reason =
+      "auditor produced no valid JSON output (non-JSON or empty response)";
     console.error(
       "[opencode-orchestrator] ERROR: auditor produced no valid JSON output",
     );
-    return { done: false, requirementsJson: null, failed: [], passed: [] };
+    return {
+      done: false,
+      requirementsJson: null,
+      failed: [],
+      passed: [],
+      parseError: reason,
+    };
   }
 
   try {
@@ -43,10 +50,18 @@ export function parseAuditResult(stdout: string): AuditSummary {
     const hasRequirements =
       Array.isArray(payload.requirements) && payload.requirements.length > 0;
     if (payload.done === false && !hasRequirements) {
+      const reason =
+        "auditor returned done:false without any requirements (empty or missing requirements array)";
       console.error(
         "[opencode-orchestrator] ERROR: auditor returned done:false with empty requirements - treating as error",
       );
-      return { done: false, requirementsJson: null, failed: [], passed: [] };
+      return {
+        done: false,
+        requirementsJson: null,
+        failed: [],
+        passed: [],
+        parseError: reason,
+      };
     }
 
     let requirementsJson: string | null = null;
@@ -72,6 +87,14 @@ export function parseAuditResult(stdout: string): AuditSummary {
     const doneFlag = !!payload && payload.done === true;
     return { done: doneFlag, requirementsJson, failed, passed };
   } catch {
-    return { done: false, requirementsJson: null, failed: [], passed: [] };
+    const reason =
+      "auditor produced invalid JSON when parsing the audit report";
+    return {
+      done: false,
+      requirementsJson: null,
+      failed: [],
+      passed: [],
+      parseError: reason,
+    };
   }
 }

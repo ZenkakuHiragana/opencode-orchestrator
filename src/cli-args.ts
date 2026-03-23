@@ -64,10 +64,7 @@ export function parseLoopArgs(argv: string[]): LoopOptions {
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
-    if (arg === "--help" || arg === "-h") {
-      printLoopUsage();
-      process.exit(0);
-    } else if (arg === "--task") {
+    if (arg === "--task") {
       const next = argv[++i];
       if (!next) {
         throw new Error("--task requires a task name");
@@ -156,9 +153,6 @@ export function parseListArgs(argv: string[]): ListOptions {
   for (const arg of argv) {
     if (arg === "--json") {
       format = "json";
-    } else if (arg === "--help" || arg === "-h") {
-      printListUsage();
-      process.exit(0);
     } else if (arg.startsWith("-")) {
       throw new Error(`unknown option for list: ${arg}`);
     } else {

@@ -75,81 +75,67 @@ flowchart LR
 
 ## LLM向けクイックスタート
 
-AI エージェントがこの orchestrator を使ってタスクを実行する場合、次の手順で始められます。
+このパッケージは npm で配布される OpenCode 向けの「プラグイン + CLI」同梱パッケージです。
 
-### Installation
+### 1) インストール
 
 ```bash
-npm install
-npm run build
+npm install @zenorg/opencode-orchestrator
 ```
 
-Expected output: Build completes without errors, generating `dist/cli.js` and `dist/index.js`.
+グローバル利用なら `npm install -g @zenorg/opencode-orchestrator` でも構いません。
 
-### 基本的な使い方
+### 2) OpenCode にプラグイン登録
 
-1. **タスクの状態ディレクトリを作成**
-   - 状態は `$XDG_STATE_HOME/opencode/orchestrator/<task>/state` に保存されます
-   - 初回実行時に自動的にディレクトリが作成されます
+`opencode.json` に以下を設定します。
 
-2. **plan フェーズ** (OpenCode TUI で実行)
+```json
+{
+  "plugins": ["@zenorg/opencode-orchestrator"]
+}
+```
 
-   ```
-   > npx opencode-orchestrator planner --task my-task "大きな開発タスク"
-   ```
+これで orchestrator 用エージェント（`orch-planner` など）、
+ツール（`preflight-cli` / `orch_todo_read` / `orch_todo_write` / `autocommit`）が利用可能になります。
 
-   - acceptance-index.json と spec.md が作成されます
+### 3) 計画フェーズ（OpenCode 側）
 
-3. **実行ループ開始**
+計画は CLI ではなく OpenCode 側で実施します。基本フローは次の通りです。
 
-   ```bash
-   npx opencode-orchestrator loop --task my-task "タスクの説明"
-   ```
+1. `orch-planner` でタスクを整理
+2. Planner が内部で `orch-refine` / `orch-spec-check` / `preflight-cli` を使って
+   `acceptance-index.json` / `spec.md` / `command-policy.json` を整備
+3. `command-policy.json.summary.loop_status` が `ready_for_loop` になることを確認
 
-   Expected output:
+状態ファイルは `$XDG_STATE_HOME/opencode/orchestrator/<task>/state` に保存されます。
 
-   ```
-    [opencode-orchestrator] === STEP 1 (maxLoop=100) ===
-    [opencode-orchestrator] progress: 1/100
-    ...
-    [opencode-orchestrator] auditor done = true
-   ```
+### 4) 実行フェーズ（CLI）
 
-### CLI オプション
+計画済みタスクに対して実行ループを開始します。
 
-| オプション      | 説明                            | 例                   |
-| --------------- | ------------------------------- | -------------------- |
-| `--task <name>` | タスクキー (必須)               | `--task my-api-task` |
-| `--continue`    | 前回のセッションを継続          |                      |
-| `--max-loop N`  | 最大ステップ数 (デフォルト 100) | `--max-loop 50`      |
-| `--commit`      | 完了時に自動コミット            |                      |
+```bash
+npx opencode-orchestrator loop --task <task-key> "高レベルゴール"
+```
 
-### 次のステップ
+プロンプトは省略可能です（省略時は `spec.md` などを参照する既定プロンプトを使用）。
 
-- `opencode-orchestrator list` で利用可能なタスクを確認
-- `opencode-orchestrator loop --help` でループオプションの詳細を確認
-- 状態ディレクトリ内の `acceptance-index.json` で要件を確認
+典型的な出力:
 
-1. opencode.json のプラグインフィールドに登録します。
-   ```json
-   {
-     "plugins": ["@zenorg/opencode-orchestrator"]
-   }
-   ```
-2. CLIをインストールします。
-   ```sh
-   npm install -g @zenorg/opencode-orchestrator
-   ```
+```text
+[opencode-orchestrator] === STEP 1 (maxLoop=100) ===
+[opencode-orchestrator] progress: 1/100
+...
+[opencode-orchestrator] auditor done = true
+```
 
-OpenCode からこのリポジトリをプラグインとして読み込むと、
+### 5) よく使う CLI
 
-- Orch-Planner ... 計画フェーズで対話するエージェント
-- `@orch-local-investigator` ... コードベース探索サブエージェント
-- `@orch-public-researcher` ... Web 検索サブエージェント
-- Orchestrator 用のコマンド各種（`/orch-todo-write`, `/orch-exec`など。非公開にはできない仕様らしいです。)
-- 各種カスタムツール (`autocommit`, `preflight-cli`)
+- タスク一覧: `npx opencode-orchestrator list`
+- タスク一覧(JSON): `npx opencode-orchestrator list --json`
+- ループヘルプ: `npx opencode-orchestrator loop --help`
 
-が自動登録されます。
+`loop` 実行前に `command-policy.json` が未整備（または `must_exec` が unavailable）だと、
+計画の実行は始まりません。先に計画フェーズを完了させてください。
 
 ## 設定
 

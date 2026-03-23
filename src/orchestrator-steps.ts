@@ -343,39 +343,6 @@ export async function runExecutorAndAuditorStep(
     (b) => b.tag && b.tag !== "need_replan",
   );
 
-  const hasEnvBlocked = otherBlockers.some((b) => b.tag === "env_blocked");
-  if (hasEnvBlocked) {
-    const prevEnvBlocked = status.consecutive_env_blocked ?? 0;
-    status.consecutive_env_blocked = prevEnvBlocked + 1;
-    failureBudget.consecutive_env_blocked = status.consecutive_env_blocked;
-    failureBudget.last_failure_kind = "env_blocked";
-    failureBudget.last_failure_summary =
-      otherBlockers.find((b) => b.tag === "env_blocked")?.reason ||
-      "executor が env_blocked を報告した";
-    if (status.consecutive_env_blocked >= 3) {
-      const proposals: ProposalSnapshot[] = Array.isArray(status.proposals)
-        ? status.proposals.slice()
-        : [];
-      const blockersForProposal = otherBlockers.filter(
-        (b) => b.tag === "env_blocked",
-      );
-      for (const blocker of blockersForProposal) {
-        proposals.push({
-          id: `p-${Date.now()}-${blocker.tag}`,
-          source: "executor",
-          cycle: step,
-          kind: blocker.tag,
-          summary: "Executor reported env_blocked in 3 consecutive steps",
-          details: `${blocker.scope}: ${blocker.tag}: ${blocker.reason}`,
-        });
-      }
-      status.proposals = proposals;
-    }
-  } else {
-    status.consecutive_env_blocked = 0;
-    failureBudget.consecutive_env_blocked = 0;
-  }
-
   for (const line of execRes.stdout.split(/\r?\n/)) {
     const trimmed = line.trim();
     if (!trimmed.startsWith("STEP_BLOCKER:")) continue;
@@ -398,6 +365,7 @@ export async function runExecutorAndAuditorStep(
   }
 
   let shouldAudit = false;
+  let auditParseError: string | null = null;
   let lastAuditStatus: string | null = null;
   let lastAuditIds: string | null = null;
   let verificationGapIssue: ReplanIssue | null = null;
@@ -466,6 +434,50 @@ export async function runExecutorAndAuditorStep(
     failureBudget.consecutive_verification_gaps = 0;
   }
 
+  const envBlockedBlockers = otherBlockers.filter(
+    (b) => b.tag === "env_blocked",
+  );
+  const envBlockedReasonFromExecutor = envBlockedBlockers[0]?.reason;
+  const envBlockedReason =
+    auditParseError ?? envBlockedReasonFromExecutor ?? undefined;
+  if (envBlockedReason) {
+    const prevEnvBlocked = status.consecutive_env_blocked ?? 0;
+    status.consecutive_env_blocked = prevEnvBlocked + 1;
+    failureBudget.consecutive_env_blocked = status.consecutive_env_blocked;
+    failureBudget.last_failure_kind = "env_blocked";
+    failureBudget.last_failure_summary = envBlockedReason;
+    if (status.consecutive_env_blocked >= 3) {
+      const proposals: ProposalSnapshot[] = Array.isArray(status.proposals)
+        ? status.proposals.slice()
+        : [];
+      if (envBlockedBlockers.length > 0) {
+        for (const blocker of envBlockedBlockers) {
+          proposals.push({
+            id: `p-${Date.now()}-${blocker.tag}`,
+            source: "executor",
+            cycle: step,
+            kind: blocker.tag,
+            summary: "Executor reported env_blocked in 3 consecutive steps",
+            details: `${blocker.scope}: ${blocker.tag}: ${blocker.reason}`,
+          });
+        }
+      } else {
+        proposals.push({
+          id: `p-${Date.now()}-env_blocked-parse`,
+          source: "auditor",
+          cycle: step,
+          kind: "env_blocked",
+          summary: "Repeatedly unable to parse auditor output",
+          details: envBlockedReason,
+        });
+      }
+      status.proposals = proposals;
+    }
+  } else {
+    status.consecutive_env_blocked = 0;
+    failureBudget.consecutive_env_blocked = 0;
+  }
+
   let stepDone = false;
   if (shouldAudit) {
     const auditPrompt = buildAuditPrompt(opts.prompt, opts.task);
@@ -502,8 +514,15 @@ export async function runExecutorAndAuditorStep(
       done: auditDone,
       failed,
       passed,
+      parseError: parseErrorFromAudit,
     } = parseAuditResult(auditRes.stdout);
+    auditParseError = parseErrorFromAudit ?? null;
     stepDone = auditDone;
+    if (parseErrorFromAudit) {
+      console.error(
+        `[opencode-orchestrator] auditor parse error: ${parseErrorFromAudit}`,
+      );
+    }
     if (auditDone) {
       failureBudget.consecutive_audit_failures = 0;
     } else {

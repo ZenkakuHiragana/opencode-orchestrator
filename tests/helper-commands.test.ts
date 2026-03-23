@@ -11,12 +11,12 @@ describe("helper-commands.json", () => {
 
   it("should contain expected helper commands", () => {
     const ids = helperCommandsData.helper_commands.map((h) => h.id);
-    expect(ids).toContain("grep");
-    expect(ids).toContain("rg");
-    expect(ids).toContain("sort");
-    expect(ids).toContain("uniq");
-    expect(ids).toContain("wc");
-    expect(ids).toContain("jq");
+    expect(ids).toContain("helper:grep");
+    expect(ids).toContain("helper:rg");
+    expect(ids).toContain("helper:sort");
+    expect(ids).toContain("helper:uniq");
+    expect(ids).toContain("helper:wc");
+    expect(ids).toContain("helper:jq");
   });
 
   it("each helper command should have required fields", () => {
@@ -46,7 +46,9 @@ describe("helper-commands.json", () => {
   });
 
   it("rg command should have correct structure for executor use", () => {
-    const rg = helperCommandsData.helper_commands.find((h) => h.id === "rg");
+    const rg = helperCommandsData.helper_commands.find(
+      (h) => h.id === "helper:rg",
+    );
     expect(rg).toBeDefined();
     expect(rg?.command).toBe("rg {{params}}");
     expect(rg?.probe).toBe("rg --version");
@@ -54,7 +56,9 @@ describe("helper-commands.json", () => {
   });
 
   it("jq command should mention safety in purpose", () => {
-    const jq = helperCommandsData.helper_commands.find((h) => h.id === "jq");
+    const jq = helperCommandsData.helper_commands.find(
+      (h) => h.id === "helper:jq",
+    );
     expect(jq).toBeDefined();
     expect(jq?.purpose).toContain("JSON");
   });

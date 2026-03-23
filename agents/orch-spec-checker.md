@@ -164,6 +164,9 @@ Behavior when reading `command-policy.json`:
   - **Safety issues**:
     - Commands that hide their real behavior behind wrapper scripts or compound shell entrypoints
       instead of a single base CLI.
+    - Commands that include shell pipelines (`|`), connectors (`&&`, `||`, `;`), redirections
+      (`>`, `<`, `2>&1`, etc.), or other shell scripting constructs. Those belong to the Executor
+      stage; the spec-checker should ensure that the Refiner provides only base CLI entrypoints.
   - **Templating opportunities**:
     - Many commands that share the same base CLI and differ only in arguments, where a small
       number of parameterized templates would be clearer and safer.

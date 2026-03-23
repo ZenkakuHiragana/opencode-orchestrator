@@ -136,13 +136,13 @@ Core flow:
 
   ```json
   "helper_availability": {
-    "rg": "available",
-    "grep": "unavailable",
-    "jq": "available"
+    "helper:rg": "available",
+    "helper:grep": "unavailable",
+    "helper:jq": "available"
   }
   ```
 
-  where each key is a helper command ID and the value is either `"available"` or `"unavailable"`.
+  where each key is a helper command ID (they carry a `helper:` prefix, e.g. `helper:rg`) and the value is either `"available"` or `"unavailable"`.
   This update MUST happen on the first preflight run and whenever environment changes are reported.
 
 - Use the command definitions provided by the Refiner in `command-policy.json.commands[]`.
@@ -198,6 +198,16 @@ Core flow:
   It maintains an in-process cache keyed by `(cwd, command)` so that repeated calls with the
   same command do not re-probe the environment. You do not need to de-duplicate commands
   beyond avoiding obviously identical entries in `command-policy.json.commands[]`.
+
+- The purpose of Preflight is to confirm that the listed commands are permitted to run
+  under the current OpenCode permission map, not to verify their business-level success.
+  The planner should treat the `available` boolean in each probe result as the single source
+  of truth. Commands that exit non-zero because of real errors (for example `ls non/existent/directory`)
+  may still be `available: true` because they were allowed to start. Only when `available` is
+  `false` should you mark a command as blocked. Use `exit_code` and `stderr_excerpt` purely for
+  diagnosis (for example to distinguish a permission denial vs. an honest runtime error in a
+  helper probe), and never downgrade a command to `availability: "unavailable"` solely because
+  its exit code was non-zero.
 
 4. Command policy synthesis (`command-policy.json`)
 

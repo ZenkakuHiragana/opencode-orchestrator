@@ -69,8 +69,13 @@ const DENY_PATTERNS: RegExp[] = [
   /~$/,
 ];
 
+function normalizeDenyPath(p: string): string {
+  return p.replace(/\\/g, "/");
+}
+
 export function isDeniedPath(p: string): boolean {
-  return DENY_PATTERNS.some((re) => re.test(p));
+  const normalized = normalizeDenyPath(p);
+  return DENY_PATTERNS.some((re) => re.test(normalized));
 }
 
 export function parseNameOnlyList(text: string): string[] {
