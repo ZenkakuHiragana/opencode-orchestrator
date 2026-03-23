@@ -4,11 +4,15 @@ import path from "node:path";
 import { describe, it, expect } from "vitest";
 
 import {
+  evaluateBashPermission,
   interpretPreflightRun,
   type CommandDescriptor,
   type OpencodeRunResult,
 } from "../src/preflight-cli.js";
+import preflightCliTool from "../src/preflight-cli.js";
 import { buildOpencodeSpawnPlan } from "../src/opencode-spawn.js";
+import { getOrchestratorStateDir } from "../src/orchestrator-paths.js";
+import { setPreflightRunnerBashPermission } from "../src/preflight-permission-store.js";
 
 describe("buildOpencodeSpawnPlan", () => {
   it("uses node script directly on Windows when opencode script path is known", () => {
@@ -241,6 +245,160 @@ describe("interpretPreflightRun", () => {
       'preflight probe "npm test" failed',
     );
     expect(result.stderr_excerpt).toContain("permission denied");
+  });
+});
+
+describe("evaluateBashPermission", () => {
+  it("defaults to allow when permission.bash is missing", () => {
+    expect(evaluateBashPermission("ls -l", undefined)).toEqual({
+      decision: "allow",
+      determined: true,
+      matchedPattern: null,
+    });
+  });
+
+  it("uses last-match-wins for wildcard rules", () => {
+    const rules = {
+      "*": "ask",
+      "ls *": "allow",
+      "ls -l": "deny",
+    };
+
+    expect(evaluateBashPermission("ls -l", rules)).toEqual({
+      decision: "deny",
+      determined: true,
+      matchedPattern: "ls -l",
+    });
+    expect(evaluateBashPermission("ls -a", rules)).toEqual({
+      decision: "allow",
+      determined: true,
+      matchedPattern: "ls *",
+    });
+    expect(evaluateBashPermission("pwd", rules)).toEqual({
+      decision: "ask",
+      determined: true,
+      matchedPattern: "*",
+    });
+  });
+
+  it("treats non-object and invalid values as undetermined", () => {
+    expect(evaluateBashPermission("ls", 123)).toEqual({
+      decision: "allow",
+      determined: false,
+      matchedPattern: null,
+    });
+
+    expect(
+      evaluateBashPermission("ls", {
+        "*": "ASK",
+      }),
+    ).toEqual({
+      decision: "allow",
+      determined: false,
+      matchedPattern: null,
+    });
+  });
+});
+
+describe("preflight-cli permission short-circuit", () => {
+  function prepareState(task: string): void {
+    const stateDir = getOrchestratorStateDir(task);
+    fs.mkdirSync(stateDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(stateDir, "acceptance-index.json"),
+      "{}",
+      "utf8",
+    );
+    fs.writeFileSync(path.join(stateDir, "spec.md"), "# spec\n", "utf8");
+    fs.writeFileSync(path.join(stateDir, "command-policy.json"), "{}", "utf8");
+  }
+
+  it("short-circuits all probes as allow when permission.bash is undefined", async () => {
+    const prevXdg = process.env.XDG_STATE_HOME;
+    const xdg = fs.mkdtempSync(
+      path.join(os.tmpdir(), "preflight-short-allow-"),
+    );
+    process.env.XDG_STATE_HOME = xdg;
+
+    try {
+      const task = "short-circuit-allow";
+      prepareState(task);
+      setPreflightRunnerBashPermission(undefined);
+
+      const raw = await preflightCliTool.execute(
+        {
+          task,
+          commands: [
+            {
+              id: "cmd-missing-bin",
+              command: "__definitely_missing_command__ --version",
+              role: "test",
+              usage: "must_exec",
+            },
+          ],
+        },
+        { agent: "orch-planner", worktree: process.cwd() } as any,
+      );
+
+      const res = JSON.parse(raw) as {
+        status: "ok" | "failed";
+        results: { id: string; available: boolean; stderr_excerpt: string }[];
+      };
+
+      expect(res.status).toBe("ok");
+      const target = res.results.find((r) => r.id === "cmd-missing-bin");
+      expect(target).toBeTruthy();
+      expect(target!.available).toBe(true);
+      expect(target!.stderr_excerpt).toContain(
+        "short-circuit: permission.bash=allow",
+      );
+    } finally {
+      setPreflightRunnerBashPermission(undefined);
+      process.env.XDG_STATE_HOME = prevXdg;
+    }
+  });
+
+  it("short-circuits all probes as unavailable when permission.bash is ask", async () => {
+    const prevXdg = process.env.XDG_STATE_HOME;
+    const xdg = fs.mkdtempSync(path.join(os.tmpdir(), "preflight-short-ask-"));
+    process.env.XDG_STATE_HOME = xdg;
+
+    try {
+      const task = "short-circuit-ask";
+      prepareState(task);
+      setPreflightRunnerBashPermission("ask");
+
+      const raw = await preflightCliTool.execute(
+        {
+          task,
+          commands: [
+            {
+              id: "cmd-ls",
+              command: "ls -l",
+              role: "test",
+              usage: "must_exec",
+            },
+          ],
+        },
+        { agent: "orch-planner", worktree: process.cwd() } as any,
+      );
+
+      const res = JSON.parse(raw) as {
+        status: "ok" | "failed";
+        results: { id: string; available: boolean; stderr_excerpt: string }[];
+      };
+
+      expect(res.status).toBe("failed");
+      const target = res.results.find((r) => r.id === "cmd-ls");
+      expect(target).toBeTruthy();
+      expect(target!.available).toBe(false);
+      expect(target!.stderr_excerpt).toContain(
+        "short-circuit: permission.bash=ask",
+      );
+    } finally {
+      setPreflightRunnerBashPermission(undefined);
+      process.env.XDG_STATE_HOME = prevXdg;
+    }
   });
 });
 

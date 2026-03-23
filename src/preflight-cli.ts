@@ -6,6 +6,7 @@ import helperCommandsData from "../resources/helper-commands.json" with { type: 
 import { getOrchestratorStateDir } from "./orchestrator-paths.js";
 import { buildOpencodeSpawnPlan } from "./opencode-spawn.js";
 import { getOpencodeClient } from "./opencode-client-store.js";
+import { getPreflightRunnerBashPermission } from "./preflight-permission-store.js";
 
 type ToastVariant = "info" | "success" | "warning" | "error";
 
@@ -104,6 +105,91 @@ export type PreflightProbeResult = {
   exit_code: number | null;
   stderr_excerpt: string;
 };
+
+function isBashPermissionDecision(
+  value: unknown,
+): value is CommandPermissionDecision {
+  return value === "allow" || value === "ask" || value === "deny";
+}
+
+function escapeRegexChar(ch: string): string {
+  return /[\\^$+?.()|[\]{}]/.test(ch) ? `\\${ch}` : ch;
+}
+
+function wildcardToRegExp(pattern: string): RegExp {
+  let out = "^";
+  for (const ch of pattern) {
+    if (ch === "*") {
+      out += ".*";
+    } else if (ch === "?") {
+      out += ".";
+    } else {
+      out += escapeRegexChar(ch);
+    }
+  }
+  out += "$";
+  return new RegExp(out);
+}
+
+function wildcardMatch(pattern: string, command: string): boolean {
+  return wildcardToRegExp(pattern).test(command);
+}
+
+export type CommandPermissionDecision = "allow" | "ask" | "deny";
+
+export type PermissionEvaluationResult = {
+  decision: CommandPermissionDecision;
+  determined: boolean;
+  matchedPattern: string | null;
+};
+
+export function evaluateBashPermission(
+  command: string,
+  permission: unknown,
+): PermissionEvaluationResult {
+  const normalizedCommand = command.trim();
+
+  // OpenCode default: when permission.bash is not configured, bash is allowed.
+  if (permission === undefined) {
+    return { decision: "allow", determined: true, matchedPattern: null };
+  }
+
+  if (isBashPermissionDecision(permission)) {
+    return { decision: permission, determined: true, matchedPattern: null };
+  }
+
+  if (
+    !permission ||
+    typeof permission !== "object" ||
+    Array.isArray(permission)
+  ) {
+    return { decision: "allow", determined: false, matchedPattern: null };
+  }
+
+  let lastMatch: {
+    decision: CommandPermissionDecision;
+    pattern: string;
+  } | null = null;
+
+  for (const [pattern, value] of Object.entries(permission)) {
+    if (!isBashPermissionDecision(value)) {
+      continue;
+    }
+    if (wildcardMatch(pattern, normalizedCommand)) {
+      lastMatch = { decision: value, pattern };
+    }
+  }
+
+  if (!lastMatch) {
+    return { decision: "allow", determined: false, matchedPattern: null };
+  }
+
+  return {
+    decision: lastMatch.decision,
+    determined: true,
+    matchedPattern: lastMatch.pattern,
+  };
+}
 
 // Simple in-process cache to avoid spawning multiple orch-preflight sessions
 // for the exact same command in the same working directory. This keeps
@@ -700,6 +786,7 @@ const preflightCliTool = tool({
     }[];
 
     const seenCommands = new Set<string>();
+    const preflightRunnerBashPermission = getPreflightRunnerBashPermission();
 
     for (const item of allCommands) {
       const descriptor: CommandDescriptor = {
@@ -708,6 +795,26 @@ const preflightCliTool = tool({
         role: item.role,
         usage: item.usage as CommandUsage | undefined,
       };
+
+      const permissionCheck = evaluateBashPermission(
+        descriptor.command,
+        preflightRunnerBashPermission,
+      );
+      if (permissionCheck.determined) {
+        results.push({
+          id: descriptor.id,
+          command: descriptor.command,
+          role: descriptor.role ?? null,
+          usage: descriptor.usage ?? "may_exec",
+          available: permissionCheck.decision === "allow",
+          exit_code: permissionCheck.decision === "allow" ? 0 : null,
+          stderr_excerpt:
+            permissionCheck.matchedPattern !== null
+              ? `preflight-cli short-circuit: permission.bash=${permissionCheck.decision} (pattern: ${permissionCheck.matchedPattern})`
+              : `preflight-cli short-circuit: permission.bash=${permissionCheck.decision}`,
+        });
+        continue;
+      }
 
       const commandKey = descriptor.command.trim();
       const cacheKey = `${cwd}::${commandKey}`;
