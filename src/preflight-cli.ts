@@ -86,7 +86,7 @@ type RunEvent = {
   };
 };
 
-function truncateExcerpt(text: string, maxLen = 200): string {
+export function truncateExcerpt(text: string, maxLen = 200): string {
   if (text.length <= maxLen) return text;
   return text.slice(0, maxLen) + "...";
 }

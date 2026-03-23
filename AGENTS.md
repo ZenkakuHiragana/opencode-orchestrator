@@ -5,12 +5,11 @@
 
 ## ビルド / Lint / テスト
 
-- ルートの TypeScript ビルド
+- ビルド
   - `package.json` / `tsconfig.json` はリポジトリルートにあります。
   - CLI とプラグインは `src/**/*.ts` からビルドされます。
-  - ビルド手順:
-    - 依存インストール: `npm install`
-    - TypeScript ビルド: `npm run build`
+  - 依存関係のインストール: `npm install`
+  - TypeScript ビルド: `npm run build`
   - ビルド成果物は `dist/cli.js`（CLI）と `dist/index.js`（プラグイン）です。
 
 - `.opencode` 配下
@@ -24,6 +23,7 @@
 - 推奨 Orchestrator ループ起動コマンド
   - `npx opencode-orchestrator loop --task <task-key> "...大きな目標..."`
 
+- コード整形: `npm run format` ... **ビルド前に整形をお願いします。**
 - 単一テストの実行: `npm test`
 
 - カスタムコマンド
@@ -57,16 +57,6 @@
     - インデントは 2 スペース、セミコロンあり。
     - シングル/ダブルクォートは既存コードのスタイルに合わせます（このリポジトリではダブルクォート多め）。
 
-- Bash（`orchestrator-loop.sh` / その他スクリプト）
-  - 冒頭で `set -euo pipefail` を使い、エラーを早期検出します。
-  - 関数は `snake_case` で命名し、ローカル変数には `local` を付けます。
-  - 引数パースには手書きの `case` 文を使い、`getopt` など外部依存は避けます。
-
-- PowerShell（`Start-Orchestrator.ps1`）
-  - `Set-StrictMode -Version Latest` と `$ErrorActionPreference = 'Stop'` を使い、エラーを例外に統一します。
-  - パラメータには `[string]`, `[switch]` などの型を付け、`.SYNOPSIS`, `.PARAMETER` などのコメントベースヘルプを維持します。
-  - 文字列はダブルクォート + 補間、複数行文字列は here-string (`@"` `"@`) を使います。
-
 ## 5. 命名規則
 
 - ファイル名
@@ -78,6 +68,10 @@
   - TypeScript: `camelCase`（例: `buildAuthFromEnv`, `extractImageLinks`）。クラス/インターフェースは `PascalCase`。
   - Bash: `UPPER_SNAKE_CASE` で定数、`lower_snake_case` で関数名。一時変数は短い `i`, `tmp` などで構いませんが、ログに現れるものはわかりやすい名前にします。
   - PowerShell: `PascalCase`（例: `$RUN_ID`, `$SessionTitle`）。
+
+- コミットガイドライン
+  - 勝手にコミットはしないでください。指示があったときのみ許可されます。
+  - コミットメッセージは `fix:`, `refactor:` などで始まる conventional commit style で、本文は英語、詳細コメントは日本語とします。
 
 ## 6. エラー処理とフェイルセーフ / Git 操作
 

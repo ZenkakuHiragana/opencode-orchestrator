@@ -12,7 +12,7 @@ import {
   rewritePromptPaths,
 } from "./orchestrator-paths.js";
 
-function loadMarkdownBody(fullPath: string): string {
+export function loadMarkdownBody(fullPath: string): string {
   const text = fs.readFileSync(fullPath, "utf8");
   if (text.startsWith("---\n")) {
     const end = text.indexOf("\n---", 4);
@@ -77,10 +77,22 @@ export const OrchestratorPlugin: Plugin = async (input) => {
         config.command = {};
       }
 
+      // Per-agent visibility control for non-orchestrator agents (e.g. the
+      // built-in `build` agent). When an agent's key is absent or set to
+      // false, its description is cleared so the task tool shows the generic
+      // "call manually" fallback instead of a useful description that
+      // encourages proactive use.
+      //
+      // Config shape:
+      //   { "orchestrator": { "expose": { "orch-local-investigator": true } } }
+      const exposeMap: Record<string, boolean> =
+        typeof config.orchestrator?.expose === "object" &&
+        config.orchestrator?.expose !== null
+          ? config.orchestrator.expose
+          : {};
+
       // Wire orchestrator agents: metadata from TypeScript, prompt body from
-      // agents/<name>.md with any frontmatter stripped. This intentionally
-      // overwrites any existing config.agent[<name>] so that the TypeScript
-      // definition is the single source of truth.
+      // agents/<name>.md with any frontmatter stripped.
       for (const [name, meta] of Object.entries(orchestratorAgents)) {
         const bodyPath = path.join(agentsDir, `${name}.md`);
         let prompt: string | undefined;
@@ -142,9 +154,22 @@ export const OrchestratorPlugin: Plugin = async (input) => {
         }
 
         const existing = config.agent[name] ?? {};
+
+        // When the agent is not explicitly exposed, clear its description
+        // so that non-orchestrator agents (e.g. build) see the generic
+        // "call manually" fallback and are not encouraged to use them
+        // proactively via the task tool.
+        const shouldClearDescription = meta.description && !exposeMap[name];
+
+        // Merge order: TypeScript defaults first, then user overrides,
+        // then always-set prompt. This lets users override any property
+        // (description, hidden, mode, permission, …) via opencode.json.
+        const metaForMerge = shouldClearDescription
+          ? { ...meta, description: undefined }
+          : meta;
         const merged = {
+          ...metaForMerge,
           ...existing,
-          ...meta,
           ...(prompt ? { prompt } : {}),
         };
         // Rewrite any $XDG_STATE_HOME/legacy state paths in both prompts and
