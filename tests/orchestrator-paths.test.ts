@@ -54,11 +54,15 @@ describe("orchestrator-paths", () => {
     const base = getOrchestratorBaseDir();
     const body = [
       "Use $XDG_STATE_HOME/opencode/orchestrator/foo/state.",
+      "Task path: $XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/command-policy.json.",
       "Legacy ~/.local/opencode/orchestrator/bar/state path.",
     ].join("\n");
 
     const rewritten = rewritePromptPaths(body);
     expect(rewritten).toContain(`Use ${path.join(base, "foo", "state")}.`);
+    expect(rewritten).toContain(
+      `Task path: ${path.join(base, "<task-name>", "state", "command-policy.json")}.`,
+    );
     expect(rewritten).toContain(
       `Legacy ${path.join(base, "bar", "state")} path.`,
     );

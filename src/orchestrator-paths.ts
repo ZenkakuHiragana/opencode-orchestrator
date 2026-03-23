@@ -28,7 +28,7 @@ export function getOrchestratorLogsDir(task: string): string {
 function replaceStatePlaceholders(text: string): string {
   const baseDir = getOrchestratorBaseDir();
   const placeholderPattern =
-    /(\$XDG_STATE_HOME\/opencode\/orchestrator|~\/\.local\/opencode\/orchestrator|~\/\.local\/state\/opencode\/orchestrator)((?:\/[A-Za-z0-9._*-]+)*)/g;
+    /(\$XDG_STATE_HOME\/opencode\/orchestrator|~\/\.local\/opencode\/orchestrator|~\/\.local\/state\/opencode\/orchestrator)((?:\/[A-Za-z0-9._*<>{}-]+)*)/g;
 
   return text.replace(placeholderPattern, (_match, _prefix, suffix: string) => {
     const segments = suffix.split("/").filter(Boolean);

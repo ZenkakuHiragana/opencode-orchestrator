@@ -67,8 +67,8 @@ flowchart LR
 
 ---
 
-- 受け入れ条件やコマンドポリシーは、`$XDG_STATE_HOME/opencode/orchestrator/<task>/state` 配下に保存されます。
-  - デフォルトでは、`~/.local/state/opencode/orchestrator/<task>/state` です。
+- 受け入れ条件やコマンドポリシーは、`$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state` 配下に保存されます。
+  - デフォルトでは、`~/.local/state/opencode/orchestrator/<task-name>/state` です。
 - CLI `opencode-orchestrator loop` は、これらの状態ファイルを前提に
   - Todo-Writer / Executor / Auditor を順番に呼び出し
   - ストーリーが完了 (`done: true`) するまで実行を続けます。
@@ -107,7 +107,7 @@ npm install @zenorg/opencode-orchestrator
    `acceptance-index.json` / `spec.md` / `command-policy.json` を整備
 3. `command-policy.json.summary.loop_status` が `ready_for_loop` になることを確認
 
-状態ファイルは `$XDG_STATE_HOME/opencode/orchestrator/<task>/state` に保存されます。
+状態ファイルは `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state` に保存されます。
 
 ### 4) 実行フェーズ（CLI）
 
@@ -279,7 +279,7 @@ npm run build   # dist/cli.js, dist/index.js を生成
 
 実行開始前に、CLI は必ず次のファイルをチェックします。
 
-- `getOrchestratorStateDir(<task>)/command-policy.json`
+- `getOrchestratorStateDir(<task-name>)/command-policy.json`
 
 このファイルは、Refiner が用意した受け入れ条件とコマンド候補に対して
 Spec-Checker / Preflight-Runner が出した結果を、Planner が集約して作る

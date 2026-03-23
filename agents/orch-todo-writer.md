@@ -109,7 +109,7 @@ Key concepts:
     ```json
     {
       "kind": "investigation_v1",
-      "path": "$XDG_STATE_HOME/opencode/orchestrator/<task>/artifacts/T12-api-survey.json",
+      "path": "$XDG_STATE_HOME/opencode/orchestrator/<task-name>/artifacts/T12-api-survey.json",
       "summary": "12 call sites, 3 risky dependency edges, 2 migration groups"
     }
     ```

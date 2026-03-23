@@ -58,7 +58,7 @@ sequenceDiagram
     participant SpecCheckerAgent as orch-spec-checker（サブエージェント）
     participant PreflightAgent as orch-preflight-runner（サブエージェント）
     participant PreflightTool as preflight-cli（ツール）
-    participant StateDir as state/<task>/
+    participant StateDir as state/<task-name>/
 
     rect rgba(200, 220, 240, 0.15)
         Note over Human,StateDir: 計画フェーズ：Refiner → Spec-Checker → Preflight を繰り返す
@@ -126,7 +126,7 @@ sequenceDiagram
     participant EXAgent as orch-executor
     participant AUCommand as /orch-audit
     participant AUAgent as orch-auditor
-    participant StateDir as state/<task>/
+    participant StateDir as state/<task-name>/
 
     rect rgba(200, 220, 240, 0.15)
         Note over CLI,StateDir: ループ本体：Todo-Writer → Executor → Auditor を繰り返す
@@ -241,13 +241,13 @@ sequenceDiagram
     エージェント（コマンド定義自体は Refiner の責務）。
 
 - (B) 主な入力（読むファイル）
-  - `$XDG_STATE_HOME/opencode/orchestrator/<task>/state/acceptance-index.json`
-  - `$XDG_STATE_HOME/opencode/orchestrator/<task>/state/spec.md`
-  - `$XDG_STATE_HOME/opencode/orchestrator/<task>/state/command-policy.json`
+  - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/acceptance-index.json`
+  - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/spec.md`
+  - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/command-policy.json`
   - リポジトリ内コード／ドキュメント（必要に応じて `read`/`glob`/`grep`）
 
 - (C) 主な出力（書くファイル）
-  - `$XDG_STATE_HOME/opencode/orchestrator/<task>/state/command-policy.json`
+  - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/command-policy.json`
     - `summary.loop_status`
     - `commands[]`（Refiner 定義のコマンドに preflight 結果を付与）
 
@@ -293,20 +293,20 @@ sequenceDiagram
 
 - (B) 主な入力
   - 高レベルゴール（CLI 引数 / 添付ファイルで渡される）
-  - `$XDG_STATE_HOME/opencode/orchestrator/<task>/state/acceptance-index.json`（既存があれば）
-  - `$XDG_STATE_HOME/opencode/orchestrator/<task>/state/spec.md`（既存があれば）
-  - `$XDG_STATE_HOME/opencode/orchestrator/<task>/state/command-policy.json`（既存があれば）
+  - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/acceptance-index.json`（既存があれば）
+  - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/spec.md`（既存があれば）
+  - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/command-policy.json`（既存があれば）
   - リポジトリのコード／ドキュメント（`read`/`glob`/`grep`）
   - 補助エージェントからの調査結果（`task` ツール経由）:
     - `orch-public-researcher`: 外部ベストプラクティス候補・比較軸
     - `orch-local-investigator`: リポジトリ内既存パターン・制約
 
 - (C) 主な出力
-  - `$XDG_STATE_HOME/opencode/orchestrator/<task>/state/acceptance-index.json`
+  - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/acceptance-index.json`
     - `version`, `requirements[]` などの構造化された受け入れ条件（説明文は日本語）。
-  - `$XDG_STATE_HOME/opencode/orchestrator/<task>/state/spec.md`
+  - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/spec.md`
     - タスクのゴール、非ゴール、制約、期待成果物、Done 条件など（日本語）。
-  - `$XDG_STATE_HOME/opencode/orchestrator/<task>/state/command-policy.json`
+  - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/command-policy.json`
     - 初期の `commands[]` リストを定義。
 
 - (D) 出力内容
@@ -336,9 +336,9 @@ sequenceDiagram
     - command-policy 変更時の Planner 確認ルールの曖昧さ
 
 - (B) 主な入力
-  - `$XDG_STATE_HOME/opencode/orchestrator/<task>/state/acceptance-index.json`
-  - `$XDG_STATE_HOME/opencode/orchestrator/<task>/state/spec.md`
-  - `$XDG_STATE_HOME/opencode/orchestrator/<task>/state/command-policy.json`
+  - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/acceptance-index.json`
+  - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/spec.md`
+  - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/command-policy.json`
   - 必要に応じてリポジトリ内ファイル（`read`/`glob`/`grep`）
 
 - (C) 主な出力
@@ -399,15 +399,15 @@ sequenceDiagram
     で分解し、layer-only な巨大 todo バケットを避ける。
 
 - (B) 主な入力
-  - `$XDG_STATE_HOME/opencode/orchestrator/<task>/state/acceptance-index.json`
-  - `$XDG_STATE_HOME/opencode/orchestrator/<task>/state/spec.md`
-  - `$XDG_STATE_HOME/opencode/orchestrator/<task>/state/status.json`
+  - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/acceptance-index.json`
+  - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/spec.md`
+  - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/status.json`
     - `replan_request` がある場合は、Todo-Writer にとっての第一級の再計画入力として扱う。
-  - `$XDG_STATE_HOME/opencode/orchestrator/<task>/state/todo.json`
+  - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/todo.json`
   - `orch_todo_read` ツールからの既存 canonical todo 群
 
 - (C) 主な出力
-  - `$XDG_STATE_HOME/opencode/orchestrator/<task>/state/todo.json`
+  - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/todo.json`
     - `orch_todo_write` ツール (`mode=planner_replace_canonical`) を通じて上書きされる
       canonical todo 一覧。型定義は `src/orchestrator-todo.ts` の `CanonicalTodo`。
   - OpenCode セッション Todo（`todowrite` 経由）
@@ -439,17 +439,17 @@ sequenceDiagram
     並列 executor 分岐や外部キューを前提にした振る舞いは禁止。
 
 - (B) 主な入力
-  - `$XDG_STATE_HOME/opencode/orchestrator/<task>/state/acceptance-index.json`
-  - `$XDG_STATE_HOME/opencode/orchestrator/<task>/state/spec.md`
-  - `$XDG_STATE_HOME/opencode/orchestrator/<task>/state/todo.json`
+  - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/acceptance-index.json`
+  - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/spec.md`
+  - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/todo.json`
     - `orch_todo_read` で読み取る canonical todos。
-  - `$XDG_STATE_HOME/opencode/orchestrator/<task>/state/command-policy.json`
+  - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/command-policy.json`
     - 実行可能とされているコマンドのみ `bash` で実行する。（テンプレート付きコマンドの
       具体値選択もここで行う。）
   - リポジトリ内のコード／テスト／ドキュメント（`glob`/`grep`/`read`/`edit` など）。
 
 - (C) 主な出力（ファイル）
-  - `$XDG_STATE_HOME/opencode/orchestrator/<task>/state/todo.json`
+  - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/todo.json`
     - `orch_todo_write(mode=executor_update_statuses)` により Todo の `status` を更新。
   - リポジトリ内のソースコード・テストコード・ドキュメント
     - `edit`/`patch`/`write` ツールで直接更新。
@@ -486,9 +486,9 @@ sequenceDiagram
 
 - (B) 主な入力
   - 高レベルゴール（オリジナルのプロンプト）
-  - `$XDG_STATE_HOME/opencode/orchestrator/<task>/state/spec.md`
-  - `$XDG_STATE_HOME/opencode/orchestrator/<task>/state/acceptance-index.json`
-  - `$XDG_STATE_HOME/opencode/orchestrator/<task>/state/status.json`
+  - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/spec.md`
+  - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/acceptance-index.json`
+  - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/status.json`
     - `last_executor_step`、`last_auditor_report`、`replan_request`、TODO 状況、`proposals` など。参考情報であり、
       それ自体を証拠とは見なさない。
   - Git 差分・ログ・テストログなど（添付ファイルや `bash` 読み取り系コマンド経由）。
@@ -512,7 +512,7 @@ sequenceDiagram
 
 - `orch_todo_read` ツール
   - 目的: 指定タスクの canonical todo 一覧を JSON で取得する。
-  - 読み取り対象ファイル: `$XDG_STATE_HOME/opencode/orchestrator/<task>/state/todo.json`
+  - 読み取り対象ファイル: `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/todo.json`
   - 呼び出し可能エージェント: `orch-todo-writer`, `orch-executor` のみ（それ以外は SPEC_ERROR）。
   - 出力: `{ todos: CanonicalTodo[] }` を JSON 文字列で返す。
 
@@ -527,7 +527,7 @@ sequenceDiagram
 ### 9.2 orchestrator-loop 自身 (`src/orchestrator-loop.ts`)
 
 - (A) 役割
-  - 1 タスク（`--task <task>`）について、以下を制御する:
+  - 1 タスク（`--task <task-name>`）について、以下を制御する:
     - 初回 `orch-todo-write` 呼び出しとセッション作成（`createInitialSession`）
     - 各ステップの Executor 実行 (`orch-exec`)
     - 必要に応じた Todo-Writer 実行 (`orch-todo-write` 再実行)
@@ -539,19 +539,19 @@ sequenceDiagram
     `requirement diff trace: <req-id> -> <file1>, <file2>` をログ出力し、トレーサビリティを可視化する。
 
 - (B) 主な入力ファイル
-  - `$XDG_STATE_HOME/opencode/orchestrator/<task>/state/command-policy.json`
+  - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/command-policy.json`
     - `enforceCommandPolicyGate` による起動前チェック。
-  - `$XDG_STATE_HOME/opencode/orchestrator/<task>/state/acceptance-index.json`
-  - `$XDG_STATE_HOME/opencode/orchestrator/<task>/state/spec.md`
-  - `$XDG_STATE_HOME/opencode/orchestrator/<task>/state/todo.json`
-  - `$XDG_STATE_HOME/opencode/orchestrator/<task>/state/status.json`（既存があれば）
+  - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/acceptance-index.json`
+  - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/spec.md`
+  - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/todo.json`
+  - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/status.json`（既存があれば）
 
 - (C) 主な出力ファイル
-  - `$XDG_STATE_HOME/opencode/orchestrator/<task>/state/status.json`
+  - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/status.json`
     - `last_session_id`, `current_cycle`, `last_executor_step`, `last_auditor_report`,
       `replan_required`, `replan_reason`, `replan_request`, `failure_budget`, `proposals`
       などを更新。
-  - `$XDG_STATE_HOME/opencode/orchestrator/<task>/logs/` 配下
+  - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/logs/` 配下
     - `orch_step_XXX.txt` / `audit_step_XXX.jsonl` / `todowriter_step_XXX.txt` などのログ。
   - `orchestrator_session_*.json`
     - セッションエクスポート JSON（`opencode export` の結果をファイル化）。
@@ -576,7 +576,7 @@ sequenceDiagram
 
 ### 11.1 acceptance-index.json（概要）
 
-- パス: `$XDG_STATE_HOME/opencode/orchestrator/<task>/state/acceptance-index.json`
+- パス: `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/acceptance-index.json`
 - オーナー: `orch-refiner`
 - 正確なスキーマは refiner 側で進化するが、少なくとも以下のような構造を前提としている
   （`agents/orch-refiner.md`, `agents/orch-spec-checker.md` より）:
@@ -612,7 +612,7 @@ sequenceDiagram
 
 ### 11.2 command-policy.json
 
-- パス: `$XDG_STATE_HOME/opencode/orchestrator/<task>/state/command-policy.json`
+- パス: `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/command-policy.json`
 - オーナー: 初期定義は `orch-refiner`、集約と `availability` 付与は `orch-planner`。
 - `enforceCommandPolicyGate`（`src/orchestrator-loop.ts`）で期待されるスキーマ:
 
@@ -656,7 +656,7 @@ sequenceDiagram
 
 ### 11.3 todo.json（Canonical Todo）
 
-- パス: `$XDG_STATE_HOME/opencode/orchestrator/<task>/state/todo.json`
+- パス: `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/todo.json`
 - オーナー:
   - 構造生成・置換: `orch-todo-writer`（`mode=planner_replace_canonical`）
   - `status` 更新のみ: `orch-executor`（`mode=executor_update_statuses`）
@@ -696,7 +696,7 @@ sequenceDiagram
 
 ### 11.4 status.json（orchestrator-loop 状態）
 
-- パス: `$XDG_STATE_HOME/opencode/orchestrator/<task>/state/status.json`
+- パス: `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/status.json`
 - オーナー: `orchestrator-loop.ts`（`runLoop()` 内からのみ更新）
 - 型定義: `src/orchestrator-status.ts` の `OrchestratorStatus`。
 
@@ -903,7 +903,7 @@ sequenceDiagram
 
 ### 11.9 orchestrator セッションエクスポート JSON
 
-- パス: `$XDG_STATE_HOME/opencode/orchestrator/<task>/logs/orchestrator_session_*.json`
+- パス: `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/logs/orchestrator_session_*.json`
   （`runLoop()` 終了時に `opencode export` の stdout をそのまま保存）。
 - スキーマ: OpenCode セッションの内部表現であり、このリポジトリ側では詳細を前提にしていない。
   - そのため、ここでは「opaque（不透明）」な JSON として扱う。

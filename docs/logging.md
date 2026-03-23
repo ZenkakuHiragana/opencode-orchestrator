@@ -7,7 +7,7 @@
 ### 出力先
 
 1. `stderr`（主）: 進捗・エラー・状態メッセージを `console.error()` で出力
-2. タスク別ログファイル: `$XDG_STATE_HOME/opencode/orchestrator/<task>/logs` に step/audit などのログを保存
+2. タスク別ログファイル: `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/logs` に step/audit などのログを保存
 3. autocommit の補助ログ: 状態ディレクトリ配下に JSONL を追記（デバッグ用途）
 
 ### ログの規模感（評価）
