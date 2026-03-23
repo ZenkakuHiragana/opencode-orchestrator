@@ -266,8 +266,14 @@ Stable command identifiers and templates:
   - `usage`: one of `"must_exec"`, `"may_exec"`, or `"doc_only"`, indicating how critical
     the command is.
   - `probe_command`: a lightweight, non-destructive variant of the same base CLI that
-    can be used by preflight to check availability without running the full command. For example,
-    for `command: "dotnet build Solution.sln"` you might choose `probe_command: "dotnet build --help"`.
+    can be used by preflight to check availability without running the full command.
+    **Important**: OpenCode's permission system uses **prefix matching** to decide whether a
+    command is allowed. When constructing `probe_command`, maximize the shared prefix length
+    with the actual `command` so that the permission grant for the probe also covers the real
+    command as precisely as possible. For example, for `command: "dotnet build Solution.sln"`,
+    prefer `probe_command: "dotnet build Solution.sln --help"` over `"dotnet build --help"`,
+    because the longer prefix `dotnet build Solution.sln` matches the actual command more
+    closely and avoids granting an overly broad permission.
   - `parameters`: when you use `{{name}}` placeholders in a template, describe the
     meaning of each parameter in this object. For example:
     - `"parameters": { "pattern": { "description": "string or regex that rg should search for" }, "subdir": { "description": "repository-relative path" } }`

@@ -210,7 +210,15 @@ export function interpretPreflightRun(
       typeof parsed.part.text === "string"
     ) {
       const text = parsed.part.text.trim();
-      if (text.startsWith("{") && text.endsWith("}")) {
+      // LLM tends to wrap JSON in markdown code fences despite instructions.
+      // Strip fences like ```json ... ``` or ``` ... ``` before checking.
+      const stripped = text
+        .replace(/^```(?:json)?\s*\n?/i, "")
+        .replace(/\n?```\s*$/i, "")
+        .trim();
+      if (stripped.startsWith("{") && stripped.endsWith("}")) {
+        jsonText = stripped;
+      } else if (text.startsWith("{") && text.endsWith("}")) {
         jsonText = text;
       } else if (!firstNonJsonText && text.length > 0) {
         firstNonJsonText = text;

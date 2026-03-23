@@ -142,6 +142,77 @@ describe("interpretPreflightRun", () => {
     expect(result.stderr_excerpt).toBe("");
   });
 
+  it("extracts JSON when wrapped in markdown code fences", () => {
+    const payload = {
+      status: "ok",
+      results: [
+        {
+          command: "npm test",
+          role: "tests",
+          usage: "must_exec" as const,
+          available: true,
+          exit_code: 0,
+          stderr_excerpt: "",
+        },
+      ],
+    };
+
+    // Simulate LLM wrapping JSON in ```json ... ``` fences
+    const fencedText = "```json\n" + JSON.stringify(payload) + "\n```";
+
+    const eventLine = JSON.stringify({
+      type: "text",
+      part: { text: fencedText },
+      sessionID: "ses_456",
+    });
+
+    const runResult: OpencodeRunResult = {
+      stdout: eventLine + "\n",
+      stderr: "",
+      code: 0,
+    };
+
+    const { result, sessionID } = interpretPreflightRun(descriptor, runResult);
+    expect(sessionID).toBe("ses_456");
+    expect(result.available).toBe(true);
+    expect(result.exit_code).toBe(0);
+    expect(result.stderr_excerpt).toBe("");
+  });
+
+  it("extracts JSON when wrapped in plain markdown code fences", () => {
+    const payload = {
+      status: "ok",
+      results: [
+        {
+          command: "npm test",
+          role: "tests",
+          usage: "must_exec" as const,
+          available: true,
+          exit_code: 0,
+          stderr_excerpt: "",
+        },
+      ],
+    };
+
+    // Simulate LLM wrapping JSON in ``` ... ``` fences (no language tag)
+    const fencedText = "```\n" + JSON.stringify(payload) + "\n```";
+
+    const eventLine = JSON.stringify({
+      type: "text",
+      part: { text: fencedText },
+    });
+
+    const runResult: OpencodeRunResult = {
+      stdout: eventLine + "\n",
+      stderr: "",
+      code: 0,
+    };
+
+    const { result } = interpretPreflightRun(descriptor, runResult);
+    expect(result.available).toBe(true);
+    expect(result.exit_code).toBe(0);
+  });
+
   it("falls back to tool_use error details when JSON is missing", () => {
     const lines = [
       JSON.stringify({
