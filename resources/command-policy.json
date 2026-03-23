@@ -20,6 +20,14 @@
             "blocked_by_environment"
           ],
           "description": "Mechanical gate for starting the executor loop."
+        },
+        "helper_availability": {
+          "type": "object",
+          "description": "Map of helper command IDs from helper-commands.json to their availability status (available/unavailable). Populated by preflight-cli when probe_helpers is enabled.",
+          "additionalProperties": {
+            "type": "string",
+            "enum": ["available", "unavailable"]
+          }
         }
       },
       "additionalProperties": true
@@ -38,7 +46,7 @@
           },
           "command": {
             "type": "string",
-            "description": "Concrete command line or command template without shell pipelines or control operators."
+            "description": "Concrete command line or command template. May include parameter placeholders like {{pattern}} or {{subdir}} for Executor to fill in at runtime."
           },
           "role": {
             "type": "string",

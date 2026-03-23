@@ -31,7 +31,7 @@ export const OrchestratorPlugin: Plugin = async (input) => {
   const baseDir = path.dirname(__dirname);
   const agentsDir = path.join(baseDir, "agents");
   const commandsDir = path.join(baseDir, "commands");
-  const schemaDir = path.join(baseDir, "schema");
+  const schemaDir = path.join(baseDir, "resources");
 
   const loadJsonSchema = (name: string): string | undefined => {
     const fullPath = path.join(schemaDir, `${name}.json`);
@@ -42,6 +42,7 @@ export const OrchestratorPlugin: Plugin = async (input) => {
   const schemaCache: Record<string, string | undefined> = {
     "acceptance-index": loadJsonSchema("acceptance-index"),
     "command-policy": loadJsonSchema("command-policy"),
+    "helper-commands": loadJsonSchema("helper-commands"),
   };
 
   // Detect when this plugin instance is running inside an `orch-preflight`
@@ -103,12 +104,18 @@ export const OrchestratorPlugin: Plugin = async (input) => {
 
         // Attach shared JSON schema fragments to the end of the prompt when
         // relevant. This keeps acceptance-index/command-policy definitions in
-        // schema/*.json as a single source of truth while still exposing them
+        // resources/*.json as a single source of truth while still exposing them
         // to each orchestrator agent via a ```json code block.
         const schemaNames: string[] = [];
         if (name === "orch-refiner" || name === "orch-spec-checker") {
-          schemaNames.push("acceptance-index", "command-policy");
-        } else if (name === "orch-planner" || name === "orch-executor") {
+          schemaNames.push(
+            "acceptance-index",
+            "command-policy",
+            "helper-commands",
+          );
+        } else if (name === "orch-planner") {
+          schemaNames.push("command-policy", "helper-commands");
+        } else if (name === "orch-executor") {
           schemaNames.push("command-policy");
         }
 
@@ -121,7 +128,9 @@ export const OrchestratorPlugin: Plugin = async (input) => {
             const label =
               sName === "acceptance-index"
                 ? "JSON schema for acceptance-index.json"
-                : "JSON schema for command-policy.json";
+                : sName === "command-policy"
+                  ? "JSON schema for command-policy.json"
+                  : "Predefined helper commands (available for shell composition)";
             parts.push(
               `${label} (for reference):\n\n` +
                 "```json\n" +

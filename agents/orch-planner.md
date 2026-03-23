@@ -72,6 +72,11 @@ Additional tools:
   - Runs the `orch-preflight` command via `opencode run --format json` so that permission
     prompts are auto-rejected.
   - Commands that require `ask` permissions must be treated as **unavailable** in preflight.
+  - Preflight-cli automatically includes helper commands from `resources/helper-commands.json`
+    (such as `grep`, `rg`, `sort`, `uniq`, `jq`, etc.) in the probe list alongside the
+    user-defined commands. Helper commands use `role: "helper"` and `usage: "may_exec"`.
+    The results are returned in the same `results` array, and the Planner should update
+    `command-policy.json.summary.helper_availability` based on these results.
 
 Core flow:
 
@@ -124,9 +129,25 @@ Core flow:
   `Refiner → Spec-Checker → (if commands or environment changed) Preflight` whenever:
   - the human provides feedback that changes requirements or command design, or
   - the human reports that missing tools have been installed or environment problems fixed.
-  - Use the command definitions provided by the Refiner in `command-policy.json.commands[]`.
-    Each entry MUST include a stable `id`, `command`, `role`, and `usage`.
-    - Example: `{ "id": "cmd-dotnet-test", "command": "dotnet test", "role": "test", "usage": "must_exec" }`.
+
+- **Helper command availability**: Preflight-cli automatically probes helper commands
+  from `resources/helper-commands.json` alongside the user-defined commands. After preflight
+  completes, update `command-policy.json.summary.helper_availability` with the results. The format should be:
+
+  ```json
+  "helper_availability": {
+    "rg": "available",
+    "grep": "unavailable",
+    "jq": "available"
+  }
+  ```
+
+  where each key is a helper command ID and the value is either `"available"` or `"unavailable"`.
+  This update MUST happen on the first preflight run and whenever environment changes are reported.
+
+- Use the command definitions provided by the Refiner in `command-policy.json.commands[]`.
+  Each entry MUST include a stable `id`, `command`, `role`, and `usage`.
+  - Example: `{ "id": "cmd-dotnet-test", "command": "dotnet test", "role": "test", "usage": "must_exec" }`.
   - Never invent new commands or IDs at this stage. If a command is missing, go back to the
     refiner/spec-checker loop instead of guessing.
   - For each command entry, decide which concrete command string to send to `preflight-cli`:
@@ -163,8 +184,7 @@ Core flow:
   `stderr_excerpt` starting with `SPEC_ERROR:` because the command definition is invalid for this story), treat this as a **specification problem**
   rather than an environment issue:
   - Hand control back to the Refiner / Spec-Checker loop.
-  - Work with those agents to rewrite the underlying command definitions so that
-    each entry is a single base CLI without pipelines, shell control operators, or wrapper scripts.
+  - Work with those agents to rewrite the underlying command definitions.
 - You may only use `preflight-cli` **after** Refiner and Spec-Checker have created the core
   orchestrator state for this task. The following files must already exist under
   `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/`:
@@ -186,10 +206,11 @@ Ownership boundary (MANDATORY):
 - **Refiner owns**: `commands[]` definitions — `id`, `command`, `role`, `usage`, `probe_command`,
   `parameters`. These are the canonical command definitions and are the Refiner's single source
   of truth. You must **not** add, remove, or modify any of these fields directly.
-- **Planner owns**: `summary.loop_status` and `commands[].availability`. You annotate the
+- **Planner owns**: `summary.loop_status`, `summary.helper_availability`, and
+  `commands[].availability`. You annotate the
   Refiner-defined command list with preflight results and readiness assessment. You also
   set `related_requirements` when you can infer them, and update the overall structure
-  of `command-policy.json` (e.g. adding preflight result metadata).
+  of `command-policy.json` (e.g. adding preflight result metadata and helper availability).
 - If a command definition is missing, invalid, or needs structural adjustment, hand control
   back to the Refiner/Spec-Checker loop. Do not fix command definitions in Planner.
 

@@ -1,0 +1,160 @@
+{
+  "helper_commands": [
+    {
+      "id": "grep",
+      "command": "grep {{params}}",
+      "probe": "grep --version",
+      "purpose": "パターンマッチング。標準入力またはファイルから正規表現に一致する行を出力する。",
+      "placeholders": {
+        "params": "grep のオプションとパターン・ファイル。例: -n 'export' src/api/"
+      }
+    },
+    {
+      "id": "rg",
+      "command": "rg {{params}}",
+      "probe": "rg --version",
+      "purpose": "高速なパターンマッチング。ripgrep を用いてファイルやディレクトリを横断検索する。",
+      "placeholders": {
+        "params": "rg のオプションとパターン・パス。例: -n 'function' src/"
+      }
+    },
+    {
+      "id": "sort",
+      "command": "sort",
+      "probe": "sort --version",
+      "purpose": "標準入力の行を辞書順または数値順に並べ替える。"
+    },
+    {
+      "id": "sort-with-flags",
+      "command": "sort {{flags}}",
+      "probe": "sort --version",
+      "purpose": "オプションを付けて標準入力の行を並べ替える。",
+      "placeholders": {
+        "flags": "sort のフラグ。例: -r（逆順）, -n（数値）, -t: -k2（区切り指定）"
+      }
+    },
+    {
+      "id": "uniq",
+      "command": "uniq",
+      "probe": "uniq --version",
+      "purpose": "連続する重複行を削除する。sort と組み合わせて完全な重複除去を行う。"
+    },
+    {
+      "id": "uniq-with-flags",
+      "command": "uniq {{flags}}",
+      "probe": "uniq --version",
+      "purpose": "オプションを付けて重複行を処理する。",
+      "placeholders": {
+        "flags": "uniq のフラグ。例: -c（出現回数を付加）, -d（重複行のみ出力）"
+      }
+    },
+    {
+      "id": "wc",
+      "command": "wc {{flags}}",
+      "probe": "wc --version",
+      "purpose": "行数・単語数・バイト数を数える。",
+      "placeholders": {
+        "flags": "wc のフラグ。例: -l（行数）, -w（単語数）, -c（バイト数）"
+      }
+    },
+    {
+      "id": "head",
+      "command": "head {{flags}}",
+      "probe": "head --version",
+      "purpose": "先頭の行を出力する。",
+      "placeholders": {
+        "flags": "head のフラグ。例: -n 10（先頭10行）"
+      }
+    },
+    {
+      "id": "tail",
+      "command": "tail {{flags}}",
+      "probe": "tail --version",
+      "purpose": "末尾の行を出力する。",
+      "placeholders": {
+        "flags": "tail のフラグ。例: -n 10（末尾10行）"
+      }
+    },
+    {
+      "id": "cut",
+      "command": "cut {{flags}}",
+      "probe": "cut --version",
+      "purpose": "各行から指定したフィールドやカラムを抽出する。",
+      "placeholders": {
+        "flags": "cut のフラグ。例: -d: -f1（コロン区切り1番目のフィールド）, -c1-10（文字位置1〜10）"
+      }
+    },
+    {
+      "id": "tr",
+      "command": "tr {{params}}",
+      "probe": "tr --version",
+      "purpose": "文字の置換・削除・圧縮を行う。",
+      "placeholders": {
+        "params": "tr のオプションと変換セット。例: -d '\\n'（改行削除）, 'a-z' 'A-Z'（小文字→大文字）"
+      }
+    },
+    {
+      "id": "comm",
+      "command": "comm {{flags}}",
+      "probe": "comm --version",
+      "purpose": "2つのソート済みファイルの行を比較し、共通行・片方にのみ存在する行を出力する。",
+      "placeholders": {
+        "flags": "comm のフラグ。例: -23（ファイル1にのみある行）, -12（共通行）"
+      }
+    },
+    {
+      "id": "cat",
+      "command": "cat",
+      "probe": "cat --version",
+      "purpose": "ファイルの内容を標準出力に連結して出力する。"
+    },
+    {
+      "id": "ls",
+      "command": "ls {{flags}}",
+      "probe": "ls --version",
+      "purpose": "ディレクトリのエントリを一覧表示する。",
+      "placeholders": {
+        "flags": "ls のフラグ。例: -la（詳細表示＋隠しファイル）, -1（1行1エントリ）"
+      }
+    },
+    {
+      "id": "jq",
+      "command": "jq {{params}}",
+      "probe": "jq --version",
+      "purpose": "JSON データのフィルタリング・変換・整形を行う。設計上、ファイルI/O・システムコール・ネットワークアクセスの機能を持たないため副作用なし。",
+      "placeholders": {
+        "params": "jq のフィルタ式。例: '.[] | .name', 'sort_by(.id)', 'select(.status == \"active\")'"
+      }
+    },
+    {
+      "id": "true",
+      "command": "true",
+      "probe": "true",
+      "purpose": "終了コード 0 を返す。シェルスクリプトの条件分岐で使用する。"
+    },
+    {
+      "id": "false",
+      "command": "false",
+      "probe": "false",
+      "purpose": "終了コード 1 を返す。シェルスクリプトの条件分岐で使用する。"
+    },
+    {
+      "id": "test",
+      "command": "test {{params}}",
+      "probe": "test --version",
+      "purpose": "条件式を評価し、真なら終了コード 0、偽なら 1 を返す。ファイル属性の確認（-f, -d, -e）や文字列比較に使用する。",
+      "placeholders": {
+        "params": "test の条件式。例: -f file.txt（ファイル存在確認）, 'a' = 'b'（文字列比較）"
+      }
+    },
+    {
+      "id": "bracket",
+      "command": "[ {{params}} ]",
+      "probe": "[ --version",
+      "purpose": "test の代替記法。条件式を評価する。末尾に ] が必要。",
+      "placeholders": {
+        "params": "条件式。例: -d src/（ディレクトリ存在確認）, -n \"$var\"（空文字列でない）"
+      }
+    }
+  ]
+}

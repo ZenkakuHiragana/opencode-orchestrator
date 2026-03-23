@@ -530,11 +530,26 @@ Behavioral guidelines specific to the executor:
     concrete values for those placeholders at execution time as
     long as you:
     - stay within the described parameter meanings (for example, `pattern` remains a search
-      pattern and `subdir` remains a safe, repository-relative directory), and
-    - do not introduce additional shell operators (pipes, `&&`, redirections, etc.) or change
-      the base CLI.
+      pattern and `subdir` remains a safe, repository-relative directory).
       Use these templates to tailor exploration or checks to the current todo/requirement while
       still respecting the command-policy gate.
+  - You may compose shell scripts using only commands whitelisted in `command-policy.json`.
+    Pipes (`|`), command connectors (`&&`, `||`), subshells (`$(...)`), variable assignments,
+    control flow (`for`, `while`, `if`), and grouping (`{ }`) are all permitted as long as every
+    individual command in the composition is covered by a command-policy rule. The permission
+    system validates each command in the AST independently; you do not need to pre-register
+    composed scripts.
+  - **Redirections are prohibited.** Do not use `>`, `>>`, `<`, `2>`, `&>`, or any other
+    redirection operator in shell scripts. The permission system does not prevent writing to
+    files outside the working directory via redirection. Use pipes to chain commands instead
+    of writing intermediate results to files.
+  - Do **not** invoke `bash`, `sh`, `python`, `pwsh`, or any general-purpose interpreter to
+    bypass per-command permission checks. If a command is not listed in `command-policy.json`,
+    it cannot be used.
+  - Before composing shell scripts, read `command-policy.json` and check the
+    `helper_availability` field to confirm which primitives are usable in this environment.
+    If a required helper is `"unavailable"` or not in the field, emit a `STEP_BLOCKER` instead of
+    attempting to use it.
 - For long enumerative tasks, rely on todos constructed by upstream planning agents.
   Use `orch_todo_read`/`orch_todo_write` to drive progress across
   that list, and when todos are individually small (for example, many similar documentation or

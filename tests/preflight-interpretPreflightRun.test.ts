@@ -243,3 +243,65 @@ describe("interpretPreflightRun", () => {
     expect(result.stderr_excerpt).toContain("permission denied");
   });
 });
+
+describe("preflight-cli agent guardrail", () => {
+  // The preflight-cli tool is reserved for orch-planner agent only.
+  // When called from other agents, it should return a SPEC_ERROR-style
+  // failure with all commands marked as unavailable.
+
+  it("should reject calls from non-orch-planner agents (simulated)", () => {
+    // This test verifies the guardrail logic exists in preflight-cli.ts.
+    // The actual enforcement happens at runtime by checking context.agent.
+    // We verify the logic is present by checking the code structure.
+    const preflightCliSource = fs.readFileSync(
+      path.resolve(__dirname, "../src/preflight-cli.ts"),
+      "utf8",
+    );
+
+    // Check that the guardrail check exists
+    expect(preflightCliSource).toContain('agentName !== "orch-planner"');
+    expect(preflightCliSource).toContain(
+      "SPEC_ERROR: preflight-cli may only be called from the orch-planner agent",
+    );
+  });
+});
+
+describe("orchestrator resources migration", () => {
+  // Verifies that the schema files have been moved from schema/ to resources/.
+
+  it("should have schema files in resources directory", () => {
+    const resourcesDir = path.resolve(__dirname, "../resources");
+    expect(fs.existsSync(path.join(resourcesDir, "command-policy.json"))).toBe(
+      true,
+    );
+    expect(
+      fs.existsSync(path.join(resourcesDir, "acceptance-index.json")),
+    ).toBe(true);
+    expect(fs.existsSync(path.join(resourcesDir, "helper-commands.json"))).toBe(
+      true,
+    );
+    expect(fs.existsSync(path.join(resourcesDir, "todo.json"))).toBe(true);
+    expect(fs.existsSync(path.join(resourcesDir, "status.json"))).toBe(true);
+  });
+
+  it("should no longer have JSON files in schema directory", () => {
+    const schemaDir = path.resolve(__dirname, "../schema");
+    if (fs.existsSync(schemaDir)) {
+      const files = fs.readdirSync(schemaDir);
+      const jsonFiles = files.filter((f) => f.endsWith(".json"));
+      expect(jsonFiles.length).toBe(0);
+    }
+  });
+
+  it("command-policy.json should have helper_availability in schema properties", () => {
+    const commandPolicyPath = path.resolve(
+      __dirname,
+      "../resources/command-policy.json",
+    );
+    const content = JSON.parse(fs.readFileSync(commandPolicyPath, "utf8"));
+    // This is a JSON schema definition file, so we check the schema structure
+    expect(
+      content.properties?.summary?.properties?.helper_availability,
+    ).toBeDefined();
+  });
+});

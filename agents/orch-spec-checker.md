@@ -162,9 +162,6 @@ Behavior when reading `command-policy.json`:
     - Commands whose `role` or `usage` is clearly inconsistent with how they are described or how
       they would be used to satisfy the acceptance criteria.
   - **Safety issues**:
-    - Commands that include shell pipelines (`|`), concatenation (`&&`, `||`, `;`), redirection
-      (`>`, `2>&1`, etc.), or other shell scripting constructs that would violate the orchestrator
-      safety assumptions.
     - Commands that hide their real behavior behind wrapper scripts or compound shell entrypoints
       instead of a single base CLI.
   - **Templating opportunities**:

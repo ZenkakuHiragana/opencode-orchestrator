@@ -246,8 +246,7 @@ Interactive refinement loop:
      the key acceptance criteria.
    - When orch-planner reports that a command definition is invalid at the spec level
      (for example `stderr_excerpt` starting with `SPEC_ERROR:`), treat this as a **requirements bug**:
-     refine the command definitions in `command-policy.json.commands[]` so that each entry is a single base CLI without pipelines or
-     compound shell expressions.
+     refine the command definitions in `command-policy.json.commands[]`.
 
 Stable command identifiers and templates:
 
@@ -256,9 +255,8 @@ Stable command identifiers and templates:
 - Each command entry MUST have at least the following fields:
   - `id`: a task-scoped stable ID (for example, `cmd-npm-test`, `cmd-dotnet-build`).
   - `command`: the command line or **command template** (for example,
-    `npm test` or `rg {{pattern}} {{subdir}} -n`). Do not include
-    pipes (`|`), concatenation (`&&`, `||`, `;`), redirections (such as `> /dev/null 2>&1`), or
-    other shell scripting as they are not allowed by the agent's permission system.
+    `npm test` or `rg {{pattern}} {{subdir}} -n`). Parameter placeholders like `{{name}}`
+    will be filled in by the Executor at runtime.
     Template arguments like `{{name}}` are always treated as a single shell argument
     that are surrounded by `"`s. You can't define part of arguments with template (for example,
     `basedir/{{subdir}}` is invalid as it will be substituted with `basedir/"specific/path"`).
@@ -277,8 +275,7 @@ Stable command identifiers and templates:
   - `parameters`: when you use `{{name}}` placeholders in a template, describe the
     meaning of each parameter in this object. For example:
     - `"parameters": { "pattern": { "description": "string or regex that rg should search for" }, "subdir": { "description": "repository-relative path" } }`
-    - Parameters must represent a **single shell argument**. Do not include quotation marks or
-      shell operators directly in parameter values.
+    - Parameters must represent a **single shell argument**. Do not include quotation marks directly in parameter values.
   - When a command with similar but different arguments is expected to
     be used broadly throughout the story, prefer defining a **single family template** instead of
     separate IDs for each literal pattern. For example:

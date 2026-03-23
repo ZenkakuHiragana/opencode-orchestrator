@@ -2,11 +2,9 @@ import { tool } from "@opencode-ai/plugin/tool";
 import { spawn } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import helperCommandsData from "../resources/helper-commands.json" with { type: "json" };
 import { getOrchestratorStateDir } from "./orchestrator-paths.js";
-import {
-  buildOpencodeSpawnPlan,
-  type OpencodeSpawnPlan,
-} from "./opencode-spawn.js";
+import { buildOpencodeSpawnPlan } from "./opencode-spawn.js";
 import { getOpencodeClient } from "./opencode-client-store.js";
 
 type ToastVariant = "info" | "success" | "warning" | "error";
@@ -377,22 +375,22 @@ const preflightCliTool = tool({
     // Guardrail: this tool is reserved for the orch-planner agent. Other agents
     // must not call it directly. We return a SPEC_ERROR-style payload so that
     // callers can detect misuse mechanically.
-    // if (agentName !== "orch-planner") {
-    //   const msg =
-    //     "SPEC_ERROR: preflight-cli may only be called from the orch-planner agent. Other agents must not invoke this tool directly.";
-    //
-    //   const results = args.commands.map<PreflightProbeResult>((item) => ({
-    //     id: item.id,
-    //     command: item.command,
-    //     role: item.role ?? null,
-    //     usage: (item.usage as CommandUsage | undefined) ?? "may_exec",
-    //     available: false,
-    //     exit_code: null,
-    //     stderr_excerpt: msg,
-    //   }));
-    //
-    //   return JSON.stringify({ status: "failed", results }, null, 2);
-    // }
+    if (agentName !== "orch-planner") {
+      const msg =
+        "SPEC_ERROR: preflight-cli may only be called from the orch-planner agent. Other agents must not invoke this tool directly.";
+
+      const results = args.commands.map<PreflightProbeResult>((item) => ({
+        id: item.id,
+        command: item.command,
+        role: item.role ?? null,
+        usage: (item.usage as CommandUsage | undefined) ?? "may_exec",
+        available: false,
+        exit_code: null,
+        stderr_excerpt: msg,
+      }));
+
+      return JSON.stringify({ status: "failed", results }, null, 2);
+    }
 
     const cwd =
       (context as any).worktree || (context as any).directory || process.cwd();
@@ -472,25 +470,36 @@ const preflightCliTool = tool({
       return JSON.stringify(aggregated, null, 2);
     }
 
+    // Include helper commands from helper-commands.json in the probe list.
+    const allCommands: CommandDescriptor[] = [
+      ...args.commands,
+      ...helperCommandsData.helper_commands.map((h) => ({
+        id: h.id,
+        command: h.probe,
+        role: "helper",
+        usage: "may_exec" as const,
+      })),
+    ];
+
     log({
       event: "execute_start",
       task: args.task,
       cwd,
-      commands_count: args.commands.length,
+      commands_count: allCommands.length,
       commands: args.commands.map((c) => ({ id: c.id, command: c.command })),
     });
 
     emitPreflightMetadata(context, {
-      title: `preflight-cli: starting ${args.commands.length} command(s)`,
+      title: `preflight-cli: starting ${allCommands.length} command(s)`,
       task: args.task,
       phase: "starting",
       completed: 0,
-      total: args.commands.length,
+      total: allCommands.length,
       status: "running",
     });
     emitToast({
       title: "preflight-cli",
-      message: `Starting ${args.commands.length} command(s) for "${args.task}"`,
+      message: `Starting ${allCommands.length} command(s) for "${args.task}"`,
       variant: "info",
       duration: 5000,
     });
@@ -693,7 +702,7 @@ const preflightCliTool = tool({
 
     const seenCommands = new Set<string>();
 
-    for (const item of args.commands) {
+    for (const item of allCommands) {
       const descriptor: CommandDescriptor = {
         id: item.id,
         command: item.command,
@@ -705,7 +714,7 @@ const preflightCliTool = tool({
       const cacheKey = `${cwd}::${commandKey}`;
       const progress = {
         completed: results.length,
-        total: args.commands.length,
+        total: allCommands.length,
       };
 
       // If we have a cached result for this command in this working directory,
@@ -719,11 +728,11 @@ const preflightCliTool = tool({
           command: descriptor.command,
         });
         emitPreflightMetadata(context, {
-          title: `preflight-cli: cache ${results.length + 1}/${args.commands.length} ${descriptor.command}`,
+          title: `preflight-cli: cache ${results.length + 1}/${allCommands.length} ${descriptor.command}`,
           task: args.task,
           phase: "cache_hit",
           completed: results.length,
-          total: args.commands.length,
+          total: allCommands.length,
           command: descriptor.command,
           commandId: descriptor.id,
           status: "running",
@@ -775,11 +784,11 @@ const preflightCliTool = tool({
     log({ event: "execute_done", status, results });
 
     emitPreflightMetadata(context, {
-      title: `preflight-cli: done ${results.length}/${args.commands.length}`,
+      title: `preflight-cli: done ${results.length}/${allCommands.length}`,
       task: args.task,
       phase: "completed",
       completed: results.length,
-      total: args.commands.length,
+      total: allCommands.length,
       status,
     });
     emitToast({
