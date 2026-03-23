@@ -1,0 +1,84 @@
+name: Coverage Badge
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      gist: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Run tests with coverage
+        run: npx vitest run --coverage --reporter=json
+        continue-on-error: true
+
+      - name: Generate and upload coverage badge
+        run: |
+          # coverage-summary.json が vitest から生成される
+          if [ -f coverage/coverage-summary.json ]; then
+            COVERAGE=$(node -e "
+              const r = require('./coverage/coverage-summary.json');
+              const pct = Math.round(r.total.lines.pct * 10) / 10;
+              console.log(pct);
+            ")
+          else
+            COVERAGE="unknown"
+          fi
+
+          # 色の決定: >=80 は緑、>=60 は黄、それ以下は赤
+          COLOR=$(node -e "
+            const c = parseFloat(process.argv[1]);
+            if (isNaN(c)) { console.log('grey'); }
+            else if (c >= 80) { console.log('brightgreen'); }
+            else if (c >= 60) { console.log('yellow'); }
+            else { console.log('red'); }
+          " "$COVERAGE")
+
+          # shields.io endpoint JSON を生成
+          cat > coverage-badge.json <<EOJSON
+          {
+            "schemaVersion": 1,
+            "label": "coverage",
+            "message": "${COVERAGE}%",
+            "color": "${COLOR}"
+          }
+          EOJSON
+
+          echo "Badge content:"
+          cat coverage-badge.json
+
+          # gist にアップロード
+          # GIST_ID はリポジトリのシークレットに設定してください
+          if [ -n "${{ secrets.GIST_ID }}" ] && [ -n "${{ secrets.GITHUB_TOKEN }}" ]; then
+            gh gist edit "${{ secrets.GIST_ID }}" \
+              -a coverage-badge.json \
+              -f coverage-badge.json \
+              -d "Coverage badge for opencode-orchestrator"
+          else
+            echo "::warning::GIST_ID or GITHUB_TOKEN secret not set. Skipping gist upload."
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload badge artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-badge
+          path: coverage-badge.json
+          retention-days: 30

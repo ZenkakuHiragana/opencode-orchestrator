@@ -1,5 +1,7 @@
 # OpenCode Orchestrator Plugin
 
+[![Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/ZenkakuHiragana/952d30e89702c55163f5dd20cb0eef6e/raw/coverage-badge.json)](https://github.com/ZenkakuHiragana/opencode-orchestrator/actions/workflows/coverage.yml)
+
 > [!NOTE]
 > ものすごく AI 臭い README だけど、それもそのはず 99% AI 製。
 > あんまり真面目に開発する気がないので許してほしい。
