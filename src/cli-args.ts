@@ -18,11 +18,36 @@ export interface ListOptions {
   format: "text" | "json";
 }
 
-function printListUsage() {
+export function printListUsage() {
   console.error(
     "Usage: opencode-orchestrator list [--json]\n" +
       "\n" +
-      "List available orchestrator tasks discovered under the orchestrator state directory.",
+      "List available orchestrator tasks discovered under the orchestrator state directory.\n" +
+      "\n" +
+      "Options:\n" +
+      "  --json   Output as JSON array",
+  );
+}
+
+export function printLoopUsage() {
+  console.error(
+    "Usage: opencode-orchestrator loop --task <task-name> [options] [prompt]\n" +
+      "\n" +
+      "Run an orchestrator loop for the specified task.\n" +
+      "\n" +
+      "Required:\n" +
+      "  --task <name>        Task key to run (e.g., 'my-task')\n" +
+      "\n" +
+      "Options:\n" +
+      "  --session <id>      Session ID for persistence\n" +
+      "  --continue           Continue from last session\n" +
+      "  --commit             Auto-commit changes when done\n" +
+      "  --max-loop <n>      Maximum loop iterations (default: 100)\n" +
+      "  --max-restarts <n>  Maximum safety restarts (default: 20)\n" +
+      "  --file, -f <path>   Attach file to each step\n" +
+      "  --help, -h          Show this help message\n" +
+      "\n" +
+      "The prompt argument is optional. If omitted, uses spec-driven prompts.",
   );
 }
 
@@ -39,7 +64,10 @@ export function parseLoopArgs(argv: string[]): LoopOptions {
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
-    if (arg === "--task") {
+    if (arg === "--help" || arg === "-h") {
+      printLoopUsage();
+      process.exit(0);
+    } else if (arg === "--task") {
       const next = argv[++i];
       if (!next) {
         throw new Error("--task requires a task name");
