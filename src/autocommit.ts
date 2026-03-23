@@ -7,7 +7,7 @@ import { getOrchestratorBaseDir } from "./orchestrator-paths.js";
 const z = tool.schema;
 
 // Deny list for paths that must not be committed accidentally.
-// - 機密情報: .env 系, credentials, secret を含む名前, キー/証明書ファイル
+// - 機密情報: .env 系, credentials, secret を含む名前, キー/証明書ファイル, .ssh/.gnupg/.aws/.kube 等の機密ディレクトリ
 // - よくあるビルド成果物や一時ファイル: node_modules, dist, target, build, *.log など
 const DENY_PATTERNS: RegExp[] = [
   // Secrets / credentials
@@ -18,6 +18,16 @@ const DENY_PATTERNS: RegExp[] = [
   /(^|\/)id_[er]d?sa(\.pub)?$/i,
   /\.(pem|key|p12|pfx|jks|keystore)$/i,
   /(password|passwd|api[_-]?key|token)/i,
+
+  // Sensitive directories (.ssh, .gnupg, .aws, .kube, etc.)
+  /(^|\/)\.ssh(\/|$)/i,
+  /(^|\/)\.gnupg(\/|$)/i,
+  /(^|\/)\.aws(\/|$)/i,
+  /(^|\/)\.kube(\/|$)/i,
+
+  // Sensitive config files
+  /(^|\/)\.npmrc$/i,
+  /(^|\/)\.pypirc$/i,
 
   // Common build artifacts / caches
   /(^|\/)node_modules(\/|$)/,
@@ -120,7 +130,7 @@ function getAutocommitLogPath(): string | null {
   try {
     const baseDir = getOrchestratorBaseDir();
     const logsDir = path.join(baseDir, "logs");
-    fs.mkdirSync(logsDir, { recursive: true });
+    fs.mkdirSync(logsDir, { recursive: true, mode: 0o700 });
     autoCommitLogPath = path.join(logsDir, "autocommit.log");
   } catch {
     autoCommitLogPath = null;

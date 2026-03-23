@@ -139,4 +139,39 @@ describe("isDeniedPath", () => {
     expect(isDeniedPath(".gitignore")).toBe(false);
     expect(isDeniedPath(".editorconfig")).toBe(false);
   });
+
+  // Sensitive directory patterns (R2)
+  it("blocks .ssh directory", () => {
+    expect(isDeniedPath(".ssh")).toBe(true);
+    expect(isDeniedPath(".ssh/")).toBe(true);
+    expect(isDeniedPath(".ssh/id_rsa")).toBe(true);
+    expect(isDeniedPath(".ssh/config")).toBe(true);
+    expect(isDeniedPath("home/.ssh/authorized_keys")).toBe(true);
+  });
+
+  it("blocks .gnupg directory", () => {
+    expect(isDeniedPath(".gnupg")).toBe(true);
+    expect(isDeniedPath(".gnupg/")).toBe(true);
+    expect(isDeniedPath(".gnupg/secring.gpg")).toBe(true);
+  });
+
+  it("blocks .aws directory", () => {
+    expect(isDeniedPath(".aws")).toBe(true);
+    expect(isDeniedPath(".aws/")).toBe(true);
+    expect(isDeniedPath(".aws/credentials")).toBe(true);
+    expect(isDeniedPath(".aws/config")).toBe(true);
+  });
+
+  it("blocks .kube directory", () => {
+    expect(isDeniedPath(".kube")).toBe(true);
+    expect(isDeniedPath(".kube/")).toBe(true);
+    expect(isDeniedPath(".kube/config")).toBe(true);
+  });
+
+  it("blocks sensitive config files", () => {
+    expect(isDeniedPath(".npmrc")).toBe(true);
+    expect(isDeniedPath(".pypirc")).toBe(true);
+    expect(isDeniedPath("project/.npmrc")).toBe(true);
+    expect(isDeniedPath("project/.pypirc")).toBe(true);
+  });
 });
