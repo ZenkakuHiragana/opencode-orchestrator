@@ -10,7 +10,7 @@
     },
     "summary": {
       "type": "object",
-      "required": ["loop_status"],
+      "required": ["loop_status", "helper_availability"],
       "properties": {
         "loop_status": {
           "type": "string",
@@ -23,11 +23,107 @@
         },
         "helper_availability": {
           "type": "object",
-          "description": "Map of helper command IDs from helper-commands.json to their availability status (available/unavailable). Populated by preflight-cli when probe_helpers is enabled.",
-          "additionalProperties": {
-            "type": "string",
-            "enum": ["available", "unavailable"]
-          }
+          "required": [
+            "helper:grep",
+            "helper:rg",
+            "helper:sort",
+            "helper:sort-with-flags",
+            "helper:uniq",
+            "helper:uniq-with-flags",
+            "helper:wc",
+            "helper:head",
+            "helper:tail",
+            "helper:cut",
+            "helper:tr",
+            "helper:comm",
+            "helper:cat",
+            "helper:ls",
+            "helper:jq",
+            "helper:true",
+            "helper:false",
+            "helper:test",
+            "helper:bracket"
+          ],
+          "description": "Map of helper command IDs from helper-commands.json to their availability status (available/unavailable). Every helper command ID must be present.",
+          "properties": {
+            "helper:grep": {
+              "type": "string",
+              "enum": ["available", "unavailable"]
+            },
+            "helper:rg": {
+              "type": "string",
+              "enum": ["available", "unavailable"]
+            },
+            "helper:sort": {
+              "type": "string",
+              "enum": ["available", "unavailable"]
+            },
+            "helper:sort-with-flags": {
+              "type": "string",
+              "enum": ["available", "unavailable"]
+            },
+            "helper:uniq": {
+              "type": "string",
+              "enum": ["available", "unavailable"]
+            },
+            "helper:uniq-with-flags": {
+              "type": "string",
+              "enum": ["available", "unavailable"]
+            },
+            "helper:wc": {
+              "type": "string",
+              "enum": ["available", "unavailable"]
+            },
+            "helper:head": {
+              "type": "string",
+              "enum": ["available", "unavailable"]
+            },
+            "helper:tail": {
+              "type": "string",
+              "enum": ["available", "unavailable"]
+            },
+            "helper:cut": {
+              "type": "string",
+              "enum": ["available", "unavailable"]
+            },
+            "helper:tr": {
+              "type": "string",
+              "enum": ["available", "unavailable"]
+            },
+            "helper:comm": {
+              "type": "string",
+              "enum": ["available", "unavailable"]
+            },
+            "helper:cat": {
+              "type": "string",
+              "enum": ["available", "unavailable"]
+            },
+            "helper:ls": {
+              "type": "string",
+              "enum": ["available", "unavailable"]
+            },
+            "helper:jq": {
+              "type": "string",
+              "enum": ["available", "unavailable"]
+            },
+            "helper:true": {
+              "type": "string",
+              "enum": ["available", "unavailable"]
+            },
+            "helper:false": {
+              "type": "string",
+              "enum": ["available", "unavailable"]
+            },
+            "helper:test": {
+              "type": "string",
+              "enum": ["available", "unavailable"]
+            },
+            "helper:bracket": {
+              "type": "string",
+              "enum": ["available", "unavailable"]
+            }
+          },
+          "additionalProperties": false
         }
       },
       "additionalProperties": true
@@ -37,7 +133,17 @@
       "description": "List of allowed commands (or templates) for this task.",
       "items": {
         "type": "object",
-        "required": ["id", "command", "role", "usage"],
+        "required": [
+          "id",
+          "command",
+          "role",
+          "usage",
+          "availability",
+          "related_requirements",
+          "probe_command",
+          "parameters",
+          "usage_notes"
+        ],
         "properties": {
           "id": {
             "type": "string",
@@ -90,7 +196,7 @@
           },
           "usage_notes": {
             "type": "string",
-            "description": "Optional human-readable notes about how this command should be used (typically in Japanese)."
+            "description": "Human-readable notes about how this command should be used (typically in Japanese). Use an empty string when there is no note."
           }
         },
         "additionalProperties": true

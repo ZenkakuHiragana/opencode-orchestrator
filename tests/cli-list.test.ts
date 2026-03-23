@@ -4,6 +4,28 @@ import * as path from "node:path";
 import * as fs from "node:fs";
 import { parseListArgs, runList } from "../src/cli.js";
 
+const helperAvailability = {
+  "helper:grep": "available",
+  "helper:rg": "available",
+  "helper:sort": "available",
+  "helper:sort-with-flags": "available",
+  "helper:uniq": "available",
+  "helper:uniq-with-flags": "available",
+  "helper:wc": "available",
+  "helper:head": "available",
+  "helper:tail": "available",
+  "helper:cut": "available",
+  "helper:tr": "available",
+  "helper:comm": "available",
+  "helper:cat": "available",
+  "helper:ls": "available",
+  "helper:jq": "available",
+  "helper:true": "available",
+  "helper:false": "available",
+  "helper:test": "available",
+  "helper:bracket": "available",
+} as const;
+
 describe("parseListArgs", () => {
   it("defaults to text format with no args", () => {
     const opts = parseListArgs([]);
@@ -106,7 +128,14 @@ describe("runList integration", () => {
     const policyPath = path.join(stateDir, "command-policy.json");
     fs.writeFileSync(
       policyPath,
-      JSON.stringify({ summary: { loop_status: "ready_for_loop" } }),
+      JSON.stringify({
+        version: 1,
+        summary: {
+          loop_status: "ready_for_loop",
+          helper_availability: helperAvailability,
+        },
+        commands: [],
+      }),
       "utf8",
     );
 
@@ -151,7 +180,14 @@ describe("runList integration", () => {
     fs.mkdirSync(shortDir, { recursive: true });
     fs.writeFileSync(
       path.join(shortDir, "command-policy.json"),
-      JSON.stringify({ summary: { loop_status: "ready_for_loop" } }),
+      JSON.stringify({
+        version: 1,
+        summary: {
+          loop_status: "ready_for_loop",
+          helper_availability: helperAvailability,
+        },
+        commands: [],
+      }),
       "utf8",
     );
 
@@ -160,7 +196,14 @@ describe("runList integration", () => {
     fs.mkdirSync(longDir, { recursive: true });
     fs.writeFileSync(
       path.join(longDir, "command-policy.json"),
-      JSON.stringify({ summary: { loop_status: "needs_refinement" } }),
+      JSON.stringify({
+        version: 1,
+        summary: {
+          loop_status: "needs_refinement",
+          helper_availability: helperAvailability,
+        },
+        commands: [],
+      }),
       "utf8",
     );
 

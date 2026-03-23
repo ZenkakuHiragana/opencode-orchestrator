@@ -43,7 +43,38 @@ describe("buildFileArgs", () => {
       const acc = path.join(stateDir, "acceptance-index.json");
       const todo = path.join(stateDir, "todo.json");
       const spec = path.join(stateDir, "spec.md");
-      fs.writeFileSync(policy, JSON.stringify({ summary: {} }), "utf8");
+      fs.writeFileSync(
+        policy,
+        JSON.stringify({
+          version: 1,
+          summary: {
+            loop_status: "ready_for_loop",
+            helper_availability: {
+              "helper:grep": "available",
+              "helper:rg": "available",
+              "helper:sort": "available",
+              "helper:sort-with-flags": "available",
+              "helper:uniq": "available",
+              "helper:uniq-with-flags": "available",
+              "helper:wc": "available",
+              "helper:head": "available",
+              "helper:tail": "available",
+              "helper:cut": "available",
+              "helper:tr": "available",
+              "helper:comm": "available",
+              "helper:cat": "available",
+              "helper:ls": "available",
+              "helper:jq": "available",
+              "helper:true": "available",
+              "helper:false": "available",
+              "helper:test": "available",
+              "helper:bracket": "available",
+            },
+          },
+          commands: [],
+        }),
+        "utf8",
+      );
       fs.writeFileSync(acc, "{}", "utf8");
       fs.writeFileSync(
         todo,

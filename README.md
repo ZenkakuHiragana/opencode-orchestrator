@@ -137,6 +137,9 @@ npx opencode-orchestrator loop --task <task-key> "高レベルゴール"
 `loop` 実行前に `command-policy.json` が未整備（または `must_exec` が unavailable）だと、
 計画の実行は始まりません。先に計画フェーズを完了させてください。
 
+`command-policy.json.summary.helper_availability` も必須です。
+`command-policy.json.commands[]` の各フィールドも必須です。情報が空でも `[]` / `{}` / `""` で明示します。
+
 ## 設定
 
 ### `permission.orchestrator`

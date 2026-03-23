@@ -47,6 +47,43 @@ describe("OrchestratorPlugin", () => {
     expect(typeof config.command["orch-exec"].template).toBe("string");
   });
 
+  it("embeds helper command JSON into required agent prompts", async () => {
+    const plugin = await OrchestratorPlugin({ client: {} } as any);
+    const config: any = {};
+    await plugin.config!(config);
+
+    for (const agentName of [
+      "orch-refiner",
+      "orch-planner",
+      "orch-spec-checker",
+    ]) {
+      const prompt = config.agent[agentName]?.prompt;
+      expect(typeof prompt).toBe("string");
+      expect(prompt).toContain(
+        "Predefined helper commands (available for shell composition)",
+      );
+      expect(prompt).toContain("helper_commands");
+      expect(prompt).toContain('"id": "helper:rg"');
+      expect(prompt).toContain('"command": "rg {{params}}"');
+      expect(prompt).toContain('"id": "helper:jq"');
+      expect(prompt).toContain('"command": "jq {{params}}"');
+    }
+  });
+
+  it("does not embed helper command JSON into executor prompt", async () => {
+    const plugin = await OrchestratorPlugin({ client: {} } as any);
+    const config: any = {};
+    await plugin.config!(config);
+
+    const prompt = config.agent["orch-executor"]?.prompt;
+    expect(typeof prompt).toBe("string");
+    expect(prompt).not.toContain(
+      "Predefined helper commands (available for shell composition)",
+    );
+    expect(prompt).not.toContain("helper_commands");
+    expect(prompt).not.toContain('"command": "rg {{params}}"');
+  });
+
   it("keeps description when permission.orchestrator is allow", async () => {
     const plugin = await OrchestratorPlugin({ client: {} } as any);
     const config: any = {

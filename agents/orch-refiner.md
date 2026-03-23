@@ -252,7 +252,7 @@ Stable command identifiers and templates:
 
 - When you represent external commands in command-policy,
   you MUST assign a **unique, stable ID** to each command.
-- Each command entry MUST have at least the following fields:
+- Each command entry MUST have the following fields:
   - `id`: a task-scoped stable ID (for example, `cmd-npm-test`, `cmd-dotnet-build`).
   - `command`: the command line or **command template** (for example,
     `npm test` or `rg {{pattern}} {{subdir}} -n`). Parameter placeholders like `{{name}}`
@@ -275,10 +275,13 @@ Stable command identifiers and templates:
     prefer `probe_command: "dotnet build Solution.sln --help"` over `"dotnet build --help"`,
     because the longer prefix `dotnet build Solution.sln` matches the actual command more
     closely and avoids granting an overly broad permission.
-  - `parameters`: when you use `{{name}}` placeholders in a template, describe the
-    meaning of each parameter in this object. For example:
+  - `parameters`: describe the meaning of each template parameter in this object.
+    Use `{}` when the command has no template parameters. For example:
     - `"parameters": { "pattern": { "description": "string or regex that rg should search for" }, "subdir": { "description": "repository-relative path" } }`
     - Parameters must represent a **single shell argument**. Do not include quotation marks directly in parameter values.
+  - `related_requirements`: include the linked requirement IDs. Use `[]` when there is no specific linkage.
+  - `usage_notes`: include a short operator note in Japanese. Use `""` when there is no note.
+  - `availability`: include an initial placeholder value for the planner/preflight handoff. Use `"unavailable"` until Planner overwrites it with probe results.
   - When a command with similar but different arguments is expected to
     be used broadly throughout the story, prefer defining a **single family template** instead of
     separate IDs for each literal pattern. For example:
@@ -289,6 +292,16 @@ Stable command identifiers and templates:
       "command": "rg {{pattern}} {{subdir}} -n",
       "role": "explore",
       "usage": "may_exec",
+      "availability": "unavailable",
+      "related_requirements": [],
+      "probe_command": "rg --version",
+      "parameters": {
+        "pattern": {
+          "description": "string or regex that rg should search for",
+        },
+        "subdir": { "description": "repository-relative path" },
+      },
+      "usage_notes": "",
     }
     ```
 

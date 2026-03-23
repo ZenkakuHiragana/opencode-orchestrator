@@ -2,6 +2,8 @@ import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
+import helperCommandsData from "../resources/helper-commands.json" with { type: "json" };
+
 import {
   getOrchestratorLogsDir,
   getOrchestratorStateDir,
@@ -235,6 +237,9 @@ export async function runLoop(opts: LoopOptions): Promise<boolean> {
 
 export function enforceCommandPolicyGate(stateDir: string): void {
   const policyPath = path.join(stateDir, "command-policy.json");
+  const requiredHelperIds = new Set(
+    helperCommandsData.helper_commands.map((helper) => helper.id),
+  );
   if (!fs.existsSync(policyPath)) {
     console.error(
       "[opencode-orchestrator] ERROR: command-policy.json not found in state directory. " +
@@ -254,24 +259,49 @@ export function enforceCommandPolicyGate(stateDir: string): void {
     process.exit(1);
   }
 
+  let version: number | undefined;
   let status: string | undefined;
+  let helperAvailability:
+    | Record<string, "available" | "unavailable">
+    | undefined;
   let commands:
     | {
+        id?: string;
         command?: string;
+        role?: string;
         usage?: string;
         availability?: "available" | "unavailable";
+        related_requirements?: string[];
+        probe_command?: string;
+        parameters?: Record<string, { description?: string }>;
+        usage_notes?: string;
       }[]
     | undefined;
   try {
     const json = JSON.parse(raw) as {
-      summary?: { loop_status?: string };
+      version?: number;
+      summary?: {
+        loop_status?: string;
+        helper_availability?: Record<string, "available" | "unavailable">;
+      };
       commands?: {
+        id?: string;
         command?: string;
+        role?: string;
         usage?: string;
         availability?: "available" | "unavailable";
+        related_requirements?: string[];
+        probe_command?: string;
+        parameters?: Record<string, { description?: string }>;
+        usage_notes?: string;
       }[];
     };
+    version = json.version;
     status = json && json.summary ? json.summary.loop_status : undefined;
+    helperAvailability =
+      json && json.summary && json.summary.helper_availability
+        ? json.summary.helper_availability
+        : undefined;
     commands = Array.isArray(json.commands) ? json.commands : undefined;
   } catch (err) {
     console.error(
@@ -281,10 +311,82 @@ export function enforceCommandPolicyGate(stateDir: string): void {
     process.exit(1);
   }
 
-  if (commands && commands.length > 0) {
+  if (version !== 1) {
+    console.error(
+      "[opencode-orchestrator] ERROR: command-policy.json.version=1 is required.",
+    );
+    process.exit(1);
+  }
+
+  if (!helperAvailability || typeof helperAvailability !== "object") {
+    console.error(
+      "[opencode-orchestrator] ERROR: command-policy.json.summary.helper_availability is required. " +
+        "Run the planning/preflight phase to populate helper availability before starting the loop.",
+    );
+    process.exit(1);
+  }
+
+  if (typeof status !== "string") {
+    console.error(
+      "[opencode-orchestrator] ERROR: command-policy.json.summary.loop_status is required.",
+    );
+    process.exit(1);
+  }
+
+  if (!Array.isArray(commands)) {
+    console.error(
+      "[opencode-orchestrator] ERROR: command-policy.json.commands is required.",
+    );
+    process.exit(1);
+  }
+
+  for (const helperId of requiredHelperIds) {
+    const availability = helperAvailability[helperId];
+    if (availability !== "available" && availability !== "unavailable") {
+      console.error(
+        `[opencode-orchestrator] ERROR: command-policy.json.summary.helper_availability.${helperId} is required.`,
+      );
+      process.exit(1);
+    }
+  }
+
+  if (commands.length > 0) {
+    for (const cmd of commands) {
+      const hasValidParameters =
+        !!cmd.parameters &&
+        typeof cmd.parameters === "object" &&
+        Object.values(cmd.parameters).every(
+          (meta) =>
+            !!meta &&
+            typeof meta === "object" &&
+            typeof meta.description === "string",
+        );
+      const hasValidRelatedRequirements =
+        Array.isArray(cmd.related_requirements) &&
+        cmd.related_requirements.every((item) => typeof item === "string");
+
+      if (
+        typeof cmd.id !== "string" ||
+        typeof cmd.command !== "string" ||
+        typeof cmd.role !== "string" ||
+        typeof cmd.usage !== "string" ||
+        (cmd.availability !== "available" &&
+          cmd.availability !== "unavailable") ||
+        typeof cmd.probe_command !== "string" ||
+        typeof cmd.usage_notes !== "string" ||
+        !hasValidParameters ||
+        !hasValidRelatedRequirements
+      ) {
+        console.error(
+          "[opencode-orchestrator] ERROR: every command-policy.json.commands[] entry must define id, command, role, usage, availability, related_requirements, probe_command, parameters, and usage_notes.",
+        );
+        process.exit(1);
+      }
+    }
+
     const blocking = commands.filter((cmd) => {
-      const usage = cmd.usage || "must_exec";
-      const availability = cmd.availability || "unavailable";
+      const usage = cmd.usage;
+      const availability = cmd.availability;
       return usage === "must_exec" && availability !== "available";
     });
 
@@ -294,9 +396,7 @@ export function enforceCommandPolicyGate(stateDir: string): void {
       );
       for (const cmd of blocking) {
         console.error(
-          `  - ${cmd.command || "<unknown>"} (usage=${cmd.usage || "must_exec"}, availability=${
-            cmd.availability || "unavailable"
-          })`,
+          `  - ${cmd.command || "<unknown>"} (usage=${cmd.usage}, availability=${cmd.availability})`,
         );
       }
       console.error(
@@ -307,7 +407,7 @@ export function enforceCommandPolicyGate(stateDir: string): void {
     }
   }
 
-  if (!status || status === "ready_for_loop") {
+  if (status === "ready_for_loop") {
     return;
   }
 

@@ -72,7 +72,7 @@ Additional tools:
   - Runs the `orch-preflight` command via `opencode run --format json` so that permission
     prompts are auto-rejected.
   - Commands that require `ask` permissions must be treated as **unavailable** in preflight.
-  - Preflight-cli automatically includes helper commands from `resources/helper-commands.json`
+  - Preflight-cli automatically includes embedded helper command definitions
     (such as `grep`, `rg`, `sort`, `uniq`, `jq`, etc.) in the probe list alongside the
     user-defined commands. Helper commands use `role: "helper"` and `usage: "may_exec"`.
     The results are returned in the same `results` array, and the Planner should update
@@ -131,7 +131,7 @@ Core flow:
   - the human reports that missing tools have been installed or environment problems fixed.
 
 - **Helper command availability**: Preflight-cli automatically probes helper commands
-  from `resources/helper-commands.json` alongside the user-defined commands. After preflight
+  embedded in the prompt context alongside the user-defined commands. After preflight
   completes, update `command-policy.json.summary.helper_availability` with the results. The format should be:
 
   ```json
@@ -143,11 +143,12 @@ Core flow:
   ```
 
   where each key is a helper command ID (they carry a `helper:` prefix, e.g. `helper:rg`) and the value is either `"available"` or `"unavailable"`.
+  Every embedded helper command ID MUST be present in this map.
   This update MUST happen on the first preflight run and whenever environment changes are reported.
 
 - Use the command definitions provided by the Refiner in `command-policy.json.commands[]`.
-  Each entry MUST include a stable `id`, `command`, `role`, and `usage`.
-  - Example: `{ "id": "cmd-dotnet-test", "command": "dotnet test", "role": "test", "usage": "must_exec" }`.
+  Each entry MUST include a stable `id`, `command`, `role`, `usage`, `availability`, `related_requirements`, `probe_command`, `parameters`, and `usage_notes`.
+  - Example: `{ "id": "cmd-dotnet-test", "command": "dotnet test", "role": "test", "usage": "must_exec", "availability": "unavailable", "related_requirements": [], "probe_command": "dotnet test --help", "parameters": {}, "usage_notes": "" }`.
   - Never invent new commands or IDs at this stage. If a command is missing, go back to the
     refiner/spec-checker loop instead of guessing.
   - For each command entry, decide which concrete command string to send to `preflight-cli`:
@@ -214,20 +215,22 @@ Core flow:
 Ownership boundary (MANDATORY):
 
 - **Refiner owns**: `commands[]` definitions — `id`, `command`, `role`, `usage`, `probe_command`,
-  `parameters`. These are the canonical command definitions and are the Refiner's single source
-  of truth. You must **not** add, remove, or modify any of these fields directly.
+  `parameters`, `related_requirements`, and `usage_notes`. These are the canonical command
+  definitions and are the Refiner's single source of truth. You must **not** add, remove, or
+  modify any of these fields directly.
 - **Planner owns**: `summary.loop_status`, `summary.helper_availability`, and
   `commands[].availability`. You annotate the
   Refiner-defined command list with preflight results and readiness assessment. You also
-  set `related_requirements` when you can infer them, and update the overall structure
-  of `command-policy.json` (e.g. adding preflight result metadata and helper availability).
+  update the overall structure of `command-policy.json` (for example `version`, helper
+  availability, and readiness summary) without changing Refiner-owned command fields.
 - If a command definition is missing, invalid, or needs structural adjustment, hand control
   back to the Refiner/Spec-Checker loop. Do not fix command definitions in Planner.
 
 After you have both a spec-check report and a preflight result,
 update the `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/command-policy.json`.
 
-- In `command-policy.json`, include at minimum:
+- In `command-policy.json`, include all required fields:
+  - `version: 1`
   - `summary.loop_status` as one of:
     - `"ready_for_loop"`: all `must_exec` commands are marked `availability: "available"`
       and there are no blocking spec issues.
@@ -238,8 +241,8 @@ update the `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/command-poli
   - `commands[]`: entries mirroring the **Refiner-defined command list** (for example
     from `acceptance-index.json` or an initial `command-policy.json`), annotated with
     preflight availability, for example:
-    - `id`, `command`, `role`, `usage`, `availability` ("available" / "unavailable"), and
-      `related_requirements` when you can infer them.
+    - `id`, `command`, `role`, `usage`, `availability` ("available" / "unavailable"),
+      `related_requirements`, `probe_command`, `parameters`, and `usage_notes`.
 - For any `must_exec` command, set `availability: "available"` **only** if preflight
   confirms it can run without interactive permission. Otherwise mark it `"unavailable"`.
 - If `loop_status` is not `"ready_for_loop"`, clearly explain to the human why the loop

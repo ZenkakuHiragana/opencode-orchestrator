@@ -39,6 +39,7 @@
   - Orchestrator / Refiner / Spec-Checker / Preflight-Runner / Todo-Writer / Executor / Auditor の責務分担は崩さず、役割をまたぐ機能追加は慎重に行います。
   - ログ/エラーメッセージは日本語メイン・英語補助の現在のスタイルを踏襲してください。
   - システムプロンプトとカスタムコマンドに記載するプロンプトは英語で書いてください。
+  - システムプロンプトやカスタムコマンド本文には、デプロイ先エージェントから見て解決不能なローカルファイルパスを直接書かないでください。特に `resources/helper-commands.json` のようなパスは記載禁止です。helper command の内容が必要な場合は、TypeScript 側で JSON オブジェクトをプロンプトへ埋め込んで渡してください。
 
 - TypeScript（`src/**/*.ts`)
   - モジュール構造

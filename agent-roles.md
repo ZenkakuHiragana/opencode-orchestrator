@@ -614,15 +614,17 @@ sequenceDiagram
 
 - パス: `$XDG_STATE_HOME/opencode/orchestrator/<task>/state/command-policy.json`
 - オーナー: 初期定義は `orch-refiner`、集約と `availability` 付与は `orch-planner`。
-- `enforceCommandPolicyGate`（`src/orchestrator-loop.ts`）で期待される最小スキーマ:
+- `enforceCommandPolicyGate`（`src/orchestrator-loop.ts`）で期待されるスキーマ:
 
 ```jsonc
 {
+  "version": 1,
   "summary": {
     "loop_status": "ready_for_loop" | "needs_refinement" | "blocked_by_environment" | string,
     "helper_availability": {
       "helper:rg": "available" | "unavailable",
       "helper:grep": "available" | "unavailable"
+      // ... helper-commands.json にある全 helper ID を列挙
     }
   },
   "commands": [
@@ -631,18 +633,22 @@ sequenceDiagram
       "command": "npm test",                    // コマンド文字列またはテンプレート
       "role": "test" | "build" | "lint" | "doc" | "run" | "explore" | string,
       "usage": "must_exec" | "may_exec" | "doc_only", // クリティカル度
-      "probe_command": "npm test -- --list",    // 任意・preflight 用の軽量コマンド
-      "parameters": {                            // テンプレート使用時のパラメータ定義（任意）
+      "probe_command": "npm test -- --list",    // preflight 用の軽量コマンド
+      "parameters": {                            // テンプレート使用時のパラメータ定義。なければ {}
         "pattern": { "description": "..." },
         "subdir": { "description": "..." }
       },
-      "related_requirements": ["R1", "R2-ui"], // 任意・どの要件と結びつくか
-      "usage_notes": "...",                    // 任意・日本語メモ
+      "related_requirements": ["R1", "R2-ui"], // 関連要件。なければ []
+      "usage_notes": "...",                    // 日本語メモ。なければ ""
       "availability": "available" | "unavailable" // Planner/preflight が付与
     }
   ]
 }
 ```
+
+- `version` は必須フィールドで、現行値は `1`。
+- `summary.helper_availability` は必須フィールドで、helper command ID ごとの可用性を保持する。全 helper ID を列挙する。
+- `commands[]` の各オブジェクトは上記すべてのフィールドを必須で持つ。値がない場合も `[]` / `{}` / `""` で明示する。
 
 - `enforceCommandPolicyGate` は特に `commands[].usage` と `commands[].availability` を見て、
   `usage == "must_exec"` かつ `availability != "available"` のコマンドが 1 つでもある場合は
