@@ -96,10 +96,17 @@ The JSON must have this shape:
 }
 ```
 
+**CRITICAL RULE**: When returning `done: false`, the `requirements` array **MUST NOT be empty**.
+You must explicitly list every requirement that failed, with `"passed": false` and a `"reason"` in Japanese.
+An empty requirements array with `done: false` is invalid and will be treated as an error.
+
 Semantics:
 
 - `done` is `true` only if **all** acceptance criteria are clearly satisfied and project gates
   (tests, build, lint, docs) appear to have passed in the current state.
+- **When `done: false`**, the `requirements` array must contain at least one entry with
+  `passed: false` and a `reason` explaining why that specific requirement failed.
+  Never return `done: false` with an empty `requirements` array.
 - `requirements` is a list of requirement objects. Each requirement represents an acceptance
   criterion, testable behavior, or necessary task derived from `spec.md`.
   - `id` is a short stable identifier string for the requirement (for example

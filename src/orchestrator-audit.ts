@@ -25,6 +25,11 @@ export function parseAuditResult(stdout: string): AuditSummary {
   }
 
   if (!lastText) {
+    // Auditor did not produce any valid JSON output - this is an error condition
+    // Log for debugging purposes
+    console.error(
+      "[opencode-orchestrator] ERROR: auditor produced no valid JSON output",
+    );
     return { done: false, requirementsJson: null, failed: [], passed: [] };
   }
 
@@ -33,6 +38,16 @@ export function parseAuditResult(stdout: string): AuditSummary {
       done?: boolean;
       requirements?: { id?: string; passed?: boolean; reason?: string }[];
     };
+
+    // Check for the bug: done: false with empty requirements
+    const hasRequirements =
+      Array.isArray(payload.requirements) && payload.requirements.length > 0;
+    if (payload.done === false && !hasRequirements) {
+      console.error(
+        "[opencode-orchestrator] ERROR: auditor returned done:false with empty requirements - treating as error",
+      );
+      return { done: false, requirementsJson: null, failed: [], passed: [] };
+    }
 
     let requirementsJson: string | null = null;
     const failed: { id: string; reason?: string }[] = [];
