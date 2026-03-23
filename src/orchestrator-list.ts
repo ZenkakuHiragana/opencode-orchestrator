@@ -95,14 +95,33 @@ export async function runList(opts: ListOptions): Promise<void> {
     return;
   }
 
+  // Determine which optional columns are present across all entries.
+  const hasAnyLoopStatus = tasks.some((t) => t.loopStatus);
+  const hasAnyTitle = tasks.some((t) => t.title);
+
+  // Compute max display width for each column so that rows align.
+  const taskWidth = Math.max(...tasks.map((t) => t.task.length));
+  const statusWidth = hasAnyLoopStatus
+    ? Math.max(
+        ...tasks.map((t) =>
+          t.loopStatus ? `loop_status=${t.loopStatus}`.length : 0,
+        ),
+      )
+    : 0;
+  const titleWidth = hasAnyTitle
+    ? Math.max(...tasks.map((t) => (t.title ? `title=${t.title}`.length : 0)))
+    : 0;
+
   for (const t of tasks) {
-    const parts: string[] = [t.task];
-    if (t.loopStatus) {
-      parts.push(`loop_status=${t.loopStatus}`);
+    const cols: string[] = [t.task.padEnd(taskWidth)];
+    if (hasAnyLoopStatus) {
+      const s = t.loopStatus ? `loop_status=${t.loopStatus}` : "";
+      cols.push(s.padEnd(statusWidth));
     }
-    if (t.title) {
-      parts.push(`title=${t.title}`);
+    if (hasAnyTitle) {
+      const s = t.title ? `title=${t.title}` : "";
+      cols.push(s.padEnd(titleWidth));
     }
-    console.log(parts.join("  "));
+    console.log(cols.join("  "));
   }
 }
