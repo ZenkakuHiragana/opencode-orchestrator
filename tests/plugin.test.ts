@@ -46,4 +46,36 @@ describe("OrchestratorPlugin", () => {
     expect(config.command["orch-exec"]).toBeTruthy();
     expect(typeof config.command["orch-exec"].template).toBe("string");
   });
+
+  it("keeps description when permission.orchestrator is allow", async () => {
+    const plugin = await OrchestratorPlugin({ client: {} } as any);
+    const config: any = {
+      permission: {
+        orchestrator: {
+          "orch-local-investigator": "allow",
+        },
+      },
+    };
+    await plugin.config!(config);
+
+    expect(config.agent["orch-local-investigator"]).toBeTruthy();
+    expect(typeof config.agent["orch-local-investigator"].description).toBe(
+      "string",
+    );
+  });
+
+  it("does not use legacy orchestrator.expose", async () => {
+    const plugin = await OrchestratorPlugin({ client: {} } as any);
+    const config: any = {
+      orchestrator: {
+        expose: {
+          "orch-local-investigator": true,
+        },
+      },
+    };
+    await plugin.config!(config);
+
+    expect(config.agent["orch-local-investigator"]).toBeTruthy();
+    expect(config.agent["orch-local-investigator"].description).toBeUndefined();
+  });
 });

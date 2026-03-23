@@ -139,35 +139,39 @@ npx opencode-orchestrator loop --task <task-key> "高レベルゴール"
 
 ## 設定
 
-### `orchestrator.expose`
+### `permission.orchestrator`
 
 `Build` などの組み込みエージェントが「積極的に使ってよいサブエージェント」として認識するサブエージェントの設定です。
 デフォルトでは、orchestrator エージェントの `description` はクリアされ、`build` などの組み込み
 エージェントから「積極的に使ってよいサブエージェント」として認識されにくくなっています。
 
-個別にエージェントごとの可視状態を制御するには、`expose` にエージェント名と真偽値のマップを指定します。
+個別にエージェントごとの可視状態を制御するには、`permission.orchestrator` に
+エージェント名と権限（`"allow"` / `"deny"` など）のマップを指定します。
 
 ```json
 {
-  "orchestrator": {
-    "expose": {
-      "orch-local-investigator": true,
-      "orch-public-researcher": false
+  "permission": {
+    "orchestrator": {
+      "orch-local-investigator": "allow",
+      "orch-public-researcher": "deny"
     }
   }
 }
 ```
 
-| エージェント名キーの有無 / 値  | 挙動                                                                        |
-| ------------------------------ | --------------------------------------------------------------------------- |
-| キーが存在しない（デフォルト） | `description` がクリアされる → 「明示的に呼べ」という説明に置き換わる       |
-| `true`                         | `description` が維持される → `build` なども有用なサブエージェントとして認識 |
-| `false`                        | 明示的に非公開 → `description` がクリアされる                               |
+| エージェント名キーの有無 / 値     | 挙動                                                                        |
+| --------------------------------- | --------------------------------------------------------------------------- |
+| キーが存在しない（デフォルト）    | `description` がクリアされる → 「明示的に呼べ」という説明に置き換わる       |
+| `"allow"`                         | `description` が維持される → `build` なども有用なサブエージェントとして認識 |
+| `"deny"`（または `"allow"` 以外） | 明示的に非公開 → `description` がクリアされる                               |
 
 > [!NOTE]
-> `expose` で `false`（またはキー省略）にしていても、orchestrator の `orch-executor` は
+> `permission.orchestrator` で `"deny"`（またはキー省略）にしていても、orchestrator の `orch-executor` は
 > 自前のシステムプロンプトでこれらのエージェントを直接指定して委譲するため、
 > orchestrator の動作には影響しません。
+
+> [!NOTE]
+> `orchestrator.expose` はサポートしません。可視状態の制御は `permission.orchestrator` を使用してください。
 
 ## CLI: `opencode-orchestrator`
 

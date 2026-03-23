@@ -88,11 +88,11 @@ export const OrchestratorPlugin: Plugin = async (input) => {
       // encourages proactive use.
       //
       // Config shape:
-      //   { "orchestrator": { "expose": { "orch-local-investigator": true } } }
-      const exposeMap: Record<string, boolean> =
-        typeof config.orchestrator?.expose === "object" &&
-        config.orchestrator?.expose !== null
-          ? config.orchestrator.expose
+      //   { "permission": { "orchestrator": { "orch-local-investigator": "allow" } } }
+      const orchestratorPermissionMap: Record<string, string> =
+        typeof config.permission?.orchestrator === "object" &&
+        config.permission?.orchestrator !== null
+          ? config.permission.orchestrator
           : {};
 
       // Wire orchestrator agents: metadata from TypeScript, prompt body from
@@ -171,7 +171,8 @@ export const OrchestratorPlugin: Plugin = async (input) => {
         // so that non-orchestrator agents (e.g. build) see the generic
         // "call manually" fallback and are not encouraged to use them
         // proactively via the task tool.
-        const shouldClearDescription = meta.description && !exposeMap[name];
+        const shouldClearDescription =
+          meta.description && orchestratorPermissionMap[name] !== "allow";
 
         // Merge order: TypeScript defaults first, then user overrides,
         // then always-set prompt. This lets users override any property
