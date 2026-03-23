@@ -141,7 +141,7 @@
     {
       "id": "helper:test",
       "command": "test {{params}}",
-      "probe": "test --version",
+      "probe": "test 1",
       "purpose": "条件式を評価し、真なら終了コード 0、偽なら 1 を返す。ファイル属性の確認（-f, -d, -e）や文字列比較に使用する。",
       "placeholders": {
         "params": "test の条件式。例: -f file.txt（ファイル存在確認）, 'a' = 'b'（文字列比較）"
@@ -150,7 +150,7 @@
     {
       "id": "helper:bracket",
       "command": "[ {{params}} ]",
-      "probe": "[ --version",
+      "probe": "[ 1 ]",
       "purpose": "test の代替記法。条件式を評価する。末尾に ] が必要。",
       "placeholders": {
         "params": "条件式。例: -d src/（ディレクトリ存在確認）, -n \"$var\"（空文字列でない）"

@@ -12,7 +12,7 @@ import {
 import preflightCliTool from "../src/preflight-cli.js";
 import { buildOpencodeSpawnPlan } from "../src/opencode-spawn.js";
 import { getOrchestratorStateDir } from "../src/orchestrator-paths.js";
-import { setPreflightRunnerBashPermission } from "../src/preflight-permission-store.js";
+import { setPreflightRunnerBashPermissionSource } from "../src/preflight-permission-store.js";
 
 describe("buildOpencodeSpawnPlan", () => {
   it("uses node script directly on Windows when opencode script path is known", () => {
@@ -249,9 +249,9 @@ describe("interpretPreflightRun", () => {
 });
 
 describe("evaluateBashPermission", () => {
-  it("defaults to allow when permission.bash is missing", () => {
+  it("defaults to ask when permission.bash is missing", () => {
     expect(evaluateBashPermission("ls -l", undefined)).toEqual({
-      decision: "allow",
+      decision: "ask",
       determined: true,
       matchedPattern: null,
     });
@@ -281,10 +281,10 @@ describe("evaluateBashPermission", () => {
     });
   });
 
-  it("treats non-object and invalid values as undetermined", () => {
+  it("treats non-object and invalid values as ask", () => {
     expect(evaluateBashPermission("ls", 123)).toEqual({
-      decision: "allow",
-      determined: false,
+      decision: "ask",
+      determined: true,
       matchedPattern: null,
     });
 
@@ -293,8 +293,8 @@ describe("evaluateBashPermission", () => {
         "*": "ASK",
       }),
     ).toEqual({
-      decision: "allow",
-      determined: false,
+      decision: "ask",
+      determined: true,
       matchedPattern: null,
     });
   });
@@ -323,7 +323,10 @@ describe("preflight-cli permission short-circuit", () => {
     try {
       const task = "short-circuit-allow";
       prepareState(task);
-      setPreflightRunnerBashPermission(undefined);
+      setPreflightRunnerBashPermissionSource({
+        globalBash: undefined,
+        agentBash: undefined,
+      });
 
       const raw = await preflightCliTool.execute(
         {
@@ -353,7 +356,10 @@ describe("preflight-cli permission short-circuit", () => {
         "short-circuit: permission.bash=allow",
       );
     } finally {
-      setPreflightRunnerBashPermission(undefined);
+      setPreflightRunnerBashPermissionSource({
+        globalBash: undefined,
+        agentBash: undefined,
+      });
       process.env.XDG_STATE_HOME = prevXdg;
     }
   });
@@ -366,7 +372,10 @@ describe("preflight-cli permission short-circuit", () => {
     try {
       const task = "short-circuit-ask";
       prepareState(task);
-      setPreflightRunnerBashPermission("ask");
+      setPreflightRunnerBashPermissionSource({
+        globalBash: undefined,
+        agentBash: "ask",
+      });
 
       const raw = await preflightCliTool.execute(
         {
@@ -396,7 +405,10 @@ describe("preflight-cli permission short-circuit", () => {
         "short-circuit: permission.bash=ask",
       );
     } finally {
-      setPreflightRunnerBashPermission(undefined);
+      setPreflightRunnerBashPermissionSource({
+        globalBash: undefined,
+        agentBash: undefined,
+      });
       process.env.XDG_STATE_HOME = prevXdg;
     }
   });
