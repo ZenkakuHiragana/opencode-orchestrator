@@ -30,8 +30,8 @@ export async function runLoop(opts: LoopOptions): Promise<boolean> {
   const logDir = getOrchestratorLogsDir(opts.task);
   const stateDir = getOrchestratorStateDir(opts.task);
   const statusPath = path.join(stateDir, "status.json");
-  fs.mkdirSync(logDir, { recursive: true });
-  fs.mkdirSync(stateDir, { recursive: true });
+  fs.mkdirSync(logDir, { recursive: true, mode: 0o700 });
+  fs.mkdirSync(stateDir, { recursive: true, mode: 0o700 });
 
   let status: OrchestratorStatus = loadStatusJson(statusPath);
 
@@ -90,7 +90,10 @@ export async function runLoop(opts: LoopOptions): Promise<boolean> {
   let forceTodoWriterNextStep = false;
 
   for (let step = 1; step <= opts.maxLoop; step += 1) {
-    console.error(`\n[opencode-orchestrator] === STEP ${step} ===`);
+    console.error(
+      `\n[opencode-orchestrator] === STEP ${step} (maxLoop=${opts.maxLoop}) ===`,
+    );
+    console.error(`[opencode-orchestrator] progress: ${step}/${opts.maxLoop}`);
 
     const stepId = String(step).padStart(3, "0");
     const orchLog = path.join(logDir, `orch_step_${stepId}.txt`);
