@@ -73,7 +73,62 @@ flowchart LR
   - Todo-Writer / Executor / Auditor を順番に呼び出し
   - ストーリーが完了 (`done: true`) するまで実行を続けます。
 
-## この OpenCode プラグインの使い方
+## LLM向けクイックスタート
+
+AI エージェントがこの orchestrator を使ってタスクを実行する場合、次の手順で始められます。
+
+### Installation
+
+```bash
+npm install
+npm run build
+```
+
+Expected output: Build completes without errors, generating `dist/cli.js` and `dist/index.js`.
+
+### 基本的な使い方
+
+1. **タスクの状態ディレクトリを作成**
+   - 状態は `$XDG_STATE_HOME/opencode/orchestrator/<task>/state` に保存されます
+   - 初回実行時に自動的にディレクトリが作成されます
+
+2. **plan フェーズ** (OpenCode TUI で実行)
+
+   ```
+   > npx opencode-orchestrator planner --task my-task "大きな開発タスク"
+   ```
+
+   - acceptance-index.json と spec.md が作成されます
+
+3. **実行ループ開始**
+
+   ```bash
+   npx opencode-orchestrator loop --task my-task "タスクの説明"
+   ```
+
+   Expected output:
+
+   ```
+    [opencode-orchestrator] === STEP 1 (maxLoop=100) ===
+    [opencode-orchestrator] progress: 1/100
+    ...
+    [opencode-orchestrator] auditor done = true
+   ```
+
+### CLI オプション
+
+| オプション      | 説明                            | 例                   |
+| --------------- | ------------------------------- | -------------------- |
+| `--task <name>` | タスクキー (必須)               | `--task my-api-task` |
+| `--continue`    | 前回のセッションを継続          |                      |
+| `--max-loop N`  | 最大ステップ数 (デフォルト 100) | `--max-loop 50`      |
+| `--commit`      | 完了時に自動コミット            |                      |
+
+### 次のステップ
+
+- `opencode-orchestrator list` で利用可能なタスクを確認
+- `opencode-orchestrator loop --help` でループオプションの詳細を確認
+- 状態ディレクトリ内の `acceptance-index.json` で要件を確認
 
 1. opencode.json のプラグインフィールドに登録します。
    ```json
