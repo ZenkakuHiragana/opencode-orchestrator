@@ -38,14 +38,18 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,md}\"",
-    "test": "vitest run"
+    "test": "vitest run",
+    "lint": "eslint src/ tests/"
   },
   "dependencies": {
     "@opencode-ai/plugin": "^1.2.25"
   },
   "devDependencies": {
     "@types/node": "^22.19.15",
+    "@typescript-eslint/eslint-plugin": "^6.21.0",
+    "@typescript-eslint/parser": "^6.21.0",
     "@vitest/coverage-v8": "^4.1.0",
+    "eslint": "^8.57.1",
     "prettier": "^3.8.1",
     "typescript": "^5.7.0",
     "vitest": "^4.1.0"

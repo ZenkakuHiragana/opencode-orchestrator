@@ -12,7 +12,6 @@
 // without relying on markdown parsing. We keep the type loose enough to
 // accept the full PermissionConfig surface.
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type OrchestratorAgentConfig = { [key: string]: any };
 
 // Note: path computation for orchestrator state/log directories (including

@@ -657,7 +657,6 @@ const preflightCliTool = tool({
           variant: "warning",
           duration: 5000,
         });
-        // eslint-disable-next-line no-await-in-loop
         runResult = await runOpencode(runArgs);
         ({ result, sessionID } = interpretPreflightRun(descriptor, runResult));
       }
@@ -763,7 +762,6 @@ const preflightCliTool = tool({
         command: descriptor.command,
       });
 
-      // eslint-disable-next-line no-await-in-loop
       const res = await runSinglePreflight(descriptor, progress);
       results.push(res);
       preflightCache.set(cacheKey, res);

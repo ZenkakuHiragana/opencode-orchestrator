@@ -47,7 +47,6 @@ export function rewritePromptPaths(body: string): string {
 // any `$XDG_STATE_HOME`/legacy state paths are replaced with the actual
 // orchestrator base directory. This is used both for prompts and for
 // permission patterns like external_directory/write.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function rewriteAgentConfigPaths<T = any>(value: T): T {
   const visit = (v: unknown): unknown => {
     if (typeof v === "string") {
