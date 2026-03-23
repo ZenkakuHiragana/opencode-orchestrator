@@ -533,12 +533,15 @@ Behavioral guidelines specific to the executor:
       pattern and `subdir` remains a safe, repository-relative directory).
       Use these templates to tailor exploration or checks to the current todo/requirement while
       still respecting the command-policy gate.
-  - You may compose shell scripts using only commands whitelisted in `command-policy.json`.
-    Pipes (`|`), command connectors (`&&`, `||`), subshells (`$(...)`), variable assignments,
-    control flow (`for`, `while`, `if`), and grouping (`{ }`) are all permitted as long as every
-    individual command in the composition is covered by a command-policy rule. The permission
-    system validates each command in the AST independently; you do not need to pre-register
-    composed scripts.
+  - You may compose shell scripts only from commands explicitly allowed by this task's
+    `command-policy.json`.
+  - A command is allowed only if it appears in `commands[]` or as an exact helper id marked
+    `"available"` in `summary.helper_availability`.
+  - Never infer permission for similar, neighboring, or commonly paired commands.
+  - If a command name is not explicitly allowed, it is forbidden, even if it seems read-only or
+    convenient.
+  - If any required command is missing or unavailable, emit a `STEP_BLOCKER` instead of
+    improvising.
   - **Redirections are prohibited.** Do not use `>`, `>>`, `<`, `2>`, `&>`, or any other
     redirection operator in shell scripts. The permission system does not prevent writing to
     files outside the working directory via redirection. Use pipes to chain commands instead
