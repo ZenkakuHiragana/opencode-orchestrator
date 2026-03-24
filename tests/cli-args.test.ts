@@ -67,6 +67,8 @@ describe("parseListArgs", () => {
   it("defaults to text format", () => {
     const opts = parseListArgs([]);
     expect(opts.format).toBe("text");
+    expect(opts.task).toBeUndefined();
+    expect(opts.showProposals).toBeFalsy();
   });
 
   it("accepts --json", () => {
@@ -77,6 +79,18 @@ describe("parseListArgs", () => {
   it("throws on unknown options", () => {
     expect(() => parseListArgs(["--foo"])).toThrow(
       "unknown option for list: --foo",
+    );
+  });
+
+  it("parses --task and --proposals together", () => {
+    const opts = parseListArgs(["--task", "foo", "--proposals"]);
+    expect(opts.task).toBe("foo");
+    expect(opts.showProposals).toBe(true);
+  });
+
+  it("throws when --proposals is used without --task", () => {
+    expect(() => parseListArgs(["--proposals"])).toThrow(
+      "--proposals requires --task <task-name>",
     );
   });
 });

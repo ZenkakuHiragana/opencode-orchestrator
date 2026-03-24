@@ -7,6 +7,7 @@ import {
   getOrchestratorStateDir,
 } from "./orchestrator-paths.js";
 import type { ListOptions } from "./cli-args.js";
+import { loadStatusJson } from "./orchestrator-status.js";
 
 interface TaskListEntry {
   task: string;
@@ -52,6 +53,47 @@ function extractSummaryFromSpec(markdown: string): string | undefined {
 }
 
 export async function runList(opts: ListOptions): Promise<void> {
+  if (opts.showProposals && opts.task) {
+    const stateDir = getOrchestratorStateDir(opts.task);
+    const statusPath = path.join(stateDir, "status.json");
+    const status = loadStatusJson(statusPath);
+    const proposals = Array.isArray(status.proposals) ? status.proposals : [];
+
+    if (opts.format === "json") {
+      console.log(
+        JSON.stringify(
+          {
+            task: opts.task,
+            proposals,
+          },
+          null,
+          2,
+        ),
+      );
+      return;
+    }
+
+    if (proposals.length === 0) {
+      console.error(
+        `[opencode-orchestrator] no proposals found for task "${opts.task}".`,
+      );
+      return;
+    }
+
+    console.error(`[opencode-orchestrator] proposals for task "${opts.task}":`);
+    for (const p of proposals) {
+      console.error(
+        `  - [${p.source}] kind=${p.kind} cycle=${p.cycle} id=${p.id}`,
+      );
+      console.error(`    summary: ${p.summary}`);
+      if (p.details) {
+        const firstLine = String(p.details).split(/\r?\n/, 1)[0];
+        console.error(`    details: ${firstLine}`);
+      }
+    }
+    return;
+  }
+
   const baseDir = getOrchestratorBaseDir();
 
   let entries: fs.Dirent[];

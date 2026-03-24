@@ -37,6 +37,12 @@ describe("parseListArgs", () => {
     expect(opts.format).toBe("json");
   });
 
+  it("accepts --task and --proposals", () => {
+    const opts = parseListArgs(["--task", "foo", "--proposals"]);
+    expect(opts.task).toBe("foo");
+    expect(opts.showProposals).toBe(true);
+  });
+
   it("throws on unknown option", () => {
     expect(() => parseListArgs(["--unknown"])).toThrow(
       /unknown option for list/,
@@ -57,6 +63,34 @@ describe("runList", () => {
   beforeEach(() => {
     console.error = vi.fn();
     console.log = vi.fn();
+  });
+
+  it("prints a friendly message when proposals are requested but none exist", async () => {
+    const originalXdg = process.env.XDG_STATE_HOME;
+    const fakeXdg = path.join(
+      os.tmpdir(),
+      `opencode-orch-prop-none-${Date.now().toString(16)}-${Math.random()
+        .toString(16)
+        .slice(2)}`,
+    );
+    process.env.XDG_STATE_HOME = fakeXdg;
+
+    const baseDir = path.join(fakeXdg, "opencode", "orchestrator");
+    const task = "no-proposals-task";
+    const stateDir = path.join(baseDir, task, "state");
+    fs.mkdirSync(stateDir, { recursive: true });
+
+    await runList({ format: "text", task, showProposals: true });
+
+    process.env.XDG_STATE_HOME = originalXdg;
+
+    const errorMock = console.error as unknown as {
+      mock: { calls: unknown[][] };
+    };
+    const errorCalls = errorMock.mock.calls
+      .map((args: unknown[]) => args.join(" "))
+      .join("\n");
+    expect(errorCalls).toContain(`no proposals found for task "${task}"`);
   });
 
   afterEach(() => {

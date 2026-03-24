@@ -52,8 +52,19 @@ export async function runLoop(opts: LoopOptions): Promise<boolean> {
     console.error(
       "[opencode-orchestrator] status.json.proposals is non-empty before starting a new session; refusing to start loop.",
     );
+    console.error("[opencode-orchestrator] Proposals from previous runs:");
+    for (const p of status.proposals) {
+      console.error(
+        `  - [${p.source}] kind=${p.kind} cycle=${p.cycle} id=${p.id}`,
+      );
+      console.error(`    summary: ${p.summary}`);
+      if (p.details) {
+        const firstLine = String(p.details).split(/\r?\n/, 1)[0];
+        console.error(`    details: ${firstLine}`);
+      }
+    }
     console.error(
-      "[opencode-orchestrator] Clear proposals or handle them manually before rerunning the loop.",
+      "[opencode-orchestrator] Handle these proposals via orch-planner and clear them before rerunning the loop.",
     );
     return false;
   }

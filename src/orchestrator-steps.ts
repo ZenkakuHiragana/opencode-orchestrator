@@ -457,7 +457,8 @@ export async function runExecutorAndAuditorStep(
             source: "executor",
             cycle: step,
             kind: blocker.tag,
-            summary: "Executor reported env_blocked in 3 consecutive steps",
+            summary:
+              "環境依存のエラー (env_blocked) が 3 回連続で発生し、Executor ループを継続できません。必須コマンドや command-policy の前提を見直してほしい。",
             details: `${blocker.scope}: ${blocker.tag}: ${blocker.reason}`,
           });
         }
@@ -467,7 +468,8 @@ export async function runExecutorAndAuditorStep(
           source: "auditor",
           cycle: step,
           kind: "env_blocked",
-          summary: "Repeatedly unable to parse auditor output",
+          summary:
+            "監査結果の解析に繰り返し失敗し、環境状態を正しく判定できません。acceptance-index/spec.md と command-policy を見直してほしい。",
           details: envBlockedReason,
         });
       }
@@ -623,6 +625,17 @@ export async function runExecutorAndAuditorStep(
     console.error(
       "[opencode-orchestrator] proposals present in status.json; stopping loop for manual intervention.",
     );
+    console.error("[opencode-orchestrator] Proposals raised in this run:");
+    for (const p of status.proposals) {
+      console.error(
+        `  - [${p.source}] kind=${p.kind} cycle=${p.cycle} id=${p.id}`,
+      );
+      console.error(`    summary: ${p.summary}`);
+      if (p.details) {
+        const firstLine = String(p.details).split(/\r?\n/, 1)[0];
+        console.error(`    details: ${firstLine}`);
+      }
+    }
     return {
       sessionId,
       restartCount,

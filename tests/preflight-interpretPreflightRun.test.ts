@@ -394,7 +394,11 @@ describe("preflight-cli permission short-circuit", () => {
 
       const res = JSON.parse(raw) as {
         status: "ok" | "failed";
-        results: { id: string; available: boolean; stderr_excerpt: string }[];
+        results: {
+          id: string;
+          available: boolean;
+          stderr_excerpt: string;
+        }[];
       };
 
       expect(res.status).toBe("failed");

@@ -16,16 +16,20 @@ export interface LoopOptions {
 
 export interface ListOptions {
   format: "text" | "json";
+  task?: string;
+  showProposals?: boolean;
 }
 
 export function printListUsage() {
   console.error(
-    "Usage: opencode-orchestrator list [--json]\n" +
+    "Usage: opencode-orchestrator list [--json] [--task <task-name> --proposals]\n" +
       "\n" +
       "List available orchestrator tasks discovered under the orchestrator state directory.\n" +
       "\n" +
       "Options:\n" +
-      "  --json   Output as JSON array",
+      "  --json                Output as JSON array\n" +
+      "  --task <name>         Limit operations to a single task (used with --proposals)\n" +
+      "  --proposals           Show proposals for the specified task instead of the task list",
   );
 }
 
@@ -149,10 +153,21 @@ export function parseLoopArgs(argv: string[]): LoopOptions {
 
 export function parseListArgs(argv: string[]): ListOptions {
   let format: "text" | "json" = "text";
+  let task: string | undefined;
+  let showProposals = false;
 
-  for (const arg of argv) {
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i];
     if (arg === "--json") {
       format = "json";
+    } else if (arg === "--task") {
+      const next = argv[++i];
+      if (!next) {
+        throw new Error("--task requires a task name");
+      }
+      task = next;
+    } else if (arg === "--proposals") {
+      showProposals = true;
     } else if (arg.startsWith("-")) {
       throw new Error(`unknown option for list: ${arg}`);
     } else {
@@ -160,5 +175,9 @@ export function parseListArgs(argv: string[]): ListOptions {
     }
   }
 
-  return { format };
+  if (showProposals && !task) {
+    throw new Error("--proposals requires --task <task-name>");
+  }
+
+  return { format, task, showProposals };
 }
