@@ -148,6 +148,55 @@ You **must not**:
 
 </requirements_vs_todos>
 
+## Dynamic coverage invariants (no deferral)
+
+<dynamic_coverage>
+
+You must preserve the following **dynamic coverage invariants** whenever you derive or replace
+canonical todos:
+
+1. **Active coverage for unsatisfied requirements**
+   - For every requirement that is still expected to be satisfied (i.e. not explicitly
+     removed or superseded in the Refiner-owned sources), there **must exist at least one
+     active todo** (`status: "pending"` or `"in_progress"`) whose
+     `related_requirement_ids` includes that requirement ID.
+   - You must **never** leave a requirement in the state:
+     > "requirement still expected" + "all linked todos are `completed` or `cancelled`".
+
+2. **Strict rules for `cancelled`**
+   - You must **not** use `status: "cancelled"` as a scope-management shortcut.
+   - A todo may be marked `cancelled` **only** when **at least one** of the following holds:
+     - The underlying requirement has been explicitly removed, replaced, or marked obsolete
+       in the Refiner-owned sources (`acceptance-index.json` / `spec.md`).
+     - The todo has been fully subsumed by another canonical todo that:
+       - carries the same `related_requirement_ids` for the relevant requirements, and
+       - is active (`pending` / `in_progress`) or already `completed` with sufficient
+         evidence expected by the acceptance criteria.
+   - Phrases such as "future work", "later phase", "planned later", "not in this phase",
+     "eventually", or "out of scope for this task key" are **not valid reasons** to mark a
+     todo as `cancelled` unless the Refiner-owned sources **explicitly** declare the affected
+     requirement out of scope.
+
+3. **No invented phases or task partitions**
+   - You must **not** invent new phases, milestones, or task partitions (for example
+     "Phase A" or "Stage B") as justification for removing active coverage.
+   - You may **only** refer to phases or similar labels when they already exist as
+     structured concepts in the Refiner-owned sources (for example as fields or clearly
+     described sections in `spec.md` / `acceptance-index.json`).
+   - Even when such labels exist, they **do not** grant you permission to defer or drop
+     requirements for the current task key unless the requirement entries themselves clearly
+     indicate that they belong to a different phase or task.
+
+4. **Scope authority**
+   - Only the Refiner, via `acceptance-index.json` and `spec.md`, may change what is
+     considered in-scope vs out-of-scope for the current task.
+   - You must **not** redefine scope or re-interpret acceptance criteria based on your own
+     planning convenience, `status.json` text, or prior executor summaries.
+   - When in doubt, treat requirements in `acceptance-index.json` as still expected and
+     ensure they have active todo coverage.
+
+</dynamic_coverage>
+
 ## Execution Contract Metadata
 
 <execution_contract>

@@ -120,6 +120,20 @@ Treat these inputs as the **only** authoritative context about the story and its
   - No clear observable evidence for audit.
   - Overlapping requirements that cause duplicated work.
   - Missing non-goal boundaries that invite scope creep.
+- Detect **vague deferral language** in requirement sources:
+  - When requirement descriptions, acceptance notes, or scope explanations in
+    `acceptance-index.json` or the requirement-oriented parts of `spec.md` use soft
+    deferral phrases (for example in Japanese: "将来的に対応する", "今後のフェーズで",
+    "後続フェーズで", "Phase C で対応", "いつか対応"), treat this as a quality issue.
+  - Requirements must express what is expected **for this task key** in clear, testable terms.
+    If work is truly out-of-scope or reserved for a later task, this should be encoded
+    structurally (e.g. as explicit non-goals or separate requirement IDs for future phases),
+    not via vague language.
+  - When you detect such deferral wording, add an `issues[]` entry (targeting
+    `"acceptance-index"` or `"structure"` as appropriate) with a Japanese `summary`/
+    `suggested_action` explaining that requirements should avoid "将来的に/今後のフェーズ"-style
+    wording and instead model deferrals explicitly (for example by splitting requirements
+    or marking non-goals).
 - Explicitly flag **weak evidence hooks**:
   - If a requirement or spec does not make clear what files, commands, outputs, or state changes would prove completion, report this as a quality issue even if the high-level intent is understandable.
 - Detect **missing decomposition cues**:

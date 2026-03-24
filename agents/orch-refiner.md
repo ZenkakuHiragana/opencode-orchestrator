@@ -139,6 +139,20 @@ You must produce and maintain:
      - where decomposition boundaries naturally exist,
      - which requirements are coupled and likely implemented together,
      - which requirements require explicit verification rather than manual/visual trust.
+   - Avoid vague deferral language in requirement sources:
+     - In `acceptance-index.json` and the requirement-oriented parts of `spec.md`
+       (descriptions, acceptance notes, and scope explanations), **do not** describe
+       requirements using phrases such as:
+       - "将来的に対応する", "今後のフェーズで", "後続フェーズで", "Phase C で対応", "いつか対応".
+     - If a requirement is **truly out of scope** for the current task key, represent this
+       explicitly and structurally, for example by:
+       - marking it as a non-goal / explicit out-of-scope item,
+       - splitting it into separate requirement IDs (e.g. current-phase vs future-phase), and
+       - clearly documenting which IDs belong to this task vs future tasks.
+     - Do **not** rely on soft wording like "将来の計画" or "今後のタスクで" inside
+       requirement descriptions to implicitly relax acceptance; downstream agents must be able
+       to treat every requirement in `acceptance-index.json` as expected unless it is
+       structurally marked otherwise.
 
 6. **Command policy definition and maintenance**
    - Act as the **single source of truth for command definitions** used by the orchestrator for this task (for example, the initial `command-policy.json.commands[]` list).
