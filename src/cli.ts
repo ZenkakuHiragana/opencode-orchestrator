@@ -121,16 +121,16 @@ export async function runCli(argv: string[]): Promise<number> {
 
 function printUsage() {
   console.error(
-    "Usage: opencode-orchestrator <subcommand> [options]\n" +
+    "使い方: opencode-orchestrator <subcommand> [options]\n" +
       "\n" +
-      "Subcommands:\n" +
+      "サブコマンド:\n" +
       '  loop  --task <task-name> [--session <ses_...> | --continue] [--commit] [--max-loop N] [--max-restarts M] [--file <path>] "prompt..."\n' +
-      "  list  [--json]   List available orchestrator tasks or proposals\n" +
-      "  clear --task <task-name> --proposals [-y]   Clear proposals for a task\n" +
+      "  list  [--json]   orchestrator タスク一覧または proposal 一覧を表示\n" +
+      "  clear --task <task-name> --proposals [-y]   指定タスクの proposal を削除\n" +
       "\n" +
-      "Options:\n" +
-      "  -h, --help       Show this help message\n" +
-      "  -v, --version    Show version number\n",
+      "共通オプション:\n" +
+      "  -h, --help       このヘルプを表示\n" +
+      "  -v, --version    バージョン番号を表示\n",
   );
 }
 

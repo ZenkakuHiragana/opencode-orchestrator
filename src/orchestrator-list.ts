@@ -75,12 +75,14 @@ export async function runList(opts: ListOptions): Promise<void> {
 
     if (proposals.length === 0) {
       console.error(
-        `[opencode-orchestrator] no proposals found for task "${opts.task}".`,
+        `[opencode-orchestrator] タスク "${opts.task}" に proposal はありません。`,
       );
       return;
     }
 
-    console.error(`[opencode-orchestrator] proposals for task "${opts.task}":`);
+    console.error(
+      `[opencode-orchestrator] タスク "${opts.task}" の proposal 一覧:`,
+    );
     for (const p of proposals) {
       console.error(
         `  - [${p.source}] kind=${p.kind} cycle=${p.cycle} id=${p.id}`,
@@ -103,12 +105,12 @@ export async function runList(opts: ListOptions): Promise<void> {
     const anyErr = err as NodeJS.ErrnoException;
     if (anyErr && anyErr.code === "ENOENT") {
       console.error(
-        `[opencode-orchestrator] no orchestrator tasks found; base directory does not exist: ${baseDir}`,
+        `[opencode-orchestrator] orchestrator タスク用のベースディレクトリが存在しません: ${baseDir}`,
       );
       return;
     }
     console.error(
-      "[opencode-orchestrator] failed to read orchestrator base directory:",
+      "[opencode-orchestrator] orchestrator ベースディレクトリの読み取りに失敗しました:",
       anyErr && anyErr.message ? anyErr.message : String(err),
     );
     process.exit(1);
@@ -180,7 +182,7 @@ export async function runList(opts: ListOptions): Promise<void> {
 
   if (tasks.length === 0) {
     console.error(
-      `[opencode-orchestrator] no orchestrator tasks found under base directory: ${baseDir}`,
+      `[opencode-orchestrator] ベースディレクトリ配下に orchestrator タスクが見つかりませんでした: ${baseDir}`,
     );
     return;
   }

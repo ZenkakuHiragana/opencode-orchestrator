@@ -90,7 +90,7 @@ describe("runList", () => {
     const errorCalls = errorMock.mock.calls
       .map((args: unknown[]) => args.join(" "))
       .join("\n");
-    expect(errorCalls).toContain(`no proposals found for task "${task}"`);
+    expect(errorCalls).toContain(`タスク "${task}" に proposal はありません。`);
   });
 
   afterEach(() => {
@@ -121,7 +121,7 @@ describe("runList", () => {
       .map((args: unknown[]) => args.join(" "))
       .join("\n");
     expect(errorCalls).toContain(
-      "no orchestrator tasks found; base directory does not exist",
+      "orchestrator タスク用のベースディレクトリが存在しません",
     );
     const logMock = console.log as unknown as { mock: { calls: unknown[][] } };
     expect(logMock.mock.calls.length).toBe(0);

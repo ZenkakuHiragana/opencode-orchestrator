@@ -22,36 +22,36 @@ export interface ListOptions {
 
 export function printListUsage() {
   console.error(
-    "Usage: opencode-orchestrator list [--json] [--task <task-name> --proposals]\n" +
+    "使い方: opencode-orchestrator list [--json] [--task <task-name> --proposals]\n" +
       "\n" +
-      "List available orchestrator tasks discovered under the orchestrator state directory.\n" +
+      "orchestrator の状態ディレクトリに存在するタスク一覧を表示します。\n" +
       "\n" +
-      "Options:\n" +
-      "  --json                Output as JSON array\n" +
-      "  --task <name>         Limit operations to a single task (used with --proposals)\n" +
-      "  --proposals           Show proposals for the specified task instead of the task list",
+      "オプション:\n" +
+      "  --json                タスク一覧を JSON 形式で出力する\n" +
+      "  --task <name>         対象タスクを 1 つに絞り込む (--proposals と併用)\n" +
+      "  --proposals           タスク一覧の代わりに指定タスクの proposal 一覧を表示する",
   );
 }
 
 export function printLoopUsage() {
   console.error(
-    "Usage: opencode-orchestrator loop --task <task-name> [options] [prompt]\n" +
+    "使い方: opencode-orchestrator loop --task <task-name> [options] [prompt]\n" +
       "\n" +
-      "Run an orchestrator loop for the specified task.\n" +
+      "指定したタスクの Executor/Auditor ループを実行します。\n" +
       "\n" +
-      "Required:\n" +
-      "  --task <name>        Task key to run (e.g., 'my-task')\n" +
+      "必須:\n" +
+      "  --task <name>        実行するタスクキー (例: 'my-task')\n" +
       "\n" +
-      "Options:\n" +
-      "  --session <id>      Session ID for persistence\n" +
-      "  --continue           Continue from last session\n" +
-      "  --commit             Auto-commit changes when done\n" +
-      "  --max-loop <n>      Maximum loop iterations (default: 100)\n" +
-      "  --max-restarts <n>  Maximum safety restarts (default: 20)\n" +
-      "  --file, -f <path>   Attach file to each step\n" +
-      "  --help, -h          Show this help message\n" +
+      "オプション:\n" +
+      "  --session <id>      既存セッション ID を指定して継続する\n" +
+      "  --continue           status.json.last_session_id から継続する\n" +
+      "  --commit             ループ完了時に autocommit を依頼する\n" +
+      "  --max-loop <n>      最大ステップ数 (デフォルト: 100)\n" +
+      "  --max-restarts <n>  safety 関連の再起動上限 (デフォルト: 20)\n" +
+      "  --file, -f <path>   各ステップの opencode run に添付するファイル\n" +
+      "  --help, -h          このヘルプを表示する\n" +
       "\n" +
-      "The prompt argument is optional. If omitted, uses spec-driven prompts.",
+      "末尾の prompt 引数は省略可能です。省略時は spec.md / acceptance-index.json を元にした既定プロンプトを使用します。",
   );
 }
 

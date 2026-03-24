@@ -110,9 +110,9 @@ describe("runLoop proposals gate", () => {
     const lines = errMock.mock.calls.map((c) => c.join(" ")).join("\n");
 
     expect(lines).toContain(
-      "status.json.proposals is non-empty before starting a new session",
+      "status.json.proposals に未処理の proposal が残っているため、新しいセッションを開始できません。",
     );
-    expect(lines).toContain("Proposals from previous runs:");
+    expect(lines).toContain("以前の実行で記録された proposal:");
     expect(lines).toContain("[executor] kind=env_blocked cycle=3 id=p-1");
     expect(lines).toContain(
       "summary: 環境依存のエラー (env_blocked) が 3 回連続で発生し",

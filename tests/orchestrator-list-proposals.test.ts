@@ -64,7 +64,7 @@ describe("runList --task --proposals", () => {
     const lines = errMock.mock.calls.map((c) => c.join(" ")).join("\n");
 
     expect(lines).toContain(
-      `[opencode-orchestrator] proposals for task "${task}":`,
+      `[opencode-orchestrator] タスク "${task}" の proposal 一覧:`,
     );
     expect(lines).toContain("[executor] kind=env_blocked cycle=2 id=p-1");
     expect(lines).toContain("summary: env blocked");

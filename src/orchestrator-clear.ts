@@ -12,14 +12,14 @@ export interface ClearOptions {
 
 export function printClearUsage(): void {
   console.error(
-    "Usage: opencode-orchestrator clear --task <task-name> --proposals [-y]\n" +
+    "使い方: opencode-orchestrator clear --task <task-name> --proposals [-y]\n" +
       "\n" +
-      "Clear orchestrator state for a given task. Currently only proposal entries in status.json are supported.\n" +
+      "指定したタスクの orchestrator 状態から proposal を削除します。現時点では status.json.proposals だけが対象です。\n" +
       "\n" +
-      "Options:\n" +
-      "  --task <name>   Target task key (e.g., 'my-task')\n" +
-      "  --proposals     Clear status.json.proposals for the task\n" +
-      "  -y              Do not prompt for confirmation",
+      "オプション:\n" +
+      "  --task <name>   対象となるタスクキー (例: 'my-task')\n" +
+      "  --proposals     status.json.proposals を削除する\n" +
+      "  -y              確認なしで削除を実行する",
   );
 }
 
@@ -48,10 +48,10 @@ export function parseClearArgs(argv: string[]): ClearOptions {
   }
 
   if (!task) {
-    throw new Error("--task is required for clear");
+    throw new Error("--task は clear サブコマンドで必須です");
   }
   if (!clearProposals) {
-    throw new Error("clear currently supports only --proposals");
+    throw new Error("現在 clear がサポートしているのは --proposals のみです");
   }
 
   return { task, clearProposals, yes };
@@ -65,24 +65,24 @@ export async function runClear(opts: ClearOptions): Promise<void> {
 
   if (!opts.clearProposals) {
     console.error(
-      "[opencode-orchestrator] clear: no operation selected (expected --proposals)",
+      "[opencode-orchestrator] clear: 実行対象が指定されていません (--proposals が必要です)",
     );
     return;
   }
 
   if (proposals.length === 0) {
     console.error(
-      `[opencode-orchestrator] no proposals to clear for task "${opts.task}".`,
+      `[opencode-orchestrator] タスク "${opts.task}" には削除対象の proposal はありません。`,
     );
     return;
   }
 
   if (!opts.yes) {
     console.error(
-      `[opencode-orchestrator] ${proposals.length} proposal(s) will be cleared for task "${opts.task}".`,
+      `[opencode-orchestrator] タスク "${opts.task}" から ${proposals.length} 件の proposal を削除しようとしています。`,
     );
     console.error(
-      "[opencode-orchestrator] Re-run with -y if you are sure you want to clear them.",
+      "[opencode-orchestrator] 本当に削除してよい場合は -y を付けてもう一度実行してください。",
     );
     return;
   }
@@ -106,11 +106,11 @@ export async function runClear(opts: ClearOptions): Promise<void> {
         "utf8",
       );
       console.error(
-        `[opencode-orchestrator] backed up existing proposals to ${backupPath}`,
+        `[opencode-orchestrator] 既存の proposal をバックアップしました: ${backupPath}`,
       );
     } catch {
       console.error(
-        "[opencode-orchestrator] WARN: failed to write proposals backup; continuing without backup.",
+        "[opencode-orchestrator] WARN: proposal のバックアップに失敗しました。バックアップなしで削除を続行します。",
       );
     }
   }
@@ -118,6 +118,6 @@ export async function runClear(opts: ClearOptions): Promise<void> {
   status.proposals = [];
   saveStatusJson(statusPath, status);
   console.error(
-    `[opencode-orchestrator] cleared ${proposals.length} proposal(s) for task "${opts.task}".`,
+    `[opencode-orchestrator] タスク "${opts.task}" から ${proposals.length} 件の proposal を削除しました。`,
   );
 }

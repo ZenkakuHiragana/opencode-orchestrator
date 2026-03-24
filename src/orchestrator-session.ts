@@ -12,7 +12,9 @@ export async function createInitialSession(
   const title = `orchestrator-loop ${opts.task} ${new Date().toISOString()}`;
   const firstLog = path.join(logDir, "orch_step_000.txt");
 
-  console.error("[opencode-orchestrator] starting todo-writer session...");
+  console.error(
+    "[opencode-orchestrator] 初回の todo-writer セッションを開始します...",
+  );
 
   const res = await runOpencode(
     [
@@ -29,15 +31,17 @@ export async function createInitialSession(
   );
 
   if (res.code !== 0) {
-    throw new Error("initial todo-writer run failed");
+    throw new Error("初回の todo-writer 実行に失敗しました");
   }
 
   const sessionId = await findSessionIdByTitle(title);
   if (!sessionId) {
-    throw new Error(`failed to locate session for title: ${title}`);
+    throw new Error(
+      `タイトル '${title}' に対応するセッション ID を特定できませんでした`,
+    );
   }
 
-  console.error(`[opencode-orchestrator] new session id: ${sessionId}`);
+  console.error(`[opencode-orchestrator] 新しいセッション ID: ${sessionId}`);
   return sessionId;
 }
 
@@ -59,7 +63,7 @@ export async function restartSession(
     "just move the story forward from here.";
 
   console.error(
-    `[opencode-orchestrator] starting new todo-writer session for restart: ${restartTitle}`,
+    `[opencode-orchestrator] restart 用の新しい todo-writer セッションを開始します: ${restartTitle}`,
   );
 
   const res = await runOpencode(
@@ -78,7 +82,7 @@ export async function restartSession(
 
   if (res.code !== 0) {
     console.error(
-      "[opencode-orchestrator] WARN: restart todo-writer run failed",
+      "[opencode-orchestrator] WARN: restart 用の todo-writer 実行に失敗しました",
     );
     return { newSessionId: null, newTitle: restartTitle };
   }
@@ -86,7 +90,7 @@ export async function restartSession(
   const newSessionId = await findSessionIdByTitle(restartTitle);
   if (!newSessionId) {
     console.error(
-      `[opencode-orchestrator] WARN: failed to locate new sessionID for title: ${restartTitle}`,
+      `[opencode-orchestrator] WARN: タイトル '${restartTitle}' に対応する新しいセッション ID を特定できませんでした`,
     );
     return { newSessionId: null, newTitle: restartTitle };
   }
