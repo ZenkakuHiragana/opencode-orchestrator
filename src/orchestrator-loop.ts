@@ -104,9 +104,8 @@ export async function runLoop(opts: LoopOptions): Promise<boolean> {
 
   for (let step = 1; step <= opts.maxLoop; step += 1) {
     console.error(
-      `\n[opencode-orchestrator] === STEP ${step} / maxLoop=${opts.maxLoop} ===`,
+      `\n[opencode-orchestrator] ======== STEP ${step} / ${opts.maxLoop} ========`,
     );
-    console.error(`[opencode-orchestrator] 進捗: ${step}/${opts.maxLoop}`);
 
     const stepId = String(step).padStart(3, "0");
     const orchLog = path.join(logDir, `orch_step_${stepId}.txt`);
