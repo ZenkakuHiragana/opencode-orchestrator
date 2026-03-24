@@ -3,7 +3,10 @@
   "version": "0.1.0-beta.0",
   "private": false,
   "description": "Orchestrator CLI and plugin for OpenCode multi-agent workflows",
-  "repository": "https://github.com/ZenkakuHiragana/opencode-orchestrator",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ZenkakuHiragana/opencode-orchestrator.git"
+  },
   "homepage": "https://github.com/ZenkakuHiragana/opencode-orchestrator",
   "bugs": "https://github.com/ZenkakuHiragana/opencode-orchestrator/issues",
   "license": "MIT",
