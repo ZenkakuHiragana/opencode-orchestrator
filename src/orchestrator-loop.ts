@@ -50,10 +50,21 @@ export async function runLoop(opts: LoopOptions): Promise<boolean> {
     status.proposals.length > 0
   ) {
     console.error(
-      "[opencode-orchestrator] status.json.proposals is non-empty before starting a new session; refusing to start loop.",
+      "[opencode-orchestrator] status.json.proposals に未処理の proposal が残っているため、新しいセッションを開始できません。",
     );
+    console.error("[opencode-orchestrator] 以前の実行で記録された proposal:");
+    for (const p of status.proposals) {
+      console.error(
+        `  - [${p.source}] kind=${p.kind} cycle=${p.cycle} id=${p.id}`,
+      );
+      console.error(`    summary: ${p.summary}`);
+      if (p.details) {
+        const firstLine = String(p.details).split(/\r?\n/, 1)[0];
+        console.error(`    details: ${firstLine}`);
+      }
+    }
     console.error(
-      "[opencode-orchestrator] Clear proposals or handle them manually before rerunning the loop.",
+      "[opencode-orchestrator] これらの内容を orch-planner で処理し、proposal を解消してから loop を再実行してください。",
     );
     return false;
   }
@@ -62,25 +73,25 @@ export async function runLoop(opts: LoopOptions): Promise<boolean> {
     if (opts.continueLast) {
       if (!status.last_session_id) {
         throw new Error(
-          "--continue specified but status.json has no last_session_id for this task",
+          "--continue が指定されていますが、status.json に last_session_id が記録されていません (このタスクの過去セッションが見つかりません)",
         );
       }
       sessionId = status.last_session_id;
       console.error(
-        `[opencode-orchestrator] continuing existing session: ${sessionId}`,
+        `[opencode-orchestrator] status.json.last_session_id=${sessionId} から既存セッションを継続します。`,
       );
     } else {
       sessionId = await createInitialSession(opts, logDir, fileArgs);
     }
   } else {
     console.error(
-      `[opencode-orchestrator] using explicit session: ${sessionId}`,
+      `[opencode-orchestrator] 明示的に指定されたセッション ID を使用します: ${sessionId}`,
     );
   }
 
-  console.error(`[opencode-orchestrator] session id: ${sessionId}`);
+  console.error(`[opencode-orchestrator] セッション ID: ${sessionId}`);
   console.error(
-    "[opencode-orchestrator] loop mode: the executor and auditor do the job sequentially.",
+    "[opencode-orchestrator] loop モード: Executor と Auditor をステップごとに順番に実行します。",
   );
 
   status.last_session_id = sessionId!;
@@ -93,9 +104,9 @@ export async function runLoop(opts: LoopOptions): Promise<boolean> {
 
   for (let step = 1; step <= opts.maxLoop; step += 1) {
     console.error(
-      `\n[opencode-orchestrator] === STEP ${step} (maxLoop=${opts.maxLoop}) ===`,
+      `\n[opencode-orchestrator] === STEP ${step} / maxLoop=${opts.maxLoop} ===`,
     );
-    console.error(`[opencode-orchestrator] progress: ${step}/${opts.maxLoop}`);
+    console.error(`[opencode-orchestrator] 進捗: ${step}/${opts.maxLoop}`);
 
     const stepId = String(step).padStart(3, "0");
     const orchLog = path.join(logDir, `orch_step_${stepId}.txt`);
@@ -180,7 +191,7 @@ export async function runLoop(opts: LoopOptions): Promise<boolean> {
 
   if (!done) {
     console.error(
-      `[opencode-orchestrator] reached max-loop=${opts.maxLoop} without completion.`,
+      `[opencode-orchestrator] max-loop=${opts.maxLoop} まで到達しましたが、タスクは完了しませんでした。`,
     );
   }
 
@@ -189,7 +200,7 @@ export async function runLoop(opts: LoopOptions): Promise<boolean> {
     `orchestrator_session_${Date.now().toString()}.json`,
   );
   console.error(
-    `[opencode-orchestrator] exporting orchestrator session to ${exportPath}`,
+    `[opencode-orchestrator] orchestrator セッションをエクスポートします: ${exportPath}`,
   );
   const exportRes = await runOpencode(["export", sessionId!], undefined, false);
   if (exportRes.code === 0 && exportRes.stdout) {
@@ -197,20 +208,20 @@ export async function runLoop(opts: LoopOptions): Promise<boolean> {
       fs.writeFileSync(exportPath, exportRes.stdout, { encoding: "utf8" });
     } catch (err) {
       console.error(
-        `[opencode-orchestrator] WARN: failed to write export file ${exportPath}: ${String(
+        `[opencode-orchestrator] WARN: エクスポートファイル ${exportPath} の書き込みに失敗しました: ${String(
           err,
         )}`,
       );
     }
   } else if (exportRes.code !== 0) {
     console.error(
-      "[opencode-orchestrator] WARN: opencode export exited with non-zero status",
+      "[opencode-orchestrator] WARN: opencode export が非 0 ステータスで終了しました。",
     );
   }
 
   if (done && opts.commitOnDone) {
     console.error(
-      "[opencode-orchestrator] COMMIT_ON_DONE enabled; asking executor to create commits.",
+      "[opencode-orchestrator] COMMIT_ON_DONE が有効です。Executor にコミット作成を依頼します。",
     );
     const commitPrompt = buildCommitPrompt();
     const gitCheck = spawnSync("git", ["rev-parse", "--is-inside-work-tree"], {
@@ -227,7 +238,7 @@ export async function runLoop(opts: LoopOptions): Promise<boolean> {
       ]);
     } else {
       console.error(
-        "[opencode-orchestrator] COMMIT_ON_DONE enabled but current directory is not a git repository; skipping commit prompt.",
+        "[opencode-orchestrator] COMMIT_ON_DONE は有効ですが、カレントディレクトリが git リポジトリではないためコミット処理をスキップします。",
       );
     }
   }
@@ -242,8 +253,8 @@ export function enforceCommandPolicyGate(stateDir: string): void {
   );
   if (!fs.existsSync(policyPath)) {
     console.error(
-      "[opencode-orchestrator] ERROR: command-policy.json not found in state directory. " +
-        "Run the planning/spec-check/preflight phase (orch-planner) for this task before starting the loop.",
+      "[opencode-orchestrator] ERROR: state ディレクトリに command-policy.json が見つかりません。" +
+        "このタスクについて orch-planner フェーズ (Refiner/Spec-Checker/Preflight) を完了させてから loop を開始してください。",
     );
     process.exit(1);
   }
@@ -253,7 +264,7 @@ export function enforceCommandPolicyGate(stateDir: string): void {
     raw = fs.readFileSync(policyPath, "utf8");
   } catch (err) {
     console.error(
-      "[opencode-orchestrator] ERROR: failed to read command-policy.json:",
+      "[opencode-orchestrator] ERROR: command-policy.json の読み取りに失敗しました:",
       (err as Error).message || err,
     );
     process.exit(1);
@@ -305,7 +316,7 @@ export function enforceCommandPolicyGate(stateDir: string): void {
     commands = Array.isArray(json.commands) ? json.commands : undefined;
   } catch (err) {
     console.error(
-      "[opencode-orchestrator] ERROR: failed to parse command-policy.json as JSON:",
+      "[opencode-orchestrator] ERROR: command-policy.json を JSON としてパースできませんでした:",
       (err as Error).message || err,
     );
     process.exit(1);
@@ -313,29 +324,29 @@ export function enforceCommandPolicyGate(stateDir: string): void {
 
   if (version !== 1) {
     console.error(
-      "[opencode-orchestrator] ERROR: command-policy.json.version=1 is required.",
+      "[opencode-orchestrator] ERROR: command-policy.json.version は 1 である必要があります。",
     );
     process.exit(1);
   }
 
   if (!helperAvailability || typeof helperAvailability !== "object") {
     console.error(
-      "[opencode-orchestrator] ERROR: command-policy.json.summary.helper_availability is required. " +
-        "Run the planning/preflight phase to populate helper availability before starting the loop.",
+      "[opencode-orchestrator] ERROR: command-policy.json.summary.helper_availability が存在しません。" +
+        "Planner/Preflight フェーズで helper コマンドの利用可否を設定してから loop を開始してください。",
     );
     process.exit(1);
   }
 
   if (typeof status !== "string") {
     console.error(
-      "[opencode-orchestrator] ERROR: command-policy.json.summary.loop_status is required.",
+      "[opencode-orchestrator] ERROR: command-policy.json.summary.loop_status が存在しません。",
     );
     process.exit(1);
   }
 
   if (!Array.isArray(commands)) {
     console.error(
-      "[opencode-orchestrator] ERROR: command-policy.json.commands is required.",
+      "[opencode-orchestrator] ERROR: command-policy.json.commands が配列として存在する必要があります。",
     );
     process.exit(1);
   }
@@ -344,7 +355,7 @@ export function enforceCommandPolicyGate(stateDir: string): void {
     const availability = helperAvailability[helperId];
     if (availability !== "available" && availability !== "unavailable") {
       console.error(
-        `[opencode-orchestrator] ERROR: command-policy.json.summary.helper_availability.${helperId} is required.`,
+        `[opencode-orchestrator] ERROR: command-policy.json.summary.helper_availability.${helperId} が存在しません。`,
       );
       process.exit(1);
     }
@@ -378,7 +389,7 @@ export function enforceCommandPolicyGate(stateDir: string): void {
         !hasValidRelatedRequirements
       ) {
         console.error(
-          "[opencode-orchestrator] ERROR: every command-policy.json.commands[] entry must define id, command, role, usage, availability, related_requirements, probe_command, parameters, and usage_notes.",
+          "[opencode-orchestrator] ERROR: command-policy.json.commands[] の各エントリには id, command, role, usage, availability, related_requirements, probe_command, parameters, usage_notes がすべて定義されている必要があります。",
         );
         process.exit(1);
       }
@@ -392,7 +403,7 @@ export function enforceCommandPolicyGate(stateDir: string): void {
 
     if (blocking.length > 0) {
       console.error(
-        "[opencode-orchestrator] command-policy gate: some must_exec commands are not available:",
+        "[opencode-orchestrator] command-policy ゲート: 一部の must_exec コマンドが available になっていません:",
       );
       for (const cmd of blocking) {
         console.error(
@@ -400,8 +411,8 @@ export function enforceCommandPolicyGate(stateDir: string): void {
         );
       }
       console.error(
-        "[opencode-orchestrator] At least one must_exec command is not marked as available; " +
-          "refine the spec or ensure preflight passes before starting the executor loop.",
+        "[opencode-orchestrator] 少なくとも 1 つの must_exec コマンドが available ではありません。" +
+          "spec の見直しや preflight の再実行などで command-policy.json を更新してから loop を開始してください。",
       );
       process.exit(1);
     }
@@ -414,7 +425,7 @@ export function enforceCommandPolicyGate(stateDir: string): void {
   if (status === "needs_refinement") {
     console.error(
       "[opencode-orchestrator] command-policy.loop_status=needs_refinement; " +
-        "acceptance-index or command specification needs to be refined before running the executor loop.",
+        "acceptance-index やコマンド仕様の見直しが必要なため、まだ loop は開始できません。",
     );
     process.exit(1);
   }
@@ -422,14 +433,14 @@ export function enforceCommandPolicyGate(stateDir: string): void {
   if (status === "blocked_by_environment") {
     console.error(
       "[opencode-orchestrator] command-policy.loop_status=blocked_by_environment; " +
-        "the current environment is missing non-negotiable tools for this story.",
+        "このストーリーの実行に必須なツールが環境に存在しないため、現在の環境では loop を開始できません。",
     );
     process.exit(1);
   }
 
   console.error(
-    `[opencode-orchestrator] command-policy.loop_status=${status}; loop start is not allowed under this status. ` +
-      "Update command-policy.json via the planning/preflight phase before retrying.",
+    `[opencode-orchestrator] command-policy.loop_status=${status}; この状態では loop を開始できません。` +
+      "planning / preflight フェーズを通じて command-policy.json を更新してから再実行してください。",
   );
   process.exit(1);
 }

@@ -60,8 +60,7 @@ export const orchestratorAgents: Record<string, OrchestratorAgentConfig> = {
       },
       write: {
         "*": "deny",
-        "$XDG_STATE_HOME/opencode/orchestrator/*/state/command-policy.json":
-          "allow",
+        "$XDG_STATE_HOME/opencode/orchestrator/*/state/status.json": "allow",
       },
       external_directory: {
         "$XDG_STATE_HOME/opencode/orchestrator/**": "allow",

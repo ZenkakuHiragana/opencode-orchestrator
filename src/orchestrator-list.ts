@@ -7,6 +7,7 @@ import {
   getOrchestratorStateDir,
 } from "./orchestrator-paths.js";
 import type { ListOptions } from "./cli-args.js";
+import { loadStatusJson } from "./orchestrator-status.js";
 
 interface TaskListEntry {
   task: string;
@@ -52,6 +53,49 @@ function extractSummaryFromSpec(markdown: string): string | undefined {
 }
 
 export async function runList(opts: ListOptions): Promise<void> {
+  if (opts.showProposals && opts.task) {
+    const stateDir = getOrchestratorStateDir(opts.task);
+    const statusPath = path.join(stateDir, "status.json");
+    const status = loadStatusJson(statusPath);
+    const proposals = Array.isArray(status.proposals) ? status.proposals : [];
+
+    if (opts.format === "json") {
+      console.log(
+        JSON.stringify(
+          {
+            task: opts.task,
+            proposals,
+          },
+          null,
+          2,
+        ),
+      );
+      return;
+    }
+
+    if (proposals.length === 0) {
+      console.error(
+        `[opencode-orchestrator] タスク "${opts.task}" に proposal はありません。`,
+      );
+      return;
+    }
+
+    console.error(
+      `[opencode-orchestrator] タスク "${opts.task}" の proposal 一覧:`,
+    );
+    for (const p of proposals) {
+      console.error(
+        `  - [${p.source}] kind=${p.kind} cycle=${p.cycle} id=${p.id}`,
+      );
+      console.error(`    summary: ${p.summary}`);
+      if (p.details) {
+        const firstLine = String(p.details).split(/\r?\n/, 1)[0];
+        console.error(`    details: ${firstLine}`);
+      }
+    }
+    return;
+  }
+
   const baseDir = getOrchestratorBaseDir();
 
   let entries: fs.Dirent[];
@@ -61,12 +105,12 @@ export async function runList(opts: ListOptions): Promise<void> {
     const anyErr = err as NodeJS.ErrnoException;
     if (anyErr && anyErr.code === "ENOENT") {
       console.error(
-        `[opencode-orchestrator] no orchestrator tasks found; base directory does not exist: ${baseDir}`,
+        `[opencode-orchestrator] orchestrator タスク用のベースディレクトリが存在しません: ${baseDir}`,
       );
       return;
     }
     console.error(
-      "[opencode-orchestrator] failed to read orchestrator base directory:",
+      "[opencode-orchestrator] orchestrator ベースディレクトリの読み取りに失敗しました:",
       anyErr && anyErr.message ? anyErr.message : String(err),
     );
     process.exit(1);
@@ -138,7 +182,7 @@ export async function runList(opts: ListOptions): Promise<void> {
 
   if (tasks.length === 0) {
     console.error(
-      `[opencode-orchestrator] no orchestrator tasks found under base directory: ${baseDir}`,
+      `[opencode-orchestrator] ベースディレクトリ配下に orchestrator タスクが見つかりませんでした: ${baseDir}`,
     );
     return;
   }

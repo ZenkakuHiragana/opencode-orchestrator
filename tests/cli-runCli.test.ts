@@ -20,13 +20,13 @@ describe("runCli", () => {
   it("prints usage and returns 1 when no args", async () => {
     const code = await runCli([]);
     expect(code).toBe(1);
-    expect(writes.join("\n")).toContain("Usage: opencode-orchestrator");
+    expect(writes.join("\n")).toContain("使い方: opencode-orchestrator");
   });
 
   it("prints help and returns 0", async () => {
     const code = await runCli(["--help"]);
     expect(code).toBe(0);
-    expect(writes.join("\n")).toContain("Subcommands:");
+    expect(writes.join("\n")).toContain("サブコマンド:");
   });
 
   it("prints version and returns 0", async () => {
@@ -38,13 +38,13 @@ describe("runCli", () => {
   it("prints loop help and returns 0", async () => {
     const code = await runCli(["loop", "--help"]);
     expect(code).toBe(0);
-    expect(writes.join("\n")).toContain("Usage: opencode-orchestrator loop");
+    expect(writes.join("\n")).toContain("使い方: opencode-orchestrator loop");
   });
 
   it("prints list help and returns 0", async () => {
     const code = await runCli(["list", "--help"]);
     expect(code).toBe(0);
-    expect(writes.join("\n")).toContain("Usage: opencode-orchestrator list");
+    expect(writes.join("\n")).toContain("使い方: opencode-orchestrator list");
   });
 
   it("prints unknown subcommand and returns 1", async () => {

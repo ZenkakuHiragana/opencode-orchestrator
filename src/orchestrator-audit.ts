@@ -29,7 +29,7 @@ export function parseAuditResult(stdout: string): AuditSummary {
     const reason =
       "auditor produced no valid JSON output (non-JSON or empty response)";
     console.error(
-      "[opencode-orchestrator] ERROR: auditor produced no valid JSON output",
+      "[opencode-orchestrator] ERROR: auditor が有効な JSON 出力を生成しませんでした (JSON 以外、または空のレスポンス)",
     );
     return {
       done: false,
@@ -53,7 +53,7 @@ export function parseAuditResult(stdout: string): AuditSummary {
       const reason =
         "auditor returned done:false without any requirements (empty or missing requirements array)";
       console.error(
-        "[opencode-orchestrator] ERROR: auditor returned done:false with empty requirements - treating as error",
+        "[opencode-orchestrator] ERROR: auditor が done:false かつ requirements が空/欠落の結果を返しました (エラーとして扱います)",
       );
       return {
         done: false,

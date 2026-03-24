@@ -15,6 +15,11 @@ import {
   buildFileArgs,
 } from "./orchestrator-loop.js";
 import { runList } from "./orchestrator-list.js";
+import {
+  parseClearArgs,
+  printClearUsage,
+  runClear,
+} from "./orchestrator-clear.js";
 import { parseAuditResult } from "./orchestrator-audit.js";
 
 export { parseLoopArgs, parseListArgs } from "./cli-args.js";
@@ -26,6 +31,11 @@ export {
 } from "./orchestrator-loop.js";
 export { runList } from "./orchestrator-list.js";
 export { parseAuditResult } from "./orchestrator-audit.js";
+export {
+  parseClearArgs,
+  printClearUsage,
+  runClear,
+} from "./orchestrator-clear.js";
 
 function readPackageVersion(): string {
   const pkg = JSON.parse(
@@ -45,7 +55,11 @@ export async function runCli(argv: string[]): Promise<number> {
   const subcommand = args[0];
 
   // Root-level --help/--version (no subcommand)
-  if (subcommand !== "loop" && subcommand !== "list") {
+  if (
+    subcommand !== "loop" &&
+    subcommand !== "list" &&
+    subcommand !== "clear"
+  ) {
     if (args.includes("--help") || args.includes("-h")) {
       printUsage();
       return 0;
@@ -64,6 +78,10 @@ export async function runCli(argv: string[]): Promise<number> {
     }
     if (subcommand === "list") {
       printListUsage();
+      return 0;
+    }
+    if (subcommand === "clear") {
+      printClearUsage();
       return 0;
     }
   }
@@ -88,6 +106,12 @@ export async function runCli(argv: string[]): Promise<number> {
     return 0;
   }
 
+  if (actualSubcommand === "clear") {
+    const opts = parseClearArgs(args);
+    await runClear(opts);
+    return 0;
+  }
+
   console.error(
     `[opencode-orchestrator] unknown subcommand: ${actualSubcommand}`,
   );
@@ -97,15 +121,16 @@ export async function runCli(argv: string[]): Promise<number> {
 
 function printUsage() {
   console.error(
-    "Usage: opencode-orchestrator <subcommand> [options]\n" +
+    "使い方: opencode-orchestrator <subcommand> [options]\n" +
       "\n" +
-      "Subcommands:\n" +
+      "サブコマンド:\n" +
       '  loop  --task <task-name> [--session <ses_...> | --continue] [--commit] [--max-loop N] [--max-restarts M] [--file <path>] "prompt..."\n' +
-      "  list  [--json]   List available orchestrator tasks\n" +
+      "  list  [--json]   orchestrator タスク一覧または proposal 一覧を表示\n" +
+      "  clear --task <task-name> --proposals [-y]   指定タスクの proposal を削除\n" +
       "\n" +
-      "Options:\n" +
-      "  -h, --help       Show this help message\n" +
-      "  -v, --version    Show version number\n",
+      "共通オプション:\n" +
+      "  -h, --help       このヘルプを表示\n" +
+      "  -v, --version    バージョン番号を表示\n",
   );
 }
 

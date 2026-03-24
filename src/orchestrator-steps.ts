@@ -99,11 +99,11 @@ export async function maybeRunTodoWriterStep(
       "todo-writer が safety trip を起こしたためセッションを再開した";
     saveStatusJson(statusPath, status);
     console.error(
-      "[opencode-orchestrator] SAFETY trip detected in todo-writer output; restarting session.",
+      "[opencode-orchestrator] todo-writer の出力で safety trip を検出しました。セッションを再開します。",
     );
     if (restartCount >= opts.maxRestarts) {
       console.error(
-        `[opencode-orchestrator] MAX_RESTARTS=${opts.maxRestarts} reached during todo-writer; aborting.`,
+        `[opencode-orchestrator] todo-writer 実行中に MAX_RESTARTS=${opts.maxRestarts} に到達したため、ループを中断します。`,
       );
       return {
         sessionId,
@@ -145,7 +145,7 @@ export async function maybeRunTodoWriterStep(
       "general: todo-writer が失敗したため既存の再計画要求を維持したい";
     saveStatusJson(statusPath, status);
     console.error(
-      "[opencode-orchestrator] todo-writer step exited with non-zero status",
+      "[opencode-orchestrator] todo-writer ステップが非 0 ステータスで終了しました。",
     );
     return {
       sessionId,
@@ -168,7 +168,7 @@ export async function maybeRunTodoWriterStep(
       "general: todo-writer が有効な todo.json を生成できなかったため再計画を継続したい";
     saveStatusJson(statusPath, status);
     console.error(
-      `[opencode-orchestrator] todo-writer todos: invalid (${todoSummary.reason})`,
+      `[opencode-orchestrator] todo-writer が生成した todo.json が無効です: ${todoSummary.reason}`,
     );
     return {
       sessionId,
@@ -255,11 +255,11 @@ export async function runExecutorAndAuditorStep(
       "executor が safety trip を起こしたためセッションを再開した";
     saveStatusJson(statusPath, status);
     console.error(
-      "[opencode-orchestrator] SAFETY trip detected in executor output.",
+      "[opencode-orchestrator] executor の出力で safety trip を検出しました。",
     );
     if (restartCount >= opts.maxRestarts) {
       console.error(
-        `[opencode-orchestrator] MAX_RESTARTS=${opts.maxRestarts} reached; aborting.`,
+        `[opencode-orchestrator] MAX_RESTARTS=${opts.maxRestarts} に到達したため、ループを中断します。`,
       );
       return {
         sessionId,
@@ -295,7 +295,7 @@ export async function runExecutorAndAuditorStep(
 
   if (execRes.code !== 0) {
     console.error(
-      "[opencode-orchestrator] executor step exited with non-zero status",
+      "[opencode-orchestrator] executor ステップが非 0 ステータスで終了しました。",
     );
   }
 
@@ -358,7 +358,7 @@ export async function runExecutorAndAuditorStep(
     if (scope === "general" && tag === "need_replan") {
       forceTodoWriterNextStep = true;
       console.error(
-        "[opencode-orchestrator] executor requests replanning (general need_replan); forcing todo-writer on next step.",
+        "[opencode-orchestrator] executor から general need_replan の STEP_BLOCKER が出力されたため、次のステップで todo-writer を強制実行します。",
       );
       break;
     }
@@ -392,11 +392,11 @@ export async function runExecutorAndAuditorStep(
       shouldAudit = true;
       if (lastAuditIds && lastAuditIds !== "-") {
         console.error(
-          `[opencode-orchestrator] executor reports audit-ready requirements: ${lastAuditIds}`,
+          `[opencode-orchestrator] executor が監査対象として報告した要件 ID: ${lastAuditIds}`,
         );
       } else {
         console.error(
-          "[opencode-orchestrator] executor reports audit-ready state (no specific requirement ids).",
+          "[opencode-orchestrator] executor が監査準備完了を報告しました (特定の要件 ID は指定されていません)。",
         );
       }
     } else {
@@ -421,7 +421,7 @@ export async function runExecutorAndAuditorStep(
             : [],
       };
       console.error(
-        "[opencode-orchestrator] executor requested audit without sufficient STEP_VERIFY evidence; skipping auditor for this step.",
+        "[opencode-orchestrator] STEP_VERIFY の根拠が不足したまま STEP_AUDIT: ready が出力されたため、このステップでは auditor をスキップします。",
       );
       if (failureBudget.consecutive_verification_gaps >= 2) {
         status.replan_required = true;
@@ -457,7 +457,8 @@ export async function runExecutorAndAuditorStep(
             source: "executor",
             cycle: step,
             kind: blocker.tag,
-            summary: "Executor reported env_blocked in 3 consecutive steps",
+            summary:
+              "環境依存のエラー (env_blocked) が 3 回連続で発生し、Executor ループを継続できません。必須コマンドや command-policy の前提を見直してほしい。",
             details: `${blocker.scope}: ${blocker.tag}: ${blocker.reason}`,
           });
         }
@@ -467,7 +468,8 @@ export async function runExecutorAndAuditorStep(
           source: "auditor",
           cycle: step,
           kind: "env_blocked",
-          summary: "Repeatedly unable to parse auditor output",
+          summary:
+            "監査結果の解析に繰り返し失敗し、環境状態を正しく判定できません。acceptance-index/spec.md と command-policy を見直してほしい。",
           details: envBlockedReason,
         });
       }
@@ -506,7 +508,7 @@ export async function runExecutorAndAuditorStep(
     );
     if (auditSafety) {
       console.error(
-        "[opencode-orchestrator] SAFETY trip detected in auditor output; treating as done=false and continuing.",
+        "[opencode-orchestrator] auditor の出力で safety trip を検出しました。このステップは done=false として扱い、ループを継続します。",
       );
     }
 
@@ -520,7 +522,7 @@ export async function runExecutorAndAuditorStep(
     stepDone = auditDone;
     if (parseErrorFromAudit) {
       console.error(
-        `[opencode-orchestrator] auditor parse error: ${parseErrorFromAudit}`,
+        `[opencode-orchestrator] auditor の出力をパースできませんでした: ${parseErrorFromAudit}`,
       );
     }
     if (auditDone) {
@@ -554,7 +556,7 @@ export async function runExecutorAndAuditorStep(
     if (failed.length > 0) {
       const ids = failed.map((f) => f.id).join(", ");
       console.error(
-        `[opencode-orchestrator] auditor failing requirements: ${ids}`,
+        `[opencode-orchestrator] auditor が未達と判定した要件: ${ids}`,
       );
       for (const f of failed) {
         if (!f.reason) continue;
@@ -565,7 +567,7 @@ export async function runExecutorAndAuditorStep(
 
     if (passed.length > 0) {
       console.error(
-        `[opencode-orchestrator] auditor passed requirements: ${passed.join(", ")}`,
+        `[opencode-orchestrator] auditor が達成済みと判定した要件: ${passed.join(", ")}`,
       );
     }
 
@@ -585,7 +587,7 @@ export async function runExecutorAndAuditorStep(
     }
   } else {
     console.error(
-      "[opencode-orchestrator] skipping auditor for this step (no STEP_AUDIT: ready reported by executor).",
+      "[opencode-orchestrator] このステップでは executor から STEP_AUDIT: ready が出ていないため、auditor は起動しません。",
     );
   }
 
@@ -621,8 +623,21 @@ export async function runExecutorAndAuditorStep(
 
   if (Array.isArray(status.proposals) && status.proposals.length > 0) {
     console.error(
-      "[opencode-orchestrator] proposals present in status.json; stopping loop for manual intervention.",
+      "[opencode-orchestrator] status.json に proposal が存在するため、ループを停止します。",
     );
+    console.error(
+      "[opencode-orchestrator] このループ実行中に記録された proposal:",
+    );
+    for (const p of status.proposals) {
+      console.error(
+        `  - [${p.source}] kind=${p.kind} cycle=${p.cycle} id=${p.id}`,
+      );
+      console.error(`    summary: ${p.summary}`);
+      if (p.details) {
+        const firstLine = String(p.details).split(/\r?\n/, 1)[0];
+        console.error(`    details: ${firstLine}`);
+      }
+    }
     return {
       sessionId,
       restartCount,
@@ -747,14 +762,14 @@ async function restartFromSafety(
     `orchestrator_session_${Date.now().toString()}_restart${restartCount}_old.json`,
   );
   console.error(
-    `[opencode-orchestrator] exporting old session to ${safeExport}`,
+    `[opencode-orchestrator] 既存のセッション状態をエクスポートします: ${safeExport}`,
   );
   const exportOld = await runOpencode(["export", sessionId], safeExport);
   if (exportOld.code !== 0) {
     const warnContext =
       context === "todo-writer" ? "todo-writer restart" : "restart";
     console.error(
-      `[opencode-orchestrator] WARN: failed to export old session before ${warnContext}`,
+      `[opencode-orchestrator] WARN: ${warnContext} 前のセッション状態のエクスポートに失敗しました。`,
     );
   }
 
@@ -769,7 +784,7 @@ async function restartFromSafety(
     saveStatusJson(statusPath, status);
     const label = context === "todo-writer" ? " after todo-writer restart" : "";
     console.error(
-      `[opencode-orchestrator] switched to new session${label}: ${newSessionId} (title: ${newTitle})`,
+      `[opencode-orchestrator] 新しいセッションに切り替えました${label ? " (todo-writer restart 後)" : ""}: ${newSessionId} (title: ${newTitle})`,
     );
     return newSessionId;
   }
@@ -777,7 +792,7 @@ async function restartFromSafety(
   const warnContext =
     context === "todo-writer" ? "todo-writer restart" : "restart";
   console.error(
-    `[opencode-orchestrator] WARN: failed to locate new session after ${warnContext}; continuing with previous session.`,
+    `[opencode-orchestrator] WARN: ${warnContext} 後の新しいセッション ID を特定できませんでした。既存のセッションを使い続けます。`,
   );
   saveStatusJson(statusPath, status);
   return sessionId;
