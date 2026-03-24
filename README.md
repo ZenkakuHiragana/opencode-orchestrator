@@ -77,6 +77,17 @@ flowchart LR
 
 このパッケージは npm で配布される OpenCode 向けの「プラグイン + CLI」同梱パッケージです。
 
+まず押さえるべき点だけ先にまとめると、利用開始までの最短導線は次の通りです。
+
+1. パッケージをインストールして OpenCode にプラグイン登録する
+2. OpenCode 側の計画フェーズで `acceptance-index.json` / `spec.md` / `command-policy.json` を整備する
+3. `command-policy.json.summary.loop_status == ready_for_loop` で、
+   かつ `must_exec` コマンドがすべて `available` になってから `loop` を開始する
+
+逆に、計画フェーズが未完了のままでは実行フェーズへ進めません。`must_exec` のコマンドが 1 つでも `unavailable` なら、CLI は `loop` の開始を拒否します。
+
+実行フェーズに入ると、orchestrator は `todo.json`、`status.json`、`logs/` 配下の step ログ、auditor 結果を自動更新しながら Todo-Writer / Executor / Auditor を順番に回します。
+
 ### 1) インストール
 
 ```bash
@@ -103,7 +114,7 @@ npm install @zenorg/opencode-orchestrator
 計画は CLI ではなく OpenCode 側で実施します。基本フローは次の通りです。
 
 1. `orch-planner` でタスクを整理
-2. Planner が内部で `orch-refine` / `orch-spec-check` / `preflight-cli` を使って
+2. Planner が内部で Refiner / Spec-Checkr / Preflight-Runner を使って
    `acceptance-index.json` / `spec.md` / `command-policy.json` を整備
 3. `command-policy.json.summary.loop_status` が `ready_for_loop` になることを確認
 
@@ -118,6 +129,9 @@ npx opencode-orchestrator loop --task <task-key> "高レベルゴール"
 ```
 
 プロンプトは省略可能です（省略時は `spec.md` などを参照する既定プロンプトを使用）。
+
+`loop` の開始後は、canonical todo を持つ `todo.json`、直近ステップや監査スナップショットを持つ
+`status.json`、`logs/` 配下の executor / auditor ログ、各 step の protocol 出力が orchestrator によって継続的に更新されます。
 
 典型的な出力:
 
@@ -173,9 +187,6 @@ npx opencode-orchestrator loop --task <task-key> "高レベルゴール"
 > 自前のシステムプロンプトでこれらのエージェントを直接指定して委譲するため、
 > orchestrator の動作には影響しません。
 
-> [!NOTE]
-> `orchestrator.expose` はサポートしません。可視状態の制御は `permission.orchestrator` を使用してください。
-
 ## CLI: `opencode-orchestrator`
 
 現在の CLI には次のサブコマンドがあります。
@@ -194,8 +205,8 @@ npx opencode-orchestrator list
 典型的な出力例 (テキストモード):
 
 ```text
-my-task         loop_status=ready_for_loop    title=API エンドポイント追加
-large-refactor  loop_status=needs_refinement  title=大規模リファクタリング
+my-task         loop_status=ready_for_loop    summary=API エンドポイント追加
+large-refactor  loop_status=needs_refinement  summary=大規模リファクタリング
 ```
 
 主なオプション:
@@ -211,7 +222,7 @@ JSON 出力例:
     "rootDir": "~/.local/state/opencode/orchestrator/my-task",
     "stateDir": "~/.local/state/opencode/orchestrator/my-task/state",
     "loop_status": "ready_for_loop",
-    "title": "API エンドポイント追加"
+    "summary": "API エンドポイント追加"
   }
 ]
 ```

@@ -17,7 +17,7 @@ Diagnostic posture:
 
 - Think like the downstream pipeline's quality gate. A specification is not good enough merely
   because it exists; it should also be easy to execute, easy to audit, and hard to misread.
-- Prefer surfacing issues that would make later agents seem unhelpful or inconsistent, such as
+- Prefer surfacing issues that would make later agents seem unhelpful or inconsistent, including
   vague wording, missing verification paths, unclear boundaries, or command definitions that do
   not support the actual work shape.
 - Think one step ahead for each issue: "if left unfixed, which downstream agent will guess, stall,
@@ -61,8 +61,7 @@ Hard constraints:
   as issues instead of trying to "fix" it.
 - Treat the current workspace directory (the repository root for this task) as the only project
   codebase when reasoning about files. Do **not** speculate about or inspect arbitrary files
-  under the user's home directory (such as `~`, `$HOME`, or `/home/*`) or other unrelated
-  locations.
+  under the user's home directory or other unrelated locations.
 - When reasoning about orchestrator state, only use the documented
   `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/...` paths. If the canonical
   acceptance index for this task is missing at that path, treat it as "not yet created" and
@@ -167,6 +166,11 @@ Behavior when reading `command-policy.json`:
     - Commands that include shell pipelines (`|`), connectors (`&&`, `||`, `;`), redirections
       (`>`, `<`, `2>&1`, etc.), or other shell scripting constructs. Those belong to the Executor
       stage; the spec-checker should ensure that the Refiner provides only base CLI entrypoints.
+    - Commands that invoke shell interpreters or wrappers,
+      or `powershell -Command` to pack multiple steps into one command definition.
+    - When the intended behavior is really a short shell script made of several commands, treat a
+      single scripted entry as a command-policy problem and recommend defining each component as a
+      separate command entry.
   - **Templating opportunities**:
     - Many commands that share the same base CLI and differ only in arguments, where a small
       number of parameterized templates would be clearer and safer.
@@ -182,10 +186,11 @@ Behavior when reading `command-policy.json`:
   - a Japanese `summary` explaining the problem, and
   - a Japanese `suggested_action` explaining how a human or the Refiner/Planner could improve the
     command-policy.
-- In `suggested_action`, prefer actions that improve the pipeline mechanically, such as:
+- In `suggested_action`, prefer actions that improve the pipeline mechanically:
   - splitting or sharpening a requirement,
   - adding a verification path,
   - collapsing duplicate command variants into a template,
+  - decomposing a multi-command shell snippet into separate command definitions,
   - or moving planning-side invariants out of acceptance requirements.
 
 Feasibility and command-policy analysis:

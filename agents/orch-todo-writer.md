@@ -120,7 +120,7 @@ Key concepts:
     - `verify` → `verification_v1`
     - `implement` → artifact not required by default; use `implementation_note_v1` only when
       a structured change summary is explicitly needed.
-  - Do not invent fine-grained subtypes (e.g., `impact_survey_v1`, `api_classification_v1`)
+- Do not invent fine-grained subtypes (e.g., `impact_survey_v1`, `api_classification_v1`)
   - unless a specific subtype is required by the acceptance criteria. Start with the two broad
     schemas and split only when necessary.
 
@@ -176,14 +176,14 @@ Tools and constraints:
     - Inspect `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/acceptance-index.json`.
     - Discover any existing `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/todo.json`.
     - Inspect `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/spec.md`.
-- `orch_todo_read` / `orch_todo_write` to:
-  - Read the canonical orchestrator todo set for this task (filtered by
-    requirement id, status, or id).
-  - Persist canonical updates with `mode=planner_replace_canonical` when you have derived or
-    refined the full todo list.
-- `todowrite` to:
-  - Mirror a small, filtered subset of todos (for example the next 5–10
-    `pending`/`in_progress` items) into the OpenCode session todo list for UI display only.
+  - `orch_todo_read` / `orch_todo_write` to:
+    - Read the canonical orchestrator todo set for this task (filtered by
+      requirement id, status, or id).
+    - Persist canonical updates with `mode=planner_replace_canonical` when you have derived or
+      refined the full todo list.
+  - `todowrite` to:
+    - Mirror a small, filtered subset of todos (for example the next 5-10
+      `pending`/`in_progress` items) into the OpenCode session todo list for UI display only.
 
 - You **must not**:
   - Use `edit` or `patch` tools; code and documentation editing belongs to the Executor and
@@ -260,8 +260,8 @@ Planning workflow:
        - `related_todo_ids` identifies existing todo ids that should be reconsidered or split.
        - `related_requirement_ids` identifies requirements that still need stronger todo
          coverage or more explicit execution paths.
-   - Only if `replan_request` is missing, fall back to older raw snapshots in `status.json`
-     such as `last_executor_step.step_blocker` and `last_auditor_report.requirements`.
+   - Only if `replan_request` is missing, fall back to older raw snapshots in `status.json`,
+     including `last_executor_step.step_blocker` and `last_auditor_report.requirements`.
    - When handling executor-origin issues, prioritize fixing the structural issues they hint
      at: split overly large todos, add missing bridge todos, or reassign coverage, always
      while staying faithful to `acceptance-index.json` and `spec.md`.

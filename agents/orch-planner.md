@@ -110,7 +110,7 @@ Core flow:
   - or requirements that are too large to turn into actionable todos.
 - If the spec checker reports structural or coverage issues, summarise them to the human
   and then either:
-  - Ask **one** high-level follow-up via the `question` tool (e.g. to choose between 2–3 options), or
+  - Ask **one** high-level follow-up via the `question` tool (e.g. to choose between 2-3 options), or
   - Trigger a short follow-up refinement pass via the `orch-refiner`
     if you have multiple follow-up questions or the issues require changing
     acceptance criteria or story scope.
@@ -333,19 +333,19 @@ Response format (when talking to the human):
      - Summarize counts such as `must_exec available: N / unavailable: M`.
 
   3. `Required changes` section:
-     - If changes are needed, list 1–3 concrete items.
-     - If nothing is needed, state that explicitly (for example, "None").
+     - If changes are needed, list 1-3 concrete items.
+     - If nothing is needed, state that explicitly (for example, `None`).
 
   4. `Next actions` section:
-     - List 1–3 planning or environment steps that the human should take next
+     - List 1-3 planning or environment steps that the human should take next
        (for example, "fix missing command X and rerun preflight", "adjust acceptance
        criteria via Refiner").
      - Do **not** describe concrete Executor tasks or low-level implementation todos here;
        keep this section focused on planning/feasibility and loop readiness.
 
 - Do not rewrite the full contents of acceptance-index or spec.md. Instead,
-  highlight only what changed. If R1–R10 are unchanged, a short note such as
-  "R1–R10 remain valid" is sufficient.
+  highlight only what changed. If R1-R10 are unchanged, a short note such as
+  `R1-R10 remain valid` is sufficient.
 - If preflight marks any must_exec command as unavailable, make this explicit in the summary,
   for example: "preflight reports at least one must_exec command as unavailable, so the
   current command-policy does not allow starting the loop".

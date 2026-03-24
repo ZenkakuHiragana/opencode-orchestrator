@@ -13,7 +13,42 @@ interface TaskListEntry {
   rootDir: string;
   stateDir: string;
   loopStatus?: string;
-  title?: string;
+  summary?: string;
+}
+
+function firstNonEmptyLine(input: string): string | undefined {
+  const lines = input
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+  return lines[0];
+}
+
+function extractSummaryFromSpec(markdown: string): string | undefined {
+  const lines = markdown.split(/\r?\n/);
+  let inGoalSection = false;
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (line.length === 0) {
+      continue;
+    }
+    if (/^##\s+/.test(line)) {
+      if (line === "## 目標" || line === "## Goal") {
+        inGoalSection = true;
+        continue;
+      }
+      if (inGoalSection) {
+        break;
+      }
+      continue;
+    }
+    if (inGoalSection && !line.startsWith("#")) {
+      return line;
+    }
+  }
+
+  return firstNonEmptyLine(markdown.replace(/^#.*$/gm, "").trim());
 }
 
 export async function runList(opts: ListOptions): Promise<void> {
@@ -50,6 +85,34 @@ export async function runList(opts: ListOptions): Promise<void> {
     }
 
     const info: TaskListEntry = { task, rootDir, stateDir };
+
+    const acceptancePath = path.join(stateDir, "acceptance-index.json");
+    if (fs.existsSync(acceptancePath)) {
+      try {
+        const raw = fs.readFileSync(acceptancePath, "utf8");
+        const json = JSON.parse(raw) as { north_star?: unknown };
+        if (typeof json.north_star === "string" && json.north_star.trim()) {
+          info.summary = json.north_star.trim().replace(/\s+/g, " ");
+        }
+      } catch {
+        // ignore JSON/IO errors and leave summary undefined
+      }
+    }
+
+    if (!info.summary) {
+      const specPath = path.join(stateDir, "spec.md");
+      if (fs.existsSync(specPath)) {
+        try {
+          const raw = fs.readFileSync(specPath, "utf8");
+          const summary = extractSummaryFromSpec(raw);
+          if (summary) {
+            info.summary = summary.replace(/\s+/g, " ");
+          }
+        } catch {
+          // ignore IO errors and leave summary undefined
+        }
+      }
+    }
 
     const policyPath = path.join(stateDir, "command-policy.json");
     if (fs.existsSync(policyPath)) {
@@ -88,7 +151,7 @@ export async function runList(opts: ListOptions): Promise<void> {
       rootDir: t.rootDir,
       stateDir: t.stateDir,
       loop_status: t.loopStatus ?? null,
-      title: t.title ?? null,
+      summary: t.summary ?? null,
     }));
     // Pretty-print JSON so that it is easy to inspect from the CLI.
     console.log(JSON.stringify(payload, null, 2));
@@ -97,7 +160,7 @@ export async function runList(opts: ListOptions): Promise<void> {
 
   // Determine which optional columns are present across all entries.
   const hasAnyLoopStatus = tasks.some((t) => t.loopStatus);
-  const hasAnyTitle = tasks.some((t) => t.title);
+  const hasAnySummary = tasks.some((t) => t.summary);
 
   // Compute max display width for each column so that rows align.
   const taskWidth = Math.max(...tasks.map((t) => t.task.length));
@@ -108,8 +171,10 @@ export async function runList(opts: ListOptions): Promise<void> {
         ),
       )
     : 0;
-  const titleWidth = hasAnyTitle
-    ? Math.max(...tasks.map((t) => (t.title ? `title=${t.title}`.length : 0)))
+  const summaryWidth = hasAnySummary
+    ? Math.max(
+        ...tasks.map((t) => (t.summary ? `summary=${t.summary}`.length : 0)),
+      )
     : 0;
 
   for (const t of tasks) {
@@ -118,9 +183,9 @@ export async function runList(opts: ListOptions): Promise<void> {
       const s = t.loopStatus ? `loop_status=${t.loopStatus}` : "";
       cols.push(s.padEnd(statusWidth));
     }
-    if (hasAnyTitle) {
-      const s = t.title ? `title=${t.title}` : "";
-      cols.push(s.padEnd(titleWidth));
+    if (hasAnySummary) {
+      const s = t.summary ? `summary=${t.summary}` : "";
+      cols.push(s.padEnd(summaryWidth));
     }
     console.log(cols.join("  "));
   }

@@ -257,9 +257,11 @@ Stable command identifiers and templates:
   - `command`: the command line or **command template** (for example,
     `npm test` or `rg {{pattern}} {{subdir}} -n`). Parameter placeholders like `{{name}}`
     will be filled in by the Executor at runtime.
-    Avoid embedding shell pipelines (`|`), connectors (`&&`, `||`, `;`), redirections
-    (`>`, `<`, `2>&1`, etc.), or subshells in these definitions. Keep each command a single base
-    CLI so the Executor can safely compose more complex scripts later.
+    Avoid embedding shell pipelines (`|`), connectors (`&&`, `||`, `;`), redirections,
+    subshells, shell wrappers, or any other shell-script syntax in these definitions. Keep each
+    command a single base CLI so the Executor can safely compose more complex scripts later.
+    If a useful one-line shell snippet would require multiple commands, define each component as
+    its own command entry instead of encoding the composition into one shell command.
     Template arguments like `{{name}}` are always treated as a single shell argument
     that are surrounded by `"`s. You can't define part of arguments with template (for example,
     `basedir/{{subdir}}` is invalid as it will be substituted with `basedir/"specific/path"`).
@@ -299,7 +301,9 @@ Stable command identifiers and templates:
         "pattern": {
           "description": "string or regex that rg should search for",
         },
-        "subdir": { "description": "repository-relative path" },
+        "subdir": {
+          "description": "repository-relative path",
+        },
       },
       "usage_notes": "",
     }
@@ -321,6 +325,8 @@ Stable command identifiers and templates:
   - use `must_exec` only for commands that are truly required for trustworthy completion,
   - avoid flooding command-policy with near-duplicate literal commands when a safe template would
     express the intent better,
+  - split multi-step shell snippets into separate reusable command definitions rather than hiding
+    them behind one scripted entrypoint,
   - and avoid exploratory commands that are unrelated to any plausible requirement or workflow.
 - When a story has non-trivial implementation risk, include command coverage that supports the
   whole pipeline lifecycle:

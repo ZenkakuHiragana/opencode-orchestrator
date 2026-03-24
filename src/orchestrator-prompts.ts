@@ -74,7 +74,7 @@ export function buildAuditPrompt(
     "The original high-level goal for this run was:\n---\n" +
     originalPrompt +
     "\n---\n\n" +
-    "Decide whether the current story is fully completed according to its acceptance criteria and project gates (build/test/lint/docs).\n" +
+    "Decide whether the current story is fully completed according to its acceptance criteria and the verification gates relevant to the changes.\n" +
     "Respond ONLY with a single JSON object on one line with the following shape:\n" +
     '{\n  "done": true | false,\n  "requirements": [ { "id": "R1-some-requirement", "passed": true | false } ]\n}\n' +
     "If you are not certain that a requirement is fully satisfied, set its passed field to false.\n" +

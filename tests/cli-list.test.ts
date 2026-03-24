@@ -154,13 +154,56 @@ describe("runList integration", () => {
     const parsed = JSON.parse(jsonText) as {
       task: string;
       loop_status: string | null;
-      title: string | null;
+      summary: string | null;
     }[];
 
     expect(parsed.length).toBe(1);
     expect(parsed[0].task).toBe(task);
     expect(parsed[0].loop_status).toBe("ready_for_loop");
-    expect(parsed[0].title).toBeNull();
+    expect(parsed[0].summary).toBeNull();
+  });
+
+  it("reads summary from acceptance-index north_star in json format", async () => {
+    const originalXdg = process.env.XDG_STATE_HOME;
+    const fakeXdg = path.join(
+      os.tmpdir(),
+      `opencode-orch-summary-json-${Date.now().toString(16)}-${Math.random()
+        .toString(16)
+        .slice(2)}`,
+    );
+    process.env.XDG_STATE_HOME = fakeXdg;
+
+    const baseDir = path.join(fakeXdg, "opencode", "orchestrator");
+    const task = "summary-task";
+    const stateDir = path.join(baseDir, task, "state");
+    fs.mkdirSync(stateDir, { recursive: true });
+
+    fs.writeFileSync(
+      path.join(stateDir, "acceptance-index.json"),
+      JSON.stringify({
+        version: 1,
+        north_star: "Ship a compact task summary for list output.",
+        requirements: [],
+      }),
+      "utf8",
+    );
+
+    await runList({ format: "json" });
+
+    process.env.XDG_STATE_HOME = originalXdg;
+    try {
+      fs.rmSync(fakeXdg, { recursive: true, force: true });
+    } catch {
+      // ignore
+    }
+
+    const logMock = console.log as unknown as { mock: { calls: unknown[][] } };
+    const jsonText = String(logMock.mock.calls[0][0]);
+    const parsed = JSON.parse(jsonText) as { summary: string | null }[];
+
+    expect(parsed[0].summary).toBe(
+      "Ship a compact task summary for list output.",
+    );
   });
 
   it("aligns columns in text format when multiple tasks have different statuses", async () => {
@@ -273,5 +316,68 @@ describe("runList integration", () => {
     expect(nosLines.length).toBe(1);
     expect(nosLines[0]).toBe("task-a");
     expect(nosLines[0]).not.toContain("loop_status");
+  });
+
+  it("shows summary column in text format and falls back to spec goal", async () => {
+    const originalXdg = process.env.XDG_STATE_HOME;
+    const fakeXdg = path.join(
+      os.tmpdir(),
+      `opencode-orch-summary-text-${Date.now().toString(16)}-${Math.random()
+        .toString(16)
+        .slice(2)}`,
+    );
+    process.env.XDG_STATE_HOME = fakeXdg;
+
+    const baseDir = path.join(fakeXdg, "opencode", "orchestrator");
+
+    const northStarDir = path.join(baseDir, "alpha", "state");
+    fs.mkdirSync(northStarDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(northStarDir, "acceptance-index.json"),
+      JSON.stringify({
+        version: 1,
+        north_star: "Alpha summary from north star.",
+        requirements: [],
+      }),
+      "utf8",
+    );
+
+    const specFallbackDir = path.join(baseDir, "beta", "state");
+    fs.mkdirSync(specFallbackDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(specFallbackDir, "spec.md"),
+      [
+        "# beta タスク仕様",
+        "",
+        "## 目標",
+        "",
+        "Beta summary from spec goal section.",
+        "",
+        "## 非目標",
+        "",
+        "- none",
+      ].join("\n"),
+      "utf8",
+    );
+
+    await runList({ format: "text" });
+
+    process.env.XDG_STATE_HOME = originalXdg;
+    try {
+      fs.rmSync(fakeXdg, { recursive: true, force: true });
+    } catch {
+      // ignore
+    }
+
+    const logMock = console.log as unknown as { mock: { calls: unknown[][] } };
+    const lines = logMock.mock.calls.map((c: unknown[]) => String(c[0]));
+
+    expect(lines.length).toBe(2);
+    expect(lines[0]).toContain("summary=Alpha summary from north star.");
+    expect(lines[1]).toContain("summary=Beta summary from spec goal section.");
+
+    const alphaSummaryPos = lines[0].indexOf("summary=");
+    const betaSummaryPos = lines[1].indexOf("summary=");
+    expect(alphaSummaryPos).toBe(betaSummaryPos);
   });
 });

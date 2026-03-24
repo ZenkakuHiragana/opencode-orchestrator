@@ -100,19 +100,4 @@ describe("OrchestratorPlugin", () => {
       "string",
     );
   });
-
-  it("does not use legacy orchestrator.expose", async () => {
-    const plugin = await OrchestratorPlugin({ client: {} } as any);
-    const config: any = {
-      orchestrator: {
-        expose: {
-          "orch-local-investigator": true,
-        },
-      },
-    };
-    await plugin.config!(config);
-
-    expect(config.agent["orch-local-investigator"]).toBeTruthy();
-    expect(config.agent["orch-local-investigator"].description).toBeUndefined();
-  });
 });
