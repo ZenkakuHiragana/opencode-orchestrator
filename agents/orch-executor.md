@@ -423,33 +423,70 @@ Output protocol for each executor step:
   - Only list files you actually changed during this step.
 - `STEP_CMD` lines (0 or more):
   - Format: `STEP_CMD: <command> (<command-id-or->) <status> <short_outcome>`
-  - Example: `STEP_CMD: dotnet test (cmd-dotnet-test) success テストの全件パスを確認した`
+  - Example: `STEP_CMD: dotnet test (cmd-dotnet-test) success Verified that all tests passed`
   - `<command>` is the **concrete command line** you actually executed (for example
     `rg '## [A-Z0-9]+' doc -n` or `dotnet test MyProject.sln`).
   - `<command-id-or->` is normally the `id` field from `command-policy.json` that this command
     instantiates. In the exceptional case where you have already executed a command
     that has no corresponding policy entry, use `-` as the id to make this explicit.
   - `<status>` must be one of `success`, `failure`, `skipped`, or `blocked`.
-  - `<short_outcome>` is a short Japanese explanation (less than one sentence) describing what
-    happened (for example `dotnet test を実行し、全件成功を確認した`, `docs だけの変更なのでテストは未実行`).
+  - `<short_outcome>` is a short natural-language explanation (less than one sentence)
+    describing what happened (for example `Executed dotnet test and all tests passed`,
+    `Only documentation was changed so tests were not run`).
 - `STEP_BLOCKER` lines (0 or more):
   - Format: `STEP_BLOCKER: <scope> <tag> <reason>`
-  - Example: `STEP_BLOCKER: T4-api-details need_replan 作業単位が大きすぎる`
+  - Example: `STEP_BLOCKER: T4-api-details need_replan Work unit is too large`
   - `<scope>` is either a specific todo id (for example `T4-r1-api-details`) or the
     literal `general` when the blocker applies to the overall step.
   - `<tag>` is a short, single-token code that classified the type of blocker; it should be always:
   - `need_replan` ... when you **believe** the todo structure itself needs to be changed because
     there is no actionable work left because of no pending todos,
     or all visible todos are blocked by some reasons.
-  - `env_blocked` ... when you are sure that it is **clearly impossible** to advence any requirements
+  - `env_blocked` ... when you are sure that it is **clearly impossible** to advance any requirements
     because of environmental reasons such as lack of permission to execute necessary commands
     or there is a conflict in the specifications. Prefer using `need_replan` as the problem
     might be solved by restructuring todos.
-  - `<reason>` is a short Japanese explanation (less than one sentence) describing why this
-    blocker occurred. When `tag = need_replan`, write this as **actionable feedback for the
-    Todo-Writer** about how the todo structure should change: which todo or requirement is
-    too large or missing, and what kind of split or new todo would help. This text is copied
-    into `status.json.replan_reason` and will be consulted during the next planning pass.
+  - `<reason>` describes why this blocker occurred.
+    - When `tag = need_replan`, `<reason>` should still be a short Japanese explanation
+      (roughly one sentence) written as **actionable feedback for the Todo-Writer** about
+      how the todo structure should change: which todo or requirement is too large or
+      missing, and what kind of split or new todo would help. This text is copied into
+      `status.json.replan_reason` and will be consulted during the next planning pass.
+    - When `tag = env_blocked`, `<reason>` **must** be a single-line, semi-structured
+      string so that the Planner can reconstruct what you tried and which command
+      definitions would unblock the requirement. Use the following key/value template
+      joined by `; ` (semicolon + space):
+
+      `REQ=<requirement-ids-comma-separated>; TODOS=<todo-ids-or->; GOAL=<one-sentence-goal>; COMMAND_POLICY=<short summary of current command-policy and helper availability>; ATTEMPTED_CMDS=<comma-separated list of id:command:result>; BLOCKED_BY=<why this cannot be solved by manual work>; CANDIDATE_COMMAND_DEFS=[<candidate-command-defs>]`
+
+      where:
+      - `REQ=` lists the requirement ids (from acceptance-index.json) that are blocked
+        by this environment issue (for example `REQ=R1,R3`).
+      - `TODOS=` lists related todo ids when they are known (for example
+        `TODOS=T1-r1-exports,T2-r3-docs`); use `-` when no specific todo ids apply.
+      - `GOAL=` is a single English sentence describing what you attempted to verify
+        or achieve (for example `GOAL=Mechanically verify that all exports in module\*.def match the documented public APIs in api-index.md and docs/api/\*.md`).
+      - `COMMAND_POLICY=` summarizes, in English, which commands and helpers are
+        currently allowed according to `command-policy.json` and its
+        `summary.helper_availability`, and why they are insufficient for this GOAL
+        (for example `COMMAND_POLICY=helper:rg is available, but there is no template command in commands[] to compute set differences across three files`).
+      - `ATTEMPTED_CMDS=` lists the concrete commands you already ran within the
+        allowed policy, as a comma-separated list of `command-id:command:result` triples (for example `ATTEMPTED_CMDS=cmd-rg-exports:rg '^EXPORT' def/_.def:success,cmd-rg-docs:rg '^## ' docs/api/\*:success`).
+      - `BLOCKED*BY=` explains, in English, why you judged this to be an
+        \*environmental\* impossibility rather than a planning issue (for example
+        `BLOCKED_BY=A 900-line export list cannot be safely cross-checked against the docs by hand while preserving auditability`).
+      - `CANDIDATE_COMMAND_DEFS=` contains one or more **candidate command definition sketches**
+        that would make the requirement mechanically verifiable if they were added to `command-policy.json.commands[]`. Encode them inline in a compact pseudo-JSON form (for example `CANDIDATE_COMMAND_DEFS=[id=helper-exports-diff,command="rg {{pattern}} {{targets}} -n | sort",role="helper",usage="may_exec",parameters={pattern,targets},related_requirements=[R1,R3]]`).
+
+      These entries are **design proposals only**; do not attempt to execute any
+      command that is not explicitly allowed by `command-policy.json`. The Planner
+      will hand these sketches to the Refiner to decide whether and how to add
+      real command definitions.
+
+      Use this structured template for every `env_blocked` blocker line so that
+      `status.json.proposals[].details` always contains enough information for the
+      Planner to propose concrete remediation paths.
+
 - **Failure ladder**: Before emitting `STEP_BLOCKER: ... need_replan`,
   follow this escalation sequence to minimize unnecessary replanning round-trips:
   1. **Attempt alternative approach**: If your first attempt to complete a todo fails (for

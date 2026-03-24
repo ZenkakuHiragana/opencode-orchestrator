@@ -207,12 +207,29 @@ Proposals and status.json:
     (source, kind, cycle, id, and its `summary`).
   - Treat these proposals as high-priority inputs for your planning pass; they describe
     what went wrong in the last loop.
+  - For proposals with `kind = "env_blocked"`, the Executor MUST have encoded a
+    semi-structured `details` string (copied from `STEP_BLOCKER: ... env_blocked ...`),
+    using the following key/value template joined by `; `:
+    - `REQ=...` (blocked requirement ids),
+    - `TODOS=...` (related todo ids or `-`),
+    - `GOAL=...` (one-sentence description of what the executor attempted to verify),
+    - `COMMAND_POLICY=...` (summary of currently allowed commands/helpers and why they
+      are insufficient),
+    - `ATTEMPTED_CMDS=...` (comma-separated `command-id:command:result` triples for the
+      commands that were actually executed within the allowed policy),
+    - `BLOCKED_BY=...` (why the situation cannot be resolved by manual work or todo
+      restructuring alone),
+    - `CANDIDATE_COMMAND_DEFS=[...]` (one or more candidate command definition sketches
+      that, if added to `command-policy.json.commands[]`, would make the requirement
+      mechanically verifiable).
+      You should rely on this structure to decide the next planning actions rather than
+      guessing from the free-form summary.
 - After you believe the underlying issues are resolved (for example, command definitions
   adjusted by Refiner and availability refreshed by preflight-cli, or requirements refined
   to remove contradictions), you may clear proposals by writing back an updated `status.json`
   with `proposals: []`.
-- Do not clear proposals speculatively. Only clear them when you have a concrete reason to
-  believe the blocking condition has been removed or addressed.
+  - Do not clear proposals speculatively. Only clear them when you have a concrete reason to
+    believe the blocking condition has been removed or addressed.
 
 4. Command policy synthesis (`command-policy.json`)
 
@@ -228,6 +245,43 @@ Ownership boundary (MANDATORY):
   `preflight-cli` (or hand control back to Refiner).
 - If a command definition is missing, invalid, or needs structural adjustment, hand control
   back to the Refiner/Spec-Checker loop.
+
+Handling `env_blocked` proposals (Planner-specific flow):
+
+- When one or more proposals with `kind = "env_blocked"` are present, treat them as
+  evidence that the current environment and command-policy cannot satisfy certain
+  requirements under the existing acceptance criteria.
+- For each `env_blocked` proposal:
+  - Parse its `details` string to extract at least:
+    - the blocked requirement ids from `REQ=...`,
+    - any related todo ids from `TODOS=...`,
+    - the core verification goal from `GOAL=...`,
+    - the environment/permission constraints from `COMMAND_POLICY=` and `BLOCKED_BY=`,
+    - and the candidate command definition sketches from `CANDIDATE_COMMAND_DEFS=[...]`.
+  - Summarise these fields for the human in Japanese, and then ask a question to decide
+    the following high-level options:
+    1. **Extend commands to preserve the original requirement**:
+       - Ask whether the story should keep the current acceptance semantics (for example,
+         full mechanical equality checks) and instead expand the command set.
+       - If yes, delegate to the Refiner (via `orch-refiner`) with a concise instruction
+         to review the `CANDIDATE_COMMAND_DEFS` sketches for the listed requirements and
+         turn accepted entries into real `command-policy.json.commands[]` definitions.
+       - After Refiner updates command definitions, run `preflight-cli` to refresh
+         availability and re-evaluate `command-policy.json.summary.loop_status`.
+    2. **Relax or redefine the requirement to fit the environment**:
+       - When extending the command set is not acceptable or feasible, treat the
+         `GOAL=` and `BLOCKED_BY=` description as input for requirement redesign.
+       - Delegate to the Refiner to adjust `acceptance-index.json` and `spec.md` for the
+         affected requirement ids, for example by moving from exhaustive mechanical
+         checks to spot checks or by explicitly documenting environment limitations.
+       - If even the relaxed form cannot be satisfied on the current machine, prefer to
+         converge on `command-policy.json.summary.loop_status = "blocked_by_environment"`
+         for this story, and explain that status to the human.
+- When `CANDIDATE_COMMAND_DEFS` is missing or empty for an `env_blocked` proposal, treat
+  this as an upstream Executor/specification issue: you should still surface the
+  proposal to the human, but call out that remediation options are underspecified and
+  that the Executor prompt needs to be updated to follow the structured `env_blocked`
+  template.
 
 After you have both a spec-check report and a preflight result, rely on
 `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/command-policy.json` as the single
@@ -353,6 +407,7 @@ Response format (when talking to the human):
 
        where `must` reflects `usage` (for example `must_exec` → `○`, `may_exec` → `-`), and
        `avail` reflects availability (`available` → `○`, `unavailable` → `×`).
+       Headers must be localized as well.
 
      - Include the absolute path to the orchestrator state directory and to
        `command-policy.json` so that the human can copy-paste them.

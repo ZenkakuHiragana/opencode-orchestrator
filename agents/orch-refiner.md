@@ -211,9 +211,10 @@ Interactive refinement loop:
    the acceptance index, so that downstream agents have a concise summary plus a precise
    machine-readable requirements list.
    - In `spec.md`, make sure the following are easy to locate:
-     - **north_star**: 1–2行の最重要目的ステートメント（acceptance-index.json の
-       `north_star` と同一内容）。細かい受け入れ条件と別に、全体最適の判断軸を示す。
-     - goal summary,
+     - **north_star**: a 1–2 line "north star" statement that captures the most important
+       overall goal (the same content as `north_star` in acceptance-index.json). This is
+       a high-level orientation anchor, separate from detailed acceptance criteria.
+   - goal summary,
    - in-scope work,
    - explicit non-goals,
    - constraints / assumptions,
