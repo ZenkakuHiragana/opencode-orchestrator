@@ -11,7 +11,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      gist: write
 
     steps:
       - uses: actions/checkout@v4
@@ -63,17 +62,17 @@ jobs:
           cat coverage-badge.json
 
           # gist にアップロード
-          # GIST_ID はリポジトリのシークレットに設定してください
-          if [ -n "${{ secrets.GIST_ID }}" ] && [ -n "${{ secrets.GITHUB_TOKEN }}" ]; then
+          # GIST_ID と GIST_TOKEN はリポジトリのシークレットに設定してください
+          if [ -n "${{ secrets.GIST_ID }}" ] && [ -n "${{ secrets.GIST_TOKEN }}" ]; then
             gh gist edit "${{ secrets.GIST_ID }}" \
               -a coverage-badge.json \
               -f coverage-badge.json \
               -d "Coverage badge for opencode-orchestrator"
           else
-            echo "::warning::GIST_ID or GITHUB_TOKEN secret not set. Skipping gist upload."
+            echo "::warning::GIST_ID or GIST_TOKEN secret not set. Skipping gist upload."
           fi
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GIST_TOKEN }}
 
       - name: Upload badge artifact
         if: always()
