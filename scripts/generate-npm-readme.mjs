@@ -96,16 +96,27 @@ function renderMermaidBlocks(blocks) {
 
     fs.writeFileSync(tmpMmdPath, block.code, "utf8");
 
-    const result = spawnSync(mmdcPath, ["-i", tmpMmdPath, "-o", absPath], {
+    const args = ["-i", tmpMmdPath, "-o", absPath];
+    const result = spawnSync(mmdcPath, args, {
       stdio: "inherit",
     });
 
-    if (result.status !== 0) {
+    if (result.error || result.status !== 0) {
       console.warn(
         "[build:readme] Mermaid 図 (index=" +
           String(block.index) +
           ") のレンダリングに失敗しました。",
       );
+      if (result.error) {
+        console.error("[build:readme] mmdc spawn error:", result.error);
+      } else {
+        console.error(
+          "[build:readme] mmdc exited with status=",
+          result.status,
+          "signal=",
+          result.signal,
+        );
+      }
       block.imageRelPath = null;
       block.imageUrl = null;
       continue;
