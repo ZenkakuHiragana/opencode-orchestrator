@@ -13,7 +13,6 @@ describe("orchestratorCommands", () => {
     expect(keys).toContain("orch-audit");
     expect(keys).toContain("orch-refine");
     expect(keys).toContain("orch-spec-check");
-    expect(keys).toContain("orch-preflight");
   });
 
   it("every command has a description string", () => {
@@ -37,7 +36,6 @@ describe("orchestratorCommands", () => {
       "orch-auditor",
       "orch-refiner",
       "orch-spec-checker",
-      "orch-preflight-runner",
     ];
     for (const [name, config] of Object.entries(orchestratorCommands)) {
       expect(validAgents).toContain(config.agent);
@@ -61,9 +59,6 @@ describe("orchestratorCommands", () => {
     expect(orchestratorCommands["orch-refine"].agent).toBe("orch-refiner");
     expect(orchestratorCommands["orch-spec-check"].agent).toBe(
       "orch-spec-checker",
-    );
-    expect(orchestratorCommands["orch-preflight"].agent).toBe(
-      "orch-preflight-runner",
     );
   });
 

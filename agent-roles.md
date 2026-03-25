@@ -56,7 +56,6 @@ sequenceDiagram
     participant Planner as orch-planner（LLM）
     participant RefinerAgent as orch-refiner（サブエージェント）
     participant SpecCheckerAgent as orch-spec-checker（サブエージェント）
-    participant PreflightAgent as orch-preflight-runner（サブエージェント）
     participant PreflightTool as preflight-cli（ツール）
     participant StateDir as state/<task-name>/
 
@@ -108,7 +107,7 @@ sequenceDiagram
 **図 1.5.1 補足：TUI 計画フェーズのポイント**
 
 - Planner（LLM）は主に **orch-refine / orch-spec-check** の**カスタムコマンド**でサブエージェントを起動する。
-- PreflightRunner は Planner から直接コマンド実行せず、`preflight-cli` **ツール**経由で呼び出す（ツール内部で `orch-preflight` コマンドを非対話実行）。
+- Preflight の可否判定は `preflight-cli` **ツール**が担当し、Refiner が定義したコマンドと helper コマンドに対して permission.bash ルールをローカル評価する。
 - Refiner / Spec-Checker のサイクルは、`status === "ok"` かつ `feasible_for_loop === true` になるまで何度でも回る。
 - `command-policy.json` を更新できるのは、Planner が担当するこのフェーズだけである。
 
@@ -234,7 +233,7 @@ sequenceDiagram
 - (A) 役割
   - 高レベルのゴールから、Executor ループ実行前に必要な「オーケストレータ状態」を整備する
     プランニングコーディネータ。
-  - `orch-refiner` / `orch-spec-checker` / `orch-preflight-runner` を呼び分けて、
+  - `orch-refiner` / `orch-spec-checker` を呼び分け、preflight 用には `preflight-cli` ツールを使用して
     `acceptance-index.json`, `spec.md`, `command-policy.json`, spec-check レポート、preflight 結果
     などを揃える。
   - `command-policy.json` の `summary.loop_status` と `commands[]` を最終的に更新する唯一の
@@ -348,37 +347,32 @@ sequenceDiagram
     - `feasible_for_loop`: orchestrator ループに載せられるかのブール値
     - `issues[]`: acceptance-index / spec / command-policy に関する問題一覧（`summary`/`suggested_action` は日本語）
 
-## 5. orch-preflight-runner / orch-preflight
+## 5. Preflight（preflight-cli ツール）
 
 - 実体
-  - エージェント: `orch-preflight-runner` (`agents/orch-preflight-runner.md`)
-  - スラッシュコマンド: `orch-preflight` (`commands/orch-preflight.md`)
-  - Planner からは `preflight-cli` ツール経由で呼び出される。
+  - ツール: `preflight-cli` (`src/preflight-cli.ts`)
 
 - (A) 役割
-  - Spec-checker などが定義した「候補コマンド」が現在の環境で実行可能か、
-    破壊的でない範囲で実際に `bash` 経由で試す。
-  - Planner から `preflight-cli` ツール経由で呼ばれる場合、TypeScript 側からプロンプトに埋め込まれた helper コマンド群（`resources/helper-commands.json` に定義されている）が同時に対象になる。
+  - Spec-Checker / Refiner が定義した「候補コマンド」が現在の permission.bash ルールの下で実行可能かを、LLM を起動せずにローカルで判定する。
+  - Refiner が定義したコマンドに加えて、`resources/helper-commands.json` に定義された helper コマンド群の可用性も併せて評価する。
 
 - (B) 主な入力
-  - プロンプト中に JSON として埋め込まれたコマンド一覧:
+  - Planner からツール引数として渡される command descriptors 配列:
     - `[ { "id": "cmd-dotnet-test", "command": "dotnet test", "role": "test", "usage": "must_exec" }, ... ]`
-    - これに加えて、`helper:rg` や `helper:jq` のような helper コマンド ID も、Planner 側の `preflight-cli` から同じ配列内に追加される。
   - 各 `command` はテンプレート展開済みの「最終的な 1 行コマンド」。
 
 - (C) 主な出力（ファイル）
-  - 自身はファイルを書かない。
-  - 出力 JSON は Planner 等が読み取り、必要であれば state ディレクトリに保存。
+  - `command-policy.json` の更新のみ（`summary.available_helper_commands` / 各 `commands[].availability` / `summary.loop_status`）。
 
 - (D) 出力内容
-  - 1 行の JSON オブジェクトのみ（`agents/orch-preflight-runner.md` 参照）。
+  - ツール戻り値として 1 行の JSON オブジェクト（`{ status, results[] }`）。
   - 構造:
     - `status`: `"ok"` / `"failed"`
     - `results[]`: 各コマンドごとの
       - `id`, `command`, `role`, `usage`
       - `available`（boolean）
       - `exit_code`
-      - `stderr_excerpt`（日本語で短い説明）
+      - `stderr_excerpt`（短い説明。preflight-cli では permission.bash 由来の短い英語メッセージを使用）
 
 ## 6. orch-todo-writer / orch-todo-write
 
@@ -506,7 +500,7 @@ sequenceDiagram
     - `requirements[]`: `{ id, passed, reason? }` の配列
       - `reason` は日本語テキスト。
 
-## 9. orch-preflight-runner 以外の補助エージェント
+## 9. その他の補助エージェント
 
 ### 9.1 orch-todo-writer / orch-executor 用ツール (`src/orchestrator-todo.ts`)
 
@@ -831,10 +825,9 @@ sequenceDiagram
 }
 ```
 
-### 11.6 preflight 結果 JSON（orch-preflight-runner 出力）
+### 11.6 preflight 結果 JSON（preflight-cli 出力）
 
-- `orch-preflight` コマンドの標準出力として 1 行 JSON を返す。
-- スキーマ: `agents/orch-preflight-runner.md` に準拠。
+- `preflight-cli` ツールの戻り値として 1 行 JSON を返す。
 
 ```jsonc
 {

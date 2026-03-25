@@ -33,9 +33,4 @@ describe("system prompts must not contain Japanese text", () => {
     const content = readFile("agents/orch-spec-checker.md");
     expect(japaneseCharPattern.test(content)).toBe(false);
   });
-
-  it("orch-preflight-runner system prompt has no Japanese characters", () => {
-    const content = readFile("agents/orch-preflight-runner.md");
-    expect(japaneseCharPattern.test(content)).toBe(false);
-  });
 });

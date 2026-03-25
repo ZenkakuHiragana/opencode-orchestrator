@@ -16,7 +16,6 @@ describe("orchestratorAgents", () => {
     expect(keys).toContain("orch-spec-checker");
     expect(keys).toContain("orch-local-investigator");
     expect(keys).toContain("orch-public-researcher");
-    expect(keys).toContain("orch-preflight-runner");
   });
 
   it("every agent has a description string", () => {
@@ -113,7 +112,6 @@ describe("orchestratorAgents", () => {
     expect(names).toContain("orch-executor");
     expect(names).toContain("orch-auditor");
     expect(names).toContain("orch-spec-checker");
-    expect(names).toContain("orch-preflight-runner");
   });
 
   it("non-hidden agents are visible in agent list", () => {

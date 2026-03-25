@@ -15,7 +15,7 @@ describe("OrchestratorPlugin", () => {
     vi.restoreAllMocks();
   });
 
-  it("registers preflight-cli tool when not running orch-preflight", async () => {
+  it("registers preflight-cli tool by default", async () => {
     const client = { tag: "client" };
     const plugin = await OrchestratorPlugin({ client } as any);
     expect(getOpencodeClient()).toBe(client);
@@ -25,12 +25,8 @@ describe("OrchestratorPlugin", () => {
     expect(plugin.tool).toHaveProperty("preflight-cli");
   });
 
-  it("omits preflight-cli tool inside orch-preflight command session", async () => {
-    process.argv = ["node", "x", "run", "--command", "orch-preflight"];
-    const plugin = await OrchestratorPlugin({ client: {} } as any);
-    expect(plugin.tool).toHaveProperty("autocommit");
-    expect(plugin.tool).not.toHaveProperty("preflight-cli");
-  });
+  // NOTE: preflight-cli is always registered; we no longer special-case
+  // orch-preflight command sessions here.
 
   it("wires orchestrator agents and commands into config", async () => {
     const plugin = await OrchestratorPlugin({ client: {} } as any);
@@ -47,21 +43,14 @@ describe("OrchestratorPlugin", () => {
     expect(typeof config.command["orch-exec"].template).toBe("string");
   });
 
-  it("embeds helper command JSON into refiner/planner/spec-checker prompts", async () => {
+  it("embeds helper command JSON into planner/spec-checker prompts", async () => {
     const plugin = await OrchestratorPlugin({ client: {} } as any);
     const config: any = {};
     await plugin.config!(config);
 
-    for (const agentName of [
-      "orch-refiner",
-      "orch-planner",
-      "orch-spec-checker",
-    ]) {
+    for (const agentName of ["orch-planner", "orch-spec-checker"]) {
       const prompt = config.agent[agentName]?.prompt;
       expect(typeof prompt).toBe("string");
-      expect(prompt).toContain(
-        "Predefined helper commands (available for shell composition)",
-      );
       expect(prompt).toContain("helper_commands");
       expect(prompt).toContain('"id": "helper:rg"');
       expect(prompt).toContain('"command": "rg"');

@@ -128,7 +128,7 @@ system prompt を編集する際は、ここから外れる権限を勝手に与
   - 原則 **書かない**。唯一の例外として、`status.json.proposals` を空配列にするなど「proposal の整理」だけが許可されている（`src/orchestrator-agents.ts` の permission を参照）。
 - 呼べるもの
   - `task` → `orch-refiner`, `orch-spec-checker`
-  - `preflight-cli` ツール → 内部で `orch-preflight` コマンド + `orch-preflight-runner` エージェントが動く
+  - `preflight-cli` ツール → Refiner が定義した command descriptors と helper commands について、permission.bash ルールをローカル評価し、`command-policy.json` の `availability` と `available_helper_commands`、`loop_status` を更新する。
   - `bash` → `npx opencode-orchestrator loop ...` のような CLI の起動のみ
 - プロンプトで **やってはいけない指示**
   - `acceptance-index.json` / `spec.md` / `command-policy.json.commands[]` の内容を直接編集させる
@@ -193,15 +193,11 @@ system prompt を編集する際は、ここから外れる権限を勝手に与
   - コードや state ファイルを変更させる
   - 他エージェントに「〜してもらう」ような依頼をさせる
 
-#### orch-preflight-runner / preflight-cli（Preflight）
+#### preflight-cli（Preflight）
 
 - preflight-cli ツール（TypeScript 実装）
-  - Planner 専用ツール。Refiner が定義した command descriptors と helper commands をまとめて `orch-preflight` コマンドに渡し、結果を解釈して `command-policy.json` の `availability` と `available_helper_commands`、`loop_status` を更新する。
+  - Planner 専用ツール。Refiner が定義した command descriptors と helper commands について、OpenCode 設定から得られる `permission.bash` の実効ルールをローカル評価し、その結果を `command-policy.json` の `availability` と `available_helper_commands`、`loop_status` に反映する。
   - system prompt には **preflight-cli 自身の実装詳細**（ログファイルのパスなど）を書かない。Planner から見えるのは「preflight-cli を呼ぶと per-command の availability が分かり、command-policy.json が更新される」というレベルまで。
-- orch-preflight-runner エージェント
-  - 入力は「プレーンなコマンド descriptor 配列」のみ。acceptance-index や command-policy.json ファイルは直接見ない。
-  - 出力は `{ status, results[] }` だけ。
-  - プロンプトでは「渡された JSON だけを見て、bash で安全に probe して結果 JSON を返す」以上の権限を与えないこと。
 
 ### 8.3 「この repo の事情」と「配布先での視野」を混同しない
 
