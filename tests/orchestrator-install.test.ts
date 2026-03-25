@@ -16,18 +16,25 @@ describe("orchestrator-install", () => {
     process.env = originalEnv;
   });
 
-  it("parses --scope correctly", () => {
-    const opts = parseInstallArgs(["--scope", "local"]);
+  it("defaults to local scope", () => {
+    const opts = parseInstallArgs([]);
     expect(opts.scope).toBe("local");
-
-    const opts2 = parseInstallArgs(["--scope=global"]);
-    expect(opts2.scope).toBe("global");
   });
 
-  it("throws when scope is missing", () => {
-    expect(() => parseInstallArgs([])).toThrow(
-      "--scope must be specified as 'local' or 'global'",
-    );
+  it("parses -g and --global correctly", () => {
+    const g1 = parseInstallArgs(["-g"]);
+    expect(g1.scope).toBe("global");
+
+    const g2 = parseInstallArgs(["--global"]);
+    expect(g2.scope).toBe("global");
+  });
+
+  it("supports legacy --scope flags", () => {
+    const local = parseInstallArgs(["--scope", "local"]);
+    expect(local.scope).toBe("local");
+
+    const globalEq = parseInstallArgs(["--scope=global"]);
+    expect(globalEq.scope).toBe("global");
   });
 
   it("creates a new local config when none exists", async () => {

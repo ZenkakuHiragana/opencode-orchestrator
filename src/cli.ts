@@ -148,7 +148,7 @@ function printUsage() {
       '  loop  --task <task-name> [--session <ses_...> | --continue] [--commit] [--max-loop N] [--max-restarts M] [--file <path>] "prompt..."\n' +
       "  list  [--json]   orchestrator タスク一覧または proposal 一覧を表示\n" +
       "  clear --task <task-name> --proposals [-y]   指定タスクの proposal を削除\n" +
-      "  install --scope <local|global>   OpenCode 設定ファイルにプラグインを追加\n" +
+      "  install [-g|--global]   OpenCode 設定ファイルにプラグインを追加\n" +
       "\n" +
       "共通オプション:\n" +
       "  -h, --help       このヘルプを表示\n" +

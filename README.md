@@ -74,13 +74,11 @@ flowchart LR
 
 ### ✅ セットアップフロー
 
-LLM に対しては、次のような指示を 1 行で渡すだけで、自動的にセットアップ〜確認まで進められます。
+OpenCode に次のプロンプトを送信するとこれを読んでセットアップしてくれると思います。
 
 ```text
 read & follow https://www.npmjs.com/package/@zenorg/opencode-orchestrator
 ```
-
-以下、導入手順です。
 
 > [!NOTE]
 > **LLM 向けの説明**
@@ -89,39 +87,28 @@ read & follow https://www.npmjs.com/package/@zenorg/opencode-orchestrator
 > もしくはローカルインストールのどちらにするのかユーザーの選択を確認してください。
 > OpenCode TUI で作業している場合は `question` ツールを使ってユーザーに質問してください。
 
-1. **パッケージのインストール**
-   - グローバル インストール: `npm install -g @zenorg/opencode-orchestrator`
-   - ローカル インストール: `npm install @zenorg/opencode-orchestrator`
+1. OpenCode へのプラグインの登録
 
-2. **OpenCode の設定ファイル `opencode.json` の作成・更新**
+```bash
+# グローバルに有効化する場合
+# $XDG_CONFIG_HOME/.config/opencode/opencode.json に追記するだけ
+npx @zenorg/opencode-orchestrator install -g
 
-   以下に示すパスに OpenCode の設定ファイルがあるか確認します。
-   - グローバル設定（`~/.config/opencode/opencode.json`）
-     - > LLM 向け: ユーザーがグローバル インストールを選択した場合はこちらのパスを使ってください。
-   - ローカル設定（`./opencode.json`）
-     - > LLM 向け: ユーザーがローカル インストールを選択した場合はこちらのパスを使ってください。
+# カレントディレクトリでだけ有効化する場合
+# ./opencode.json に追記するだけ
+npx @zenorg/opencode-orchestrator install
+```
 
-   OpenCode の設定がない場合は、次の最小構成を作成します。
+実行フェーズ用 CLI のインストール
 
-   ```jsonc
-   {
-     "$schema": "https://opencode.ai/config.json",
-     "plugin": ["@zenorg/opencode-orchestrator"],
-     "permission": {
-       "bash": {
-         "*": "ask",
-       },
-     },
-   }
-   ```
-
-   すでに `opencode.json` が存在する場合は、`plugins` 配列に `"@zenorg/opencode-orchestrator"` を 1 要素として追加してください。
+```bash
+npm install -g @zenorg/opencode-orchestrator
+# npx opencode-orchestrator --help
+```
 
 3. **OpenCode から Orchestrator を有効化**
 
-   OpenCode を再起動すると有効化されます。Tab でエージェントを切り替えて **Orch-Planner** エージェントが見えることを確認してください。
-
-### CLI リファレンス（抜粋）
+OpenCode を再起動すると有効化されます。Tab でエージェントを切り替えて **Orch-Planner** エージェントが見えることを確認してください。
 
 ## 設定
 
@@ -161,6 +148,8 @@ read & follow https://www.npmjs.com/package/@zenorg/opencode-orchestrator
 - `clear`: 内部状態のクリア
   - `--proposals`: 実行フェーズで発生した問題を解決する提案を無視して消去する
   - Orch-Planner に解決を依頼しないで、手動で（強引に）解決状態にするためのコマンド
+- `install`: OpenCode の設定ファイルを編集し、このプラグインを登録する
+  - `-g`: ホームディレクトリのグローバル設定を編集する
 
 ### `loop`: 実行ループの開始
 

@@ -12,22 +12,28 @@ const PLUGIN_NAME = "@zenorg/opencode-orchestrator";
 
 export function printInstallUsage(): void {
   console.error(
-    "使い方: opencode-orchestrator install --scope <local|global>\n" +
+    "使い方: opencode-orchestrator install [options]\n" +
       "\n" +
       "OpenCode の設定ファイル (opencode.json) にこのプラグインを追加します。\n" +
       "\n" +
       "オプション:\n" +
-      "  --scope local   カレントディレクトリの ./opencode.json を作成/更新\n" +
-      "  --scope global  XDG_CONFIG_HOME/opencode/opencode.json または ~/.config/opencode/opencode.json を作成/更新",
+      "  (指定なし)      カレントディレクトリの ./opencode.json を作成/更新\n" +
+      "  -g, --global    XDG_CONFIG_HOME/opencode/opencode.json または ~/.config/opencode/opencode.json を作成/更新",
   );
 }
 
 export function parseInstallArgs(argv: string[]): InstallOptions {
-  let scope: InstallScope | undefined;
+  // npm CLI と同様に、デフォルトはローカル、-g/--global でグローバル。
+  let scope: InstallScope = "local";
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
-    if (arg === "--scope") {
+    if (arg === "-g" || arg === "--global") {
+      scope = "global";
+    } else if (arg === "--local") {
+      scope = "local";
+    } else if (arg === "--scope") {
+      // 後方互換用のエイリアス: --scope local|global
       const next = argv[++i];
       if (!next) {
         throw new Error("--scope requires a value (local or global)");
@@ -49,10 +55,6 @@ export function parseInstallArgs(argv: string[]): InstallOptions {
     } else {
       throw new Error(`unexpected argument for install: ${arg}`);
     }
-  }
-
-  if (!scope) {
-    throw new Error("--scope must be specified as 'local' or 'global'");
   }
 
   return { scope };
