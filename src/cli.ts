@@ -20,6 +20,11 @@ import {
   printClearUsage,
   runClear,
 } from "./orchestrator-clear.js";
+import {
+  parseInstallArgs,
+  printInstallUsage,
+  runInstall,
+} from "./orchestrator-install.js";
 import { parseAuditResult } from "./orchestrator-audit.js";
 
 export { parseLoopArgs, parseListArgs } from "./cli-args.js";
@@ -36,6 +41,11 @@ export {
   printClearUsage,
   runClear,
 } from "./orchestrator-clear.js";
+export {
+  parseInstallArgs,
+  printInstallUsage,
+  runInstall,
+} from "./orchestrator-install.js";
 
 function readPackageVersion(): string {
   const pkg = JSON.parse(
@@ -58,7 +68,8 @@ export async function runCli(argv: string[]): Promise<number> {
   if (
     subcommand !== "loop" &&
     subcommand !== "list" &&
-    subcommand !== "clear"
+    subcommand !== "clear" &&
+    subcommand !== "install"
   ) {
     if (args.includes("--help") || args.includes("-h")) {
       printUsage();
@@ -82,6 +93,10 @@ export async function runCli(argv: string[]): Promise<number> {
     }
     if (subcommand === "clear") {
       printClearUsage();
+      return 0;
+    }
+    if (subcommand === "install") {
+      printInstallUsage();
       return 0;
     }
   }
@@ -112,6 +127,12 @@ export async function runCli(argv: string[]): Promise<number> {
     return 0;
   }
 
+  if (actualSubcommand === "install") {
+    const opts = parseInstallArgs(args);
+    await runInstall(opts);
+    return 0;
+  }
+
   console.error(
     `[opencode-orchestrator] unknown subcommand: ${actualSubcommand}`,
   );
@@ -127,6 +148,7 @@ function printUsage() {
       '  loop  --task <task-name> [--session <ses_...> | --continue] [--commit] [--max-loop N] [--max-restarts M] [--file <path>] "prompt..."\n' +
       "  list  [--json]   orchestrator タスク一覧または proposal 一覧を表示\n" +
       "  clear --task <task-name> --proposals [-y]   指定タスクの proposal を削除\n" +
+      "  install --scope <local|global>   OpenCode 設定ファイルにプラグインを追加\n" +
       "\n" +
       "共通オプション:\n" +
       "  -h, --help       このヘルプを表示\n" +
