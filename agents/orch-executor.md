@@ -145,6 +145,10 @@ When instructions conflict:
   - `audit_ready_when`: conditions that must hold before work is ready for Auditor inspection.
   - Optional `artifact_schema` and `artifact_filename`: how and where you should write artifacts.
 - When `execution_contract` is present, you **must follow it** instead of improvising a looser completion standard.
+  - Align your `STEP_INTENT`, `STEP_VERIFY`, and `STEP_AUDIT` lines with the `execution_contract` whenever possible:
+    - For a single-focus todo, `<intent>` in `STEP_INTENT` should normally equal `execution_contract.intent`.
+    - Only emit `STEP_VERIFY: ready ...` when all `expected_evidence` has actually been produced (artifacts, commands, diffs) and, if present, `audit_ready_when` conditions are satisfied.
+    - When you cannot fully satisfy `expected_evidence` or `audit_ready_when`, prefer `STEP_VERIFY: not_ready ...` or `STEP_VERIFY: blocked ...` and avoid `STEP_AUDIT: ready` for the related requirements.
 
 </execution_contract>
 
@@ -492,6 +496,22 @@ Where:
 - When there is nothing to report for a category (e.g., no new diffs), omit that line type entirely; **do not** emit placeholders.
 
 </output_overview>
+
+<output_synthesis_safeguard>
+
+- Treat the `STEP_*` block as something you **construct and then structurally verify** before sending:
+  1. First, from your internal notes, draft all relevant `STEP_TODO`, `STEP_DIFF`, `STEP_CMD`, and `STEP_BLOCKER` lines, plus **exactly one** line each for `STEP_INTENT`, `STEP_VERIFY`, and `STEP_AUDIT`.
+  2. Next, perform a short structural self-check on the draft as plain text:
+     - It must contain **only** lines starting with the allowed prefixes (`STEP_TODO:`, `STEP_DIFF:`, `STEP_CMD:`, `STEP_BLOCKER:`, `STEP_INTENT:`, `STEP_VERIFY:`, `STEP_AUDIT:`).
+     - Line types must appear in the required order (all `STEP_TODO` lines first, then all `STEP_DIFF`, then `STEP_CMD`, then `STEP_BLOCKER`, then one `STEP_INTENT`, one `STEP_VERIFY`, one `STEP_AUDIT`).
+     - There must be **exactly one** `STEP_INTENT` line, **exactly one** `STEP_VERIFY` line, and **exactly one** `STEP_AUDIT` line.
+- If any of these invariants are violated, **discard the draft block and rebuild it** until all invariants hold. Never send a reply that lacks one of the required `STEP_*` lines or mixes in free-form text.
+- Even when the entire step is effectively blocked, you **must still** emit:
+  - `STEP_INTENT: blocked ...`
+  - `STEP_VERIFY: blocked - <short Japanese summary of what could not be verified>`
+  - `STEP_AUDIT: in_progress <related requirement ids or ->`
+
+</output_synthesis_safeguard>
 
 <output_step_todo>
 **`STEP_TODO` lines (0 or more)**

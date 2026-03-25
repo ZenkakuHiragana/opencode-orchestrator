@@ -222,6 +222,20 @@ canonical todos:
 
 - Use `execution_contract` especially for higher-risk, auditor-sensitive, or repeatedly
   failing work so that the Executor has fewer judgment calls left.
+- Design `execution_contract` so that, **if the Executor follows it literally**, they can
+  always decide:
+  - what to put into `STEP_CMD` (which commands to run and report),
+  - when they are allowed to emit `STEP_VERIFY: ready ...` versus `not_ready`/`blocked`, and
+  - when it is legitimate to emit `STEP_AUDIT: ready ...` for the related requirements.
+- For enumerative or survey-like todos (e.g. "list all X", "classify all Y", "ensure all Z
+  are covered"), make `expected_evidence` and `audit_ready_when` **Executor-independent**:
+  - State clearly **what universe is being enumerated** (files, APIs, modules, requirements).
+  - Describe what counts as **complete coverage** (e.g. "every public API in module M" rather
+    than "as many as possible").
+  - Where possible, point to concrete `command_ids` that allow the Executor to mechanically
+    check completeness instead of relying on ad-hoc reasoning.
+  - Avoid vague criteria such as "looks comprehensive" or "seems sufficient"; write conditions
+    that a future Executor step can satisfy or fail in a clearly observable way.
 
 </execution_contract>
 
