@@ -2,8 +2,12 @@
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 
-const repoRoot = path.resolve(new URL("..", import.meta.url).pathname);
+// In ESM there is no __dirname by default. We derive it from import.meta.url
+// via fileURLToPath so that paths work correctly on both POSIX and Windows.
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const repoRoot = path.resolve(__dirname, "..");
 const srcPath = path.join(repoRoot, "README.md");
 const destPath = path.join(repoRoot, "README.npm.md");
 
