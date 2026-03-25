@@ -5,6 +5,8 @@
 !.opencode/agents/**
 !.opencode/commands/**
 !.opencode/tools/**
-dist/
-node_modules/
 coverage/
+dist/
+docs/diagrams/
+node_modules/
+README.npm.md

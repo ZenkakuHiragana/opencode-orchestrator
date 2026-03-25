@@ -13,17 +13,7 @@ import {
   rewriteAgentConfigPaths,
   rewritePromptPaths,
 } from "./orchestrator-paths.js";
-
-export function loadMarkdownBody(fullPath: string): string {
-  const text = fs.readFileSync(fullPath, "utf8");
-  if (text.startsWith("---\n")) {
-    const end = text.indexOf("\n---", 4);
-    if (end !== -1) {
-      return text.slice(end + 4).trimStart();
-    }
-  }
-  return text;
-}
+import { loadMarkdownBody } from "./markdown.js";
 
 export const OrchestratorPlugin: Plugin = async (input) => {
   // Store the OpenCode client so that tools can call the API directly
