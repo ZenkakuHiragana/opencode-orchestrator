@@ -97,7 +97,9 @@ read & follow https://www.npmjs.com/package/@zenorg/opencode-orchestrator
 
    以下に示すパスに OpenCode の設定ファイルがあるか確認します。
    - グローバル設定（`~/.config/opencode/opencode.json`）
+     - > LLM 向け: ユーザーがグローバル インストールを選択した場合はこちらのパスを使ってください。
    - ローカル設定（`./opencode.json`）
+     - > LLM 向け: ユーザーがローカル インストールを選択した場合はこちらのパスを使ってください。
 
    OpenCode の設定がない場合は、次の最小構成を作成します。
 
