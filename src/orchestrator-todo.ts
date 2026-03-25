@@ -271,20 +271,26 @@ export const orchTodoReadTool = tool({
 
 export const orchTodoWriteTool = tool({
   description:
-    "Update orchestrator todos for a given task. " +
-    "Use mode=planner_replace_canonical from orch-todo-writer to replace the canonical todo set, and " +
-    "mode=executor_update_statuses from orch-executor to update statuses and record artifacts. " +
-    "When creating or replacing canonical todos (planner_replace_canonical / planner_add_todos), " +
+    "Update orchestrator todos for a given task.\n\n" +
+    "This tool is used by two orchestrator agents:\n" +
+    "- orch-todo-writer (planner) uses planner_* modes to design and evolve the canonical todo set.\n" +
+    "- orch-executor uses executor_update_statuses to reflect execution progress.\n\n" +
+    "Planner modes (orch-todo-writer only):\n" +
+    "- mode=planner_replace_canonical: replace the entire canonical todo list for a task. Use this only when the todo structure must be regenerated from requirements/spec.\n" +
+    "- mode=planner_add_todos: append new todos without changing any existing todos. Use this to add bridge work or new vertical slices.\n" +
+    "- mode=planner_update_todos: patch specific fields (summary, related_requirement_ids, execution_contract, status) of existing todos selected via filters. " +
+    "Filters combine fields with AND, treat multiple values within a field as OR, and support substring matches for summary and expected_evidence. " +
+    "Empty filters/patches or filters that match no todos are rejected with SPEC_ERROR.\n\n" +
+    "Executor mode (orch-executor only):\n" +
+    "- mode=executor_update_statuses: update statuses and record result_artifacts for existing todos.\n" +
+    "When creating or updating canonical todos (planner_replace_canonical / planner_add_todos / planner_update_todos), " +
     "new or adjusted todos should normally start with status 'pending'; reserve 'completed' / 'in_progress' / 'cancelled' " +
-    "for cases where the underlying work is already known to be finished, currently in-flight, or explicitly not needed. " +
-    "\n\n" +
+    "for cases where the underlying work is already known to be finished, currently in-flight, or explicitly not needed.\n\n" +
     "executor_update_statuses details:\n" +
     "- Each entry must have an 'id' and 'status'.\n" +
-    "- 'result_artifacts' may only be provided when status is 'completed'. " +
-    "If result_artifacts is provided with any other status, SPEC_ERROR is returned.\n" +
+    "- 'result_artifacts' may only be provided when status is 'completed'. If result_artifacts is provided with any other status, SPEC_ERROR is returned.\n" +
     "- result_artifacts is an array; you may record multiple artifacts in a single update.\n" +
-    "- Each artifact requires 'kind' (schema version, e.g. investigation_v1), " +
-    "'path' (full path under artifacts/), and 'summary' (one-line Japanese description).\n" +
+    "- Each artifact requires 'kind' (schema version, e.g. investigation_v1), 'path' (full path under artifacts/), and 'summary' (one-line Japanese description).\n" +
     "Misuse will return SPEC_ERROR.",
   args: {
     task: z
@@ -296,11 +302,13 @@ export const orchTodoWriteTool = tool({
       .enum([
         "planner_replace_canonical",
         "planner_add_todos",
+        "planner_update_todos",
         "executor_update_statuses",
       ])
       .describe(
         "planner_replace_canonical: replace the canonical todo list (planner only). " +
           "planner_add_todos: append new todos with auto-assigned ids (planner only). " +
+          "planner_update_todos: patch existing todos based on filters (planner only). " +
           "executor_update_statuses: update statuses for existing todos (executor only).",
       ),
     canonicalTodos: z
@@ -442,6 +450,102 @@ export const orchTodoWriteTool = tool({
         "Status and artifact updates to apply when mode=executor_update_statuses.",
       )
       .optional(),
+    updates: z
+      .array(
+        z.object({
+          filter: z
+            .object({
+              id: z
+                .union([z.string(), z.array(z.string())])
+                .describe(
+                  "Todo id or list of ids. Matches when todo.id is in this set.",
+                )
+                .optional(),
+              related_requirement_ids: z
+                .array(z.string())
+                .describe(
+                  "Match todos whose related_requirement_ids intersect this list.",
+                )
+                .optional(),
+              id_prefix: z
+                .string()
+                .describe(
+                  "Prefix that todo.id must start with to match (e.g. 'T2').",
+                )
+                .optional(),
+              status: z
+                .enum(["pending", "in_progress", "completed", "cancelled"])
+                .describe("Match todos whose status equals this value.")
+                .optional(),
+              summary_contains: z
+                .string()
+                .describe(
+                  "Substring to search for within todo.summary. Case-sensitive.",
+                )
+                .optional(),
+              execution_contract_expected_evidence_contains: z
+                .string()
+                .describe(
+                  "Substring to search for within execution_contract.expected_evidence entries.",
+                )
+                .optional(),
+            })
+            .describe(
+              "Filter describing which existing todos to update. Conditions across fields are combined with AND; multiple values within a field are treated as OR.",
+            ),
+          patch: z
+            .object({
+              summary: z
+                .string()
+                .describe("New summary to assign to matching todos.")
+                .optional(),
+              related_requirement_ids: z
+                .array(z.string())
+                .describe(
+                  "Full replacement list of related requirement ids for matching todos.",
+                )
+                .optional(),
+              execution_contract: z
+                .object({
+                  intent: z
+                    .enum(["implement", "verify", "investigate"])
+                    .optional(),
+                  expected_evidence: z.array(z.string()).optional(),
+                  command_ids: z.array(z.string()).optional(),
+                  audit_ready_when: z.array(z.string()).optional(),
+                  artifact_schema: z
+                    .string()
+                    .describe(
+                      "Schema version for the artifact (e.g., investigation_v1, verification_v1).",
+                    )
+                    .optional(),
+                  artifact_filename: z
+                    .string()
+                    .describe(
+                      "Filename under artifacts/ directory (e.g., T12-api-survey.json).",
+                    )
+                    .optional(),
+                })
+                .describe(
+                  "New execution_contract object to assign to matching todos (replaces any existing contract).",
+                )
+                .optional(),
+              status: z
+                .enum(["pending", "in_progress", "completed", "cancelled"])
+                .describe(
+                  "New status to assign to matching todos. Use primarily for planner-driven cancellations or large-scale plan reshaping; routine progress updates should use executor_update_statuses instead.",
+                )
+                .optional(),
+            })
+            .describe(
+              "Patch to apply to all todos matching the filter. Only specified fields are overwritten; other fields remain unchanged.",
+            ),
+        }),
+      )
+      .describe(
+        "Filter + patch updates to apply when mode=planner_update_todos. Each update selects a set of todos and overwrites selected fields.",
+      )
+      .optional(),
   },
   async execute(args, context) {
     const agentName = (context as any).agent as string | undefined;
@@ -528,6 +632,169 @@ export const orchTodoWriteTool = tool({
       const updated = existing.concat(newTodos);
       saveCanonicalTodos(todoPath, updated);
       return JSON.stringify({ ok: true, addedIds: newTodos.map((t) => t.id) });
+    }
+
+    if (args.mode === "planner_update_todos") {
+      if (agentName !== "orch-todo-writer") {
+        return JSON.stringify({
+          ok: false,
+          error:
+            "SPEC_ERROR: mode=planner_update_todos may only be used by orch-todo-writer.",
+        });
+      }
+      if (!args.updates || args.updates.length === 0) {
+        return JSON.stringify({
+          ok: false,
+          error:
+            "SPEC_ERROR: mode=planner_update_todos requires non-empty updates array.",
+        });
+      }
+
+      const byId = new Map<string, CanonicalTodo>();
+      for (const t of existing) {
+        byId.set(t.id, { ...t });
+      }
+
+      const updatedIds = new Set<string>();
+
+      for (let index = 0; index < args.updates.length; index += 1) {
+        const update = args.updates[index];
+        const filter = update.filter;
+        const patch = update.patch;
+
+        const hasFilterField = Boolean(
+          (Array.isArray(filter.id)
+            ? filter.id.length > 0
+            : typeof filter.id === "string") ||
+          (filter.related_requirement_ids &&
+            filter.related_requirement_ids.length > 0) ||
+          (filter.id_prefix && filter.id_prefix.length > 0) ||
+          filter.status ||
+          (filter.summary_contains && filter.summary_contains.length > 0) ||
+          (filter.execution_contract_expected_evidence_contains &&
+            filter.execution_contract_expected_evidence_contains.length > 0),
+        );
+        if (!hasFilterField) {
+          return JSON.stringify({
+            ok: false,
+            error:
+              "SPEC_ERROR: planner_update_todos update[" +
+              index +
+              "] has an empty filter; at least one criterion is required.",
+          });
+        }
+
+        const hasPatchField =
+          patch.summary !== undefined ||
+          patch.related_requirement_ids !== undefined ||
+          patch.execution_contract !== undefined ||
+          patch.status !== undefined;
+
+        if (!hasPatchField) {
+          return JSON.stringify({
+            ok: false,
+            error:
+              "SPEC_ERROR: planner_update_todos update[" +
+              index +
+              "] has an empty patch; at least one field must be specified.",
+          });
+        }
+
+        const matches: CanonicalTodo[] = [];
+
+        const filterIdSet =
+          Array.isArray(filter.id) && filter.id.length > 0
+            ? new Set(filter.id)
+            : undefined;
+        const filterReqSet =
+          filter.related_requirement_ids &&
+          filter.related_requirement_ids.length > 0
+            ? new Set(filter.related_requirement_ids)
+            : undefined;
+
+        for (const todo of byId.values()) {
+          // id / id list
+          if (typeof filter.id === "string") {
+            if (todo.id !== filter.id) continue;
+          } else if (filterIdSet) {
+            if (!filterIdSet.has(todo.id)) continue;
+          }
+
+          // related_requirement_ids OR match
+          if (filterReqSet) {
+            if (
+              !todo.related_requirement_ids.some((rid) => filterReqSet.has(rid))
+            ) {
+              continue;
+            }
+          }
+
+          // id_prefix
+          if (filter.id_prefix) {
+            if (!todo.id.startsWith(filter.id_prefix)) continue;
+          }
+
+          // status
+          if (filter.status && todo.status !== filter.status) {
+            continue;
+          }
+
+          // summary substring
+          if (filter.summary_contains) {
+            if (!todo.summary.includes(filter.summary_contains)) continue;
+          }
+
+          // execution_contract.expected_evidence substring
+          if (filter.execution_contract_expected_evidence_contains) {
+            const contract = todo.execution_contract;
+            const needle = filter.execution_contract_expected_evidence_contains;
+            const hasMatch = Array.isArray(contract?.expected_evidence)
+              ? contract!.expected_evidence!.some((s) => s.includes(needle))
+              : false;
+            if (!hasMatch) continue;
+          }
+
+          matches.push(todo);
+        }
+
+        if (matches.length === 0) {
+          return JSON.stringify({
+            ok: false,
+            error:
+              "SPEC_ERROR: planner_update_todos filter at index " +
+              index +
+              " did not match any todos.",
+          });
+        }
+
+        for (const original of matches) {
+          const current = byId.get(original.id) ?? original;
+          const next: CanonicalTodo = { ...current };
+
+          if (patch.summary !== undefined) {
+            next.summary = patch.summary;
+          }
+          if (patch.related_requirement_ids !== undefined) {
+            next.related_requirement_ids = patch.related_requirement_ids;
+          }
+          if (patch.execution_contract !== undefined) {
+            next.execution_contract = patch.execution_contract;
+          }
+          if (patch.status !== undefined) {
+            next.status = patch.status;
+          }
+
+          byId.set(next.id, next);
+          updatedIds.add(next.id);
+        }
+      }
+
+      const updated = Array.from(byId.values());
+      saveCanonicalTodos(todoPath, updated);
+      return JSON.stringify({
+        ok: true,
+        updatedIds: Array.from(updatedIds),
+      });
     }
 
     // executor_update_statuses

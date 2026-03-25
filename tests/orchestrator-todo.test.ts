@@ -232,6 +232,428 @@ describe("orchTodoWriteTool", () => {
     }
   });
 
+  it("updates existing todos based on planner_update_todos filters and patches", async () => {
+    const baseDir = fs.mkdtempSync(path.join(os.tmpdir(), "orch-todo-update-"));
+    const previousXdgStateHome = process.env.XDG_STATE_HOME;
+    process.env.XDG_STATE_HOME = baseDir;
+    const stateDir = getOrchestratorStateDir("update-shape");
+    fs.mkdirSync(stateDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(stateDir, "todo.json"),
+      JSON.stringify({
+        todos: [
+          {
+            id: "T1-api-listing-inventory",
+            summary: "old summary",
+            status: "pending",
+            related_requirement_ids: ["R1"],
+          },
+          {
+            id: "T18-api-inventory-connection-and-status",
+            summary: "connection inventory",
+            status: "in_progress",
+            related_requirement_ids: [
+              "R1",
+              "R2",
+            ],
+          },
+        ],
+      }),
+      "utf8",
+    );
+
+    const result = await orchTodoWriteTool.execute(
+      {
+        task: "update-shape",
+        mode: "planner_update_todos",
+        updates: [
+          {
+            filter: {
+              id: "T1-api-listing-inventory",
+              related_requirement_ids: ["R1"],
+            },
+            patch: {
+              summary: "new summary",
+              execution_contract: {
+                intent: "investigate",
+                expected_evidence: ["e1"],
+              },
+            },
+          },
+          {
+            filter: {
+              related_requirement_ids: [
+                "R1",
+                "R2",
+              ],
+              status: "in_progress",
+            },
+            patch: {
+              status: "pending",
+            },
+          },
+        ],
+      },
+      { agent: "orch-todo-writer" } as any,
+    );
+
+    const parsed = JSON.parse(result) as {
+      ok: boolean;
+      updatedIds?: string[];
+    };
+    expect(parsed.ok).toBe(true);
+    expect(parsed.updatedIds).toEqual([
+      "T1-api-listing-inventory",
+      "T18-api-inventory-connection-and-status",
+    ]);
+
+    const saved = JSON.parse(
+      fs.readFileSync(path.join(stateDir, "todo.json"), "utf8"),
+    ) as {
+      todos: Array<{
+        id: string;
+        summary: string;
+        status: string;
+        related_requirement_ids: string[];
+        execution_contract?: { intent?: string; expected_evidence?: string[] };
+      }>;
+    };
+
+    const t1 = saved.todos.find((t) => t.id === "T1-api-listing-inventory");
+    const t18 = saved.todos.find(
+      (t) => t.id === "T18-api-inventory-connection-and-status",
+    );
+
+    expect(t1?.summary).toBe("new summary");
+    expect(t1?.execution_contract).toEqual({
+      intent: "investigate",
+      expected_evidence: ["e1"],
+    });
+
+    expect(t18?.status).toBe("pending");
+
+    if (previousXdgStateHome === undefined) {
+      delete process.env.XDG_STATE_HOME;
+    } else {
+      process.env.XDG_STATE_HOME = previousXdgStateHome;
+    }
+  });
+
+  it("combines filter fields with AND and values within a field with OR", async () => {
+    const baseDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), "orch-todo-update-combo-"),
+    );
+    const previousXdgStateHome = process.env.XDG_STATE_HOME;
+    process.env.XDG_STATE_HOME = baseDir;
+    const stateDir = getOrchestratorStateDir("update-combo");
+    fs.mkdirSync(stateDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(stateDir, "todo.json"),
+      JSON.stringify({
+        todos: [
+          {
+            id: "T10-a",
+            summary: "todo A",
+            status: "pending",
+            related_requirement_ids: ["R1", "R2"],
+          },
+          {
+            id: "T10-b",
+            summary: "todo B",
+            status: "pending",
+            related_requirement_ids: ["R2"],
+          },
+          {
+            id: "T20-c",
+            summary: "todo C",
+            status: "completed",
+            related_requirement_ids: ["R1"],
+          },
+        ],
+      }),
+      "utf8",
+    );
+
+    const result = await orchTodoWriteTool.execute(
+      {
+        task: "update-combo",
+        mode: "planner_update_todos",
+        updates: [
+          {
+            filter: {
+              id: ["T10-a", "T10-b"],
+              related_requirement_ids: ["R1", "R2"],
+              status: "pending",
+            },
+            patch: {
+              summary: "updated",
+            },
+          },
+        ],
+      },
+      { agent: "orch-todo-writer" } as any,
+    );
+
+    const parsed = JSON.parse(result) as {
+      ok: boolean;
+      updatedIds?: string[];
+    };
+    expect(parsed.ok).toBe(true);
+    // id / related_requirement_ids / status の AND 条件を満たす T10-a/T10-b が両方更新される
+    expect(parsed.updatedIds).toEqual(["T10-a", "T10-b"]);
+
+    const saved = JSON.parse(
+      fs.readFileSync(path.join(stateDir, "todo.json"), "utf8"),
+    ) as {
+      todos: Array<{ id: string; summary: string }>;
+    };
+
+    const a = saved.todos.find((t) => t.id === "T10-a");
+    const b = saved.todos.find((t) => t.id === "T10-b");
+    const c = saved.todos.find((t) => t.id === "T20-c");
+
+    expect(a?.summary).toBe("updated");
+    expect(b?.summary).toBe("updated");
+    expect(c?.summary).toBe("todo C");
+
+    if (previousXdgStateHome === undefined) {
+      delete process.env.XDG_STATE_HOME;
+    } else {
+      process.env.XDG_STATE_HOME = previousXdgStateHome;
+    }
+  });
+
+  it("returns SPEC_ERROR when planner_update_todos update has an empty filter", async () => {
+    const baseDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), "orch-todo-update-empty-filter-"),
+    );
+    const previousXdgStateHome = process.env.XDG_STATE_HOME;
+    process.env.XDG_STATE_HOME = baseDir;
+    const stateDir = getOrchestratorStateDir("update-empty-filter");
+    fs.mkdirSync(stateDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(stateDir, "todo.json"),
+      JSON.stringify({
+        todos: [
+          {
+            id: "T1",
+            summary: "todo",
+            status: "pending",
+            related_requirement_ids: ["R1"],
+          },
+        ],
+      }),
+      "utf8",
+    );
+
+    const result = await orchTodoWriteTool.execute(
+      {
+        task: "update-empty-filter",
+        mode: "planner_update_todos",
+        updates: [
+          {
+            filter: {},
+            patch: {
+              summary: "new",
+            },
+          },
+        ],
+      },
+      { agent: "orch-todo-writer" } as any,
+    );
+
+    const parsed = JSON.parse(result) as { ok: boolean; error?: string };
+    expect(parsed.ok).toBe(false);
+    expect(parsed.error).toContain(
+      "planner_update_todos update[0] has an empty filter",
+    );
+
+    if (previousXdgStateHome === undefined) {
+      delete process.env.XDG_STATE_HOME;
+    } else {
+      process.env.XDG_STATE_HOME = previousXdgStateHome;
+    }
+  });
+
+  it("returns SPEC_ERROR when planner_update_todos update has an empty patch", async () => {
+    const baseDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), "orch-todo-update-empty-patch-"),
+    );
+    const previousXdgStateHome = process.env.XDG_STATE_HOME;
+    process.env.XDG_STATE_HOME = baseDir;
+    const stateDir = getOrchestratorStateDir("update-empty-patch");
+    fs.mkdirSync(stateDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(stateDir, "todo.json"),
+      JSON.stringify({
+        todos: [
+          {
+            id: "T1",
+            summary: "todo",
+            status: "pending",
+            related_requirement_ids: ["R1"],
+          },
+        ],
+      }),
+      "utf8",
+    );
+
+    const result = await orchTodoWriteTool.execute(
+      {
+        task: "update-empty-patch",
+        mode: "planner_update_todos",
+        updates: [
+          {
+            filter: { id: "T1" },
+            patch: {},
+          },
+        ],
+      },
+      { agent: "orch-todo-writer" } as any,
+    );
+
+    const parsed = JSON.parse(result) as { ok: boolean; error?: string };
+    expect(parsed.ok).toBe(false);
+    expect(parsed.error).toContain(
+      "planner_update_todos update[0] has an empty patch",
+    );
+
+    if (previousXdgStateHome === undefined) {
+      delete process.env.XDG_STATE_HOME;
+    } else {
+      process.env.XDG_STATE_HOME = previousXdgStateHome;
+    }
+  });
+
+  it("returns SPEC_ERROR when planner_update_todos filter matches no todos", async () => {
+    const baseDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), "orch-todo-update-no-match-"),
+    );
+    const previousXdgStateHome = process.env.XDG_STATE_HOME;
+    process.env.XDG_STATE_HOME = baseDir;
+    const stateDir = getOrchestratorStateDir("update-no-match");
+    fs.mkdirSync(stateDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(stateDir, "todo.json"),
+      JSON.stringify({
+        todos: [
+          {
+            id: "T1",
+            summary: "todo",
+            status: "pending",
+            related_requirement_ids: ["R1"],
+          },
+        ],
+      }),
+      "utf8",
+    );
+
+    const result = await orchTodoWriteTool.execute(
+      {
+        task: "update-no-match",
+        mode: "planner_update_todos",
+        updates: [
+          {
+            filter: { id: "T2" },
+            patch: { summary: "new" },
+          },
+        ],
+      },
+      { agent: "orch-todo-writer" } as any,
+    );
+
+    const parsed = JSON.parse(result) as { ok: boolean; error?: string };
+    expect(parsed.ok).toBe(false);
+    expect(parsed.error).toContain(
+      "planner_update_todos filter at index 0 did not match any todos",
+    );
+
+    if (previousXdgStateHome === undefined) {
+      delete process.env.XDG_STATE_HOME;
+    } else {
+      process.env.XDG_STATE_HOME = previousXdgStateHome;
+    }
+  });
+
+  it("filters by summary_contains and execution_contract_expected_evidence_contains", async () => {
+    const baseDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), "orch-todo-update-substring-"),
+    );
+    const previousXdgStateHome = process.env.XDG_STATE_HOME;
+    process.env.XDG_STATE_HOME = baseDir;
+    const stateDir = getOrchestratorStateDir("update-substring");
+    fs.mkdirSync(stateDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(stateDir, "todo.json"),
+      JSON.stringify({
+        todos: [
+          {
+            id: "T1",
+            summary: "[WIP] 未調査の inventory",
+            status: "pending",
+            related_requirement_ids: ["R1"],
+            execution_contract: {
+              intent: "investigate",
+              expected_evidence: ["今後自動投入", "代表例のみ"],
+            },
+          },
+          {
+            id: "T2",
+            summary: "完成済み inventory",
+            status: "pending",
+            related_requirement_ids: ["R1"],
+            execution_contract: {
+              intent: "investigate",
+              expected_evidence: ["具体的な JSON"],
+            },
+          },
+        ],
+      }),
+      "utf8",
+    );
+
+    const result = await orchTodoWriteTool.execute(
+      {
+        task: "update-substring",
+        mode: "planner_update_todos",
+        updates: [
+          {
+            filter: {
+              summary_contains: "未調査",
+              execution_contract_expected_evidence_contains: "今後自動投入",
+            },
+            patch: {
+              summary: "プレースホルダを潰した inventory",
+            },
+          },
+        ],
+      },
+      { agent: "orch-todo-writer" } as any,
+    );
+
+    const parsed = JSON.parse(result) as {
+      ok: boolean;
+      updatedIds?: string[];
+    };
+    expect(parsed.ok).toBe(true);
+    expect(parsed.updatedIds).toEqual(["T1"]);
+
+    const saved = JSON.parse(
+      fs.readFileSync(path.join(stateDir, "todo.json"), "utf8"),
+    ) as { todos: Array<{ id: string; summary: string }> };
+    const t1 = saved.todos.find((t) => t.id === "T1");
+    const t2 = saved.todos.find((t) => t.id === "T2");
+
+    expect(t1?.summary).toBe("プレースホルダを潰した inventory");
+    expect(t2?.summary).toBe("完成済み inventory");
+
+    if (previousXdgStateHome === undefined) {
+      delete process.env.XDG_STATE_HOME;
+    } else {
+      process.env.XDG_STATE_HOME = previousXdgStateHome;
+    }
+  });
+
   it("preserves execution_contract metadata in planner_replace_canonical output", async () => {
     const baseDir = fs.mkdtempSync(
       path.join(os.tmpdir(), "orch-todo-replace-"),
