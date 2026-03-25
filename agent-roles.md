@@ -17,7 +17,7 @@
 - `src/orchestrator-commands.ts`
   - `orchestratorCommands` テーブルで、`orch-todo-write` などのコマンド名 → 紐づくエージェント名
     （`agent` フィールド）を定義。
-- **コマンドとツールの違い（重要）**
+- **コマンドとツールの違い**
   - **カスタムコマンド**（例：`orch-todo-write`、`orch-exec`）は OpenCode が `opencode run --command <name>` で起動する単位。引数の概念はなく、プロンプトは `commands/<name>.md` に定義される。
   - **カスタムツール**（例：`orch_todo_write`、`preflight-cli`）は LLM が内部的に呼び出す関数で、`mode` などの引数を持つ。実装は `src/orchestrator-*.ts` に定義される。
   - Orchestrator-loop は**コマンド**を呼び出してサブエージェントを起動し、サブエージェントが**ツール**を内部的に使って state を読み書きする。
@@ -358,12 +358,12 @@ sequenceDiagram
 - (A) 役割
   - Spec-checker などが定義した「候補コマンド」が現在の環境で実行可能か、
     破壊的でない範囲で実際に `bash` 経由で試す。
-  - `preflight-cli` から呼ばれる場合、`resources/helper-commands.json` の helper コマンド群も同時に対象になる。
+  - Planner から `preflight-cli` ツール経由で呼ばれる場合、TypeScript 側からプロンプトに埋め込まれた helper コマンド群（`resources/helper-commands.json` に定義されている）が同時に対象になる。
 
 - (B) 主な入力
   - プロンプト中に JSON として埋め込まれたコマンド一覧:
     - `[ { "id": "cmd-dotnet-test", "command": "dotnet test", "role": "test", "usage": "must_exec" }, ... ]`
-    - helper コマンドは `helper:` 接頭辞付き ID（例: `helper:rg`, `helper:jq`）で渡される。
+    - これに加えて、`helper:rg` や `helper:jq` のような helper コマンド ID も、Planner 側の `preflight-cli` から同じ配列内に追加される。
   - 各 `command` はテンプレート展開済みの「最終的な 1 行コマンド」。
 
 - (C) 主な出力（ファイル）
@@ -521,8 +521,12 @@ sequenceDiagram
   - 書き込み対象ファイル: 上記と同じ `todo.json`。
   - `mode=planner_replace_canonical`（Todo-Writer 専用）
     - `canonicalTodos` 全体を受け取り、`todo.json` を丸ごと再生成する。
+  - `mode=planner_add_todos`（Todo-Writer 専用）
+    - 既存の canonical todo を保持したまま、新しい todo を末尾に追加する。`id` は自動採番される。
+  - `mode=planner_update_todos`（Todo-Writer 専用）
+    - 条件付きフィルタで既存 todo を選択し、`summary` や `related_requirement_ids`、`execution_contract`、`status` などを部分更新する。
   - `mode=executor_update_statuses`（Executor 専用）
-    - 既存 todo の `status` だけを更新。未知の `id` を指定した場合は SPEC_ERROR。
+    - 既存 todo の `status` と `result_artifacts` だけを更新。未知の `id` を指定した場合は SPEC_ERROR。
 
 ### 9.2 orchestrator-loop 自身 (`src/orchestrator-loop.ts`)
 
@@ -619,14 +623,10 @@ sequenceDiagram
 ```jsonc
 {
   "version": 1,
-  "summary": {
-    "loop_status": "ready_for_loop" | "needs_refinement" | "blocked_by_environment" | string,
-    "helper_availability": {
-      "helper:rg": "available" | "unavailable",
-      "helper:grep": "available" | "unavailable"
-      // ... helper-commands.json にある全 helper ID を列挙
-    }
-  },
+    "summary": {
+      "loop_status": "ready_for_loop" | "needs_refinement" | "blocked_by_environment" | string,
+      "available_helper_commands": string[]
+    },
   "commands": [
     {
       "id": "cmd-npm-test",                     // 安定 ID（kebab-case）
@@ -647,7 +647,7 @@ sequenceDiagram
 ```
 
 - `version` は必須フィールドで、現行値は `1`。
-- `summary.helper_availability` は必須フィールドで、helper command ID ごとの可用性を保持する。全 helper ID を列挙する。
+- `summary.available_helper_commands` は必須フィールドで、このタスクで利用可能な helper ベースコマンド名（例: `"rg"`, `"grep"`, `"wc"`）の一覧を保持する。
 - `commands[]` の各オブジェクトは上記すべてのフィールドを必須で持つ。値がない場合も `[]` / `{}` / `""` で明示する。
 
 - `enforceCommandPolicyGate` は特に `commands[].usage` と `commands[].availability` を見て、
@@ -667,7 +667,7 @@ sequenceDiagram
 {
   "todos": [
     {
-      "id": "T1-r1-setup-api",                  // 安定 Todo ID
+      "id": "T1-sample-setup-task",             // 安定 Todo ID
       "summary": "R1 用の API エンドポイントを作成する", // 自然言語説明（日本語）
       "status": "pending" | "in_progress" | "completed" | "cancelled",
       "related_requirement_ids": ["R1", "R2-ui"],
@@ -713,7 +713,7 @@ sequenceDiagram
     "session_id": "sess-...",
     "step_todo": [
       {
-        "id": "T1-r1-setup-api",
+        "id": "T1-sample-setup-task",
         "requirements": ["R1"],
         "description": "...", // `STEP_TODO` から抽出
         "from": "pending", // 旧ステータス（任意）

@@ -32,27 +32,13 @@ describe("helper-commands.json", () => {
     }
   });
 
-  it("helper commands should use parameter placeholders where appropriate", () => {
-    const withPlaceholders = helperCommandsData.helper_commands.filter((h) =>
-      h.command.includes("{{"),
-    );
-    expect(withPlaceholders.length).toBeGreaterThan(0);
-
-    // Verify that commands with placeholders have placeholders definition
-    for (const cmd of withPlaceholders) {
-      expect(cmd.placeholders).toBeDefined();
-      expect(typeof cmd.placeholders).toBe("object");
-    }
-  });
-
   it("rg command should have correct structure for executor use", () => {
     const rg = helperCommandsData.helper_commands.find(
       (h) => h.id === "helper:rg",
     );
     expect(rg).toBeDefined();
-    expect(rg?.command).toBe("rg {{params}}");
+    expect(rg?.command).toBe("rg");
     expect(rg?.probe).toBe("rg --version");
-    expect(rg?.placeholders?.params).toContain("rg のオプションとパターン");
   });
 
   it("jq command should mention safety in purpose", () => {

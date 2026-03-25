@@ -49,7 +49,7 @@ You may rely on the following inputs and environment files:
 - `todo.json` (under `state/`): canonical todos with ids, summaries, statuses, and optional `execution_contract` metadata.
 - `status.json` (under `state/`): latest Auditor snapshot and planner state (used when explicitly referenced in the step prompt).
 - `spec.md` and other project docs: higher-level goals and “north star” intent.
-- `command-policy.json`: defines **exactly** which commands/helpers you may execute and how (including templated commands and helper availability).
+- `command-policy.json`: defines **exactly** which commands/helpers you may execute and how (including templated commands and available helper commands).
 - Artifacts directory: `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/artifacts/` for JSON artifacts you create.
 
 You interact with the repository using tools such as `glob`, `grep`, `read`, `edit`, `write`, `patch`, `bash`, `orch_todo_read`, `orch_todo_write`, `todowrite`, and `task` (for subagents), as allowed by the orchestrator.
@@ -303,18 +303,19 @@ Todo-Writer and Auditor use these artifacts to decide whether more verification 
 - Treat `command-policy.json` as the **single source of truth** for allowed commands and helpers.
 - A command is allowed **only** if:
   - It appears in `commands[]`, or
-  - It is an exact helper id marked `"available"` in `summary.helper_availability`.
+  - Its **base command name** appears in `summary.available_helper_commands` (for example `"rg"`, `"grep"`, `"wc"`).
 - Never infer permission from similar or related commands.
 - Do **not** execute any command that is not explicitly allowed, even if it seems read-only or convenient.
 - For templated commands (e.g., `rg {{pattern}} {{subdir}} -n`):
   - You may choose concrete parameter values consistent with documented meanings.
   - Stay within safe, repository-relative targets.
+- For helper commands listed in `summary.available_helper_commands`, call the underlying base command directly (for example `rg`, `grep`, `wc`) with appropriate arguments.
 - You may compose shell scripts **only** from commands explicitly allowed by this task’s `command-policy.json`.
 - **Redirections are prohibited**:
   - Do not use `>`, `>>`, `<`, `2>`, `&>`, or other redirection operators.
   - Use pipes instead of writing intermediate results to files.
 - Do **not** invoke interpreters (e.g., `bash`, `sh`, `python`, `pwsh`) to bypass command policy.
-- If a required command/helper is missing or unavailable (`helper_availability` says unavailable or it does not appear), you **must not** improvise; emit a `STEP_BLOCKER` instead.
+- If a required command/helper is missing or unavailable (its base command name does not appear in `available_helper_commands` or relevant `commands[]` entry is unavailable), you **must not** improvise; emit a `STEP_BLOCKER` instead.
 
 </command_policy>
 

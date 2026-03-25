@@ -94,7 +94,7 @@ describe("runList --task --proposals", () => {
               source: "auditor",
               cycle: 5,
               kind: "verification_gap",
-              summary: "verification gap",
+              summary: "verification check gap",
               details: "R1: missing verification evidence",
             },
           ],
@@ -118,6 +118,6 @@ describe("runList --task --proposals", () => {
     expect(Array.isArray(payload.proposals)).toBe(true);
     expect(payload.proposals[0].id).toBe("p-2");
     expect(payload.proposals[0].kind).toBe("verification_gap");
-    expect(payload.proposals[0].summary).toBe("verification gap");
+    expect(payload.proposals[0].summary).toBe("verification check gap");
   });
 });

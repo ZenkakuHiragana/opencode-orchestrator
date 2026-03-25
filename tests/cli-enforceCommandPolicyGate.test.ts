@@ -5,27 +5,25 @@ import * as path from "node:path";
 
 import { enforceCommandPolicyGate } from "../src/cli.js";
 
-const helperAvailability = {
-  "helper:grep": "available",
-  "helper:rg": "available",
-  "helper:sort": "available",
-  "helper:sort-with-flags": "available",
-  "helper:uniq": "available",
-  "helper:uniq-with-flags": "available",
-  "helper:wc": "available",
-  "helper:head": "available",
-  "helper:tail": "available",
-  "helper:cut": "available",
-  "helper:tr": "available",
-  "helper:comm": "available",
-  "helper:cat": "available",
-  "helper:ls": "available",
-  "helper:jq": "available",
-  "helper:true": "available",
-  "helper:false": "available",
-  "helper:test": "available",
-  "helper:bracket": "available",
-} as const;
+const availableHelperCommands = [
+  "grep",
+  "rg",
+  "sort",
+  "uniq",
+  "wc",
+  "head",
+  "tail",
+  "cut",
+  "tr",
+  "comm",
+  "cat",
+  "ls",
+  "jq",
+  "true",
+  "false",
+  "test",
+  "[",
+] as const;
 
 function makeCommandPolicyCommand(availability: "available" | "unavailable") {
   return {
@@ -63,7 +61,7 @@ describe("enforceCommandPolicyGate", () => {
         version: 1,
         summary: {
           loop_status: "ready_for_loop",
-          helper_availability: helperAvailability,
+          available_helper_commands: availableHelperCommands.slice(),
         },
         commands: [makeCommandPolicyCommand("available")],
       };
@@ -91,7 +89,7 @@ describe("enforceCommandPolicyGate", () => {
         version: 1,
         summary: {
           loop_status: "ready_for_loop",
-          helper_availability: helperAvailability,
+          available_helper_commands: availableHelperCommands.slice(),
         },
         commands: [makeCommandPolicyCommand("unavailable")],
       };
@@ -142,7 +140,7 @@ describe("enforceCommandPolicyGate", () => {
           version: 1,
           summary: {
             loop_status: "needs_refinement",
-            helper_availability: helperAvailability,
+            available_helper_commands: availableHelperCommands.slice(),
           },
           commands: [],
         }),
@@ -174,7 +172,7 @@ describe("enforceCommandPolicyGate", () => {
           version: 1,
           summary: {
             loop_status: "blocked_by_environment",
-            helper_availability: helperAvailability,
+            available_helper_commands: availableHelperCommands.slice(),
           },
           commands: [],
         }),
@@ -212,7 +210,7 @@ describe("enforceCommandPolicyGate", () => {
     });
   });
 
-  it("exits when summary.helper_availability is missing", () => {
+  it("exits when summary.available_helper_commands is missing", () => {
     withTempDir((dir) => {
       const originalExit = process.exit;
       (process as any).exit = ((code?: number) => {
@@ -256,7 +254,7 @@ describe("enforceCommandPolicyGate", () => {
           version: 1,
           summary: {
             loop_status: "ready_for_loop",
-            helper_availability: helperAvailability,
+            available_helper_commands: availableHelperCommands.slice(),
           },
           commands: [
             {

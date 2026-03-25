@@ -21,7 +21,7 @@
         "id": {
           "type": "string",
           "pattern": "^[A-Za-z0-9_-]+$",
-          "description": "Stable todo identifier (for example T1-r1-setup-api)."
+          "description": "Stable todo identifier"
         },
         "summary": {
           "type": "string",

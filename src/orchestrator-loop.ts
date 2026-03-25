@@ -271,9 +271,7 @@ export function enforceCommandPolicyGate(stateDir: string): void {
 
   let version: number | undefined;
   let status: string | undefined;
-  let helperAvailability:
-    | Record<string, "available" | "unavailable">
-    | undefined;
+  let availableHelperCommands: string[] | undefined;
   let commands:
     | {
         id?: string;
@@ -292,7 +290,7 @@ export function enforceCommandPolicyGate(stateDir: string): void {
       version?: number;
       summary?: {
         loop_status?: string;
-        helper_availability?: Record<string, "available" | "unavailable">;
+        available_helper_commands?: string[];
       };
       commands?: {
         id?: string;
@@ -308,9 +306,9 @@ export function enforceCommandPolicyGate(stateDir: string): void {
     };
     version = json.version;
     status = json && json.summary ? json.summary.loop_status : undefined;
-    helperAvailability =
-      json && json.summary && json.summary.helper_availability
-        ? json.summary.helper_availability
+    availableHelperCommands =
+      json && json.summary && json.summary.available_helper_commands
+        ? json.summary.available_helper_commands
         : undefined;
     commands = Array.isArray(json.commands) ? json.commands : undefined;
   } catch (err) {
@@ -328,9 +326,9 @@ export function enforceCommandPolicyGate(stateDir: string): void {
     process.exit(1);
   }
 
-  if (!helperAvailability || typeof helperAvailability !== "object") {
+  if (!availableHelperCommands || !Array.isArray(availableHelperCommands)) {
     console.error(
-      "[opencode-orchestrator] ERROR: command-policy.json.summary.helper_availability が存在しません。" +
+      "[opencode-orchestrator] ERROR: command-policy.json.summary.available_helper_commands が存在しません。" +
         "Planner/Preflight フェーズで helper コマンドの利用可否を設定してから loop を開始してください。",
     );
     process.exit(1);
@@ -350,15 +348,8 @@ export function enforceCommandPolicyGate(stateDir: string): void {
     process.exit(1);
   }
 
-  for (const helperId of requiredHelperIds) {
-    const availability = helperAvailability[helperId];
-    if (availability !== "available" && availability !== "unavailable") {
-      console.error(
-        `[opencode-orchestrator] ERROR: command-policy.json.summary.helper_availability.${helperId} が存在しません。`,
-      );
-      process.exit(1);
-    }
-  }
+  // NOTE: available_helper_commands は「叩いてよいベースコマンド名」の列挙であり、
+  // helper-commands.json の id とは 1:1 対応しない。ここでは存在チェックのみ行う。
 
   if (commands.length > 0) {
     for (const cmd of commands) {

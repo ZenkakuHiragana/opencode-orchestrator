@@ -494,16 +494,20 @@ describe("runExecutorAndAuditorStep", () => {
   it("merges auditor failures into replan_request when replanning is already required", async () => {
     const status = createStatus();
     const execStdout = [
-      "STEP_BLOCKER: T4-auth need_replan 認証todoを分割したい",
-      "STEP_INTENT: replan R3-auth 監査で失敗した認証要件を再整理したい",
-      "STEP_VERIFY: ready cmd-auth-test 認証の検証は実行済み",
-      "STEP_AUDIT: ready R3-auth",
+      "STEP_BLOCKER: T4-login need_replan ログインtodoを分割したい",
+      "STEP_INTENT: replan R3-login 監査で指摘された要件を再整理したい",
+      "STEP_VERIFY: ready cmd-login-test ログイン処理の検証は実行済み",
+      "STEP_AUDIT: ready R3-login",
     ].join("\n");
 
     const auditPayload = {
       done: false,
       requirements: [
-        { id: "R3-auth", passed: false, reason: "認証の受け入れ条件が未達" },
+        {
+          id: "R3-login",
+          passed: false,
+          reason: "ログインの受け入れ条件が未達",
+        },
       ],
     };
     const auditStdout = JSON.stringify({
@@ -538,15 +542,15 @@ describe("runExecutorAndAuditorStep", () => {
       issues: [
         {
           source: "executor",
-          summary: "認証todoを分割したい",
-          related_todo_ids: ["T4-auth"],
-          related_requirement_ids: ["R3-auth"],
+          summary: "ログインtodoを分割したい",
+          related_todo_ids: ["T4-login"],
+          related_requirement_ids: ["R3-login"],
         },
         {
           source: "auditor",
-          summary: "認証の受け入れ条件が未達",
+          summary: "ログインの受け入れ条件が未達",
           related_todo_ids: [],
-          related_requirement_ids: ["R3-auth"],
+          related_requirement_ids: ["R3-login"],
         },
       ],
     });

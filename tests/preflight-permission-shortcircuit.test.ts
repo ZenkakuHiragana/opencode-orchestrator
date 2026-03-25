@@ -19,27 +19,25 @@ function prepareState(task: string, withCommand = false): void {
     version: 1 as const,
     summary: {
       loop_status: "ready_for_loop" as const,
-      helper_availability: {
-        "helper:grep": "available",
-        "helper:rg": "available",
-        "helper:sort": "available",
-        "helper:sort-with-flags": "available",
-        "helper:uniq": "available",
-        "helper:uniq-with-flags": "available",
-        "helper:wc": "available",
-        "helper:head": "available",
-        "helper:tail": "available",
-        "helper:cut": "available",
-        "helper:tr": "available",
-        "helper:comm": "available",
-        "helper:cat": "available",
-        "helper:ls": "available",
-        "helper:jq": "available",
-        "helper:true": "available",
-        "helper:false": "available",
-        "helper:test": "available",
-        "helper:bracket": "available",
-      },
+      available_helper_commands: [
+        "grep",
+        "rg",
+        "sort",
+        "uniq",
+        "wc",
+        "head",
+        "tail",
+        "cut",
+        "tr",
+        "comm",
+        "cat",
+        "ls",
+        "jq",
+        "true",
+        "false",
+        "test",
+        "[",
+      ],
     },
     commands: [] as any[],
   };
@@ -155,7 +153,7 @@ describe("preflight-cli short-circuit with effective permission", () => {
         "short-circuit: permission.bash=allow",
       );
 
-      // Command-policy should be updated by preflight-cli: helper_availability
+      // Command-policy should be updated by preflight-cli: available_helper_commands
       // should reflect the short-circuit result and loop_status should remain
       // ready_for_loop because must_exec command is allowed.
       const stateDir = getOrchestratorStateDir(task);
@@ -163,15 +161,13 @@ describe("preflight-cli short-circuit with effective permission", () => {
       const policy = JSON.parse(fs.readFileSync(policyPath, "utf8")) as {
         summary: {
           loop_status: string;
-          helper_availability: Record<string, string>;
+          available_helper_commands: string[];
         };
         commands: { id: string; availability: string }[];
       };
 
       expect(policy.summary.loop_status).toBe("ready_for_loop");
-      expect(policy.summary.helper_availability["helper:grep"]).toBe(
-        "available",
-      );
+      expect(policy.summary.available_helper_commands).toContain("grep");
       const cmdPolicy = policy.commands.find((c) => c.id === "cmd-missing");
       // commands[] was initially empty, so we do not expect an entry here yet.
       expect(cmdPolicy).toBeUndefined();

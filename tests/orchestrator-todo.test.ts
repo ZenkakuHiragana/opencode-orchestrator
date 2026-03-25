@@ -206,9 +206,9 @@ describe("orchTodoWriteTool", () => {
         mode: "planner_add_todos",
         addTodos: [
           {
-            summary: "Set up API endpoint docs",
+            summary: "Prepare task documentation",
             status: "pending",
-            related_requirement_ids: ["R1-api-docs"],
+            related_requirement_ids: ["R1-docs"],
           },
         ],
       },
@@ -217,13 +217,13 @@ describe("orchTodoWriteTool", () => {
 
     expect(JSON.parse(result)).toEqual({
       ok: true,
-      addedIds: ["T1-r1-api-docs-set-up-api-endpoint-docs"],
+      addedIds: ["T1-r1-docs-prepare-task-documentation"],
     });
 
     const saved = JSON.parse(
       fs.readFileSync(path.join(stateDir, "todo.json"), "utf8"),
     ) as { todos: Array<{ id: string }> };
-    expect(saved.todos[0]?.id).toBe("T1-r1-api-docs-set-up-api-endpoint-docs");
+    expect(saved.todos[0]?.id).toBe("T1-r1-docs-prepare-task-documentation");
 
     if (previousXdgStateHome === undefined) {
       delete process.env.XDG_STATE_HOME;
@@ -243,19 +243,16 @@ describe("orchTodoWriteTool", () => {
       JSON.stringify({
         todos: [
           {
-            id: "T1-api-listing-inventory",
+            id: "T1-task-survey",
             summary: "old summary",
             status: "pending",
             related_requirement_ids: ["R1"],
           },
           {
-            id: "T18-api-inventory-connection-and-status",
-            summary: "connection inventory",
+            id: "T18-task-survey-connection-and-status",
+            summary: "connection status overview",
             status: "in_progress",
-            related_requirement_ids: [
-              "R1",
-              "R2",
-            ],
+            related_requirement_ids: ["R1", "R2"],
           },
         ],
       }),
@@ -269,7 +266,7 @@ describe("orchTodoWriteTool", () => {
         updates: [
           {
             filter: {
-              id: "T1-api-listing-inventory",
+              id: "T1-task-survey",
               related_requirement_ids: ["R1"],
             },
             patch: {
@@ -282,10 +279,7 @@ describe("orchTodoWriteTool", () => {
           },
           {
             filter: {
-              related_requirement_ids: [
-                "R1",
-                "R2",
-              ],
+              related_requirement_ids: ["R1", "R2"],
               status: "in_progress",
             },
             patch: {
@@ -303,8 +297,8 @@ describe("orchTodoWriteTool", () => {
     };
     expect(parsed.ok).toBe(true);
     expect(parsed.updatedIds).toEqual([
-      "T1-api-listing-inventory",
-      "T18-api-inventory-connection-and-status",
+      "T1-task-survey",
+      "T18-task-survey-connection-and-status",
     ]);
 
     const saved = JSON.parse(
@@ -319,9 +313,9 @@ describe("orchTodoWriteTool", () => {
       }>;
     };
 
-    const t1 = saved.todos.find((t) => t.id === "T1-api-listing-inventory");
+    const t1 = saved.todos.find((t) => t.id === "T1-task-survey");
     const t18 = saved.todos.find(
-      (t) => t.id === "T18-api-inventory-connection-and-status",
+      (t) => t.id === "T18-task-survey-connection-and-status",
     );
 
     expect(t1?.summary).toBe("new summary");
@@ -589,17 +583,17 @@ describe("orchTodoWriteTool", () => {
         todos: [
           {
             id: "T1",
-            summary: "[WIP] 未調査の inventory",
+            summary: "[WIP] 未調査の項目一覧",
             status: "pending",
             related_requirement_ids: ["R1"],
             execution_contract: {
               intent: "investigate",
-              expected_evidence: ["今後自動投入", "代表例のみ"],
+              expected_evidence: ["今後自動投入", "代表例のみ (例示)"],
             },
           },
           {
             id: "T2",
-            summary: "完成済み inventory",
+            summary: "完成済みの項目一覧",
             status: "pending",
             related_requirement_ids: ["R1"],
             execution_contract: {
@@ -623,7 +617,7 @@ describe("orchTodoWriteTool", () => {
               execution_contract_expected_evidence_contains: "今後自動投入",
             },
             patch: {
-              summary: "プレースホルダを潰した inventory",
+              summary: "プレースホルダを潰した項目一覧",
             },
           },
         ],
@@ -644,8 +638,8 @@ describe("orchTodoWriteTool", () => {
     const t1 = saved.todos.find((t) => t.id === "T1");
     const t2 = saved.todos.find((t) => t.id === "T2");
 
-    expect(t1?.summary).toBe("プレースホルダを潰した inventory");
-    expect(t2?.summary).toBe("完成済み inventory");
+    expect(t1?.summary).toBe("プレースホルダを潰した項目一覧");
+    expect(t2?.summary).toBe("完成済みの項目一覧");
 
     if (previousXdgStateHome === undefined) {
       delete process.env.XDG_STATE_HOME;
@@ -730,14 +724,14 @@ describe("orchTodoWriteTool", () => {
         mode: "planner_replace_canonical",
         canonicalTodos: [
           {
-            id: "T12-api-survey",
-            summary: "Investigate public API surface",
+            id: "T12-task-survey",
+            summary: "Investigate public interface surface",
             status: "pending",
             related_requirement_ids: ["R1"],
             execution_contract: {
               intent: "investigate",
               artifact_schema: "investigation_v1",
-              artifact_filename: "T12-api-survey.json",
+              artifact_filename: "T12-task-survey.json",
               expected_evidence: ["API inventory", "stability classification"],
             },
           },
@@ -766,7 +760,7 @@ describe("orchTodoWriteTool", () => {
     expect(saved.todos[0]?.execution_contract).toEqual({
       intent: "investigate",
       artifact_schema: "investigation_v1",
-      artifact_filename: "T12-api-survey.json",
+      artifact_filename: "T12-task-survey.json",
       expected_evidence: ["API inventory", "stability classification"],
     });
 
@@ -791,7 +785,7 @@ describe("orchTodoWriteTool", () => {
         todos: [
           {
             id: "T12-api-survey",
-            summary: "Investigate public API surface",
+            summary: "Investigate public interface surface",
             status: "in_progress",
             related_requirement_ids: ["R1"],
           },
@@ -812,7 +806,7 @@ describe("orchTodoWriteTool", () => {
               {
                 kind: "investigation_v1",
                 path: "/state/artifacts/T12-api-survey.json",
-                summary: "12 call sites, 3 risky dependency edges",
+                summary: "multiple usage sites and some risky dependency edges",
               },
             ],
           },
@@ -841,7 +835,7 @@ describe("orchTodoWriteTool", () => {
       {
         kind: "investigation_v1",
         path: "/state/artifacts/T12-api-survey.json",
-        summary: "12 call sites, 3 risky dependency edges",
+        summary: "multiple usage sites and some risky dependency edges",
       },
     ]);
 
@@ -865,8 +859,8 @@ describe("orchTodoWriteTool", () => {
       JSON.stringify({
         todos: [
           {
-            id: "T18-verify",
-            summary: "Verify config loader",
+            id: "T18-verify-config",
+            summary: "Verify configuration loader",
             status: "in_progress",
             related_requirement_ids: ["R4"],
           },
@@ -881,7 +875,7 @@ describe("orchTodoWriteTool", () => {
         mode: "executor_update_statuses",
         statusUpdates: [
           {
-            id: "T18-verify",
+            id: "T18-verify-config",
             status: "completed",
             result_artifacts: [
               {

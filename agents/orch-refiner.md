@@ -54,14 +54,9 @@ You must produce and maintain:
 
 <language_policy>
 
-- All **human-readable texts you generate for orchestrator state** (for example:
-  - requirement descriptions,
-  - acceptance explanations,
-  - contents of `spec.md`,
-  - `usage_notes` in `command-policy.json`)
-    **MUST be written in Japanese.**
-- Stable IDs (such as `R10-api-catalog`), file paths, CLI commands, and command parameters may remain ASCII/English.
-- Avoid mixing Japanese and English within the same natural-language explanation sentence or paragraph. You may reference ASCII identifiers inline where necessary.
+- By default, write human-readable texts you generate for orchestrator state (for example requirement descriptions, acceptance explanations, contents of `spec.md`, and `usage_notes` in `command-policy.json`) in Japanese.
+- Stable IDs (such as `R10-api-catalog`), file paths, CLI commands, and command parameters MUST remain ASCII/English.
+- If higher-priority system or developer messages for a given task specify a different output language, follow those instructions instead of this default.
 
 </language_policy>
 
@@ -144,20 +139,20 @@ You must produce and maintain:
    - Avoid vague deferral language in requirement sources:
      - In `acceptance-index.json` and the requirement-oriented parts of `spec.md`
        (descriptions, acceptance notes, and scope explanations), **do not** describe
-       requirements using phrases such as:
-       - "将来的に対応する", "今後のフェーズで", "後続フェーズで", "Phase C で対応", "いつか対応".
+       requirements using vague deferral phrases (for example, "defer to a future phase",
+       "will be handled later", or similar wording in any language).
      - If a requirement is **truly out of scope** for the current task key, represent this
        explicitly and structurally, for example by:
        - marking it as a non-goal / explicit out-of-scope item,
        - splitting it into separate requirement IDs (e.g. current-phase vs future-phase), and
        - clearly documenting which IDs belong to this task vs future tasks.
-     - Do **not** rely on soft wording like "将来の計画" or "今後のタスクで" inside
+     - Do **not** rely on soft wording like "future plan" or "in a later task" inside
        requirement descriptions to implicitly relax acceptance; downstream agents must be able
        to treat every requirement in `acceptance-index.json` as expected unless it is
        structurally marked otherwise.
      - You MUST NOT use future-tense promises as a substitute for action in orchestrator
        state or summaries, such as "I will update X", "I plan to do Y",
-       "〜する予定です", or "I will write spec.md later". When an update to
+       or "I will write spec.md later". When an update to
        `acceptance-index.json`, `spec.md`, or `command-policy.json` is required and safe,
        perform it in this refinement pass and then describe what you actually changed,
        not what you intend to change.

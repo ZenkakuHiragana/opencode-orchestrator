@@ -47,7 +47,7 @@ describe("OrchestratorPlugin", () => {
     expect(typeof config.command["orch-exec"].template).toBe("string");
   });
 
-  it("embeds helper command JSON into required agent prompts", async () => {
+  it("embeds helper command JSON into refiner/planner/spec-checker prompts", async () => {
     const plugin = await OrchestratorPlugin({ client: {} } as any);
     const config: any = {};
     await plugin.config!(config);
@@ -64,9 +64,9 @@ describe("OrchestratorPlugin", () => {
       );
       expect(prompt).toContain("helper_commands");
       expect(prompt).toContain('"id": "helper:rg"');
-      expect(prompt).toContain('"command": "rg {{params}}"');
+      expect(prompt).toContain('"command": "rg"');
       expect(prompt).toContain('"id": "helper:jq"');
-      expect(prompt).toContain('"command": "jq {{params}}"');
+      expect(prompt).toContain('"command": "jq"');
     }
   });
 
@@ -80,8 +80,10 @@ describe("OrchestratorPlugin", () => {
     expect(prompt).not.toContain(
       "Predefined helper commands (available for shell composition)",
     );
-    expect(prompt).not.toContain("helper_commands");
-    expect(prompt).not.toContain('"command": "rg {{params}}"');
+    // Executor should not see the helper-commands schema JSON itself
+    // (resources/helper-commands.json), but it MAY see
+    // "available_helper_commands" from the command-policy schema.
+    expect(prompt).not.toContain('"helper_commands"');
   });
 
   it("keeps description when permission.orchestrator is allow", async () => {

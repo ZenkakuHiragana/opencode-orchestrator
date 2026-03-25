@@ -17,7 +17,7 @@ import {
 describe("parseExecutorStepSnapshot", () => {
   it("parses STEP_* lines into a structured snapshot", () => {
     const stdout = [
-      "STEP_TODO: T1 R1,R2 implement feature (pending → completed)",
+      "STEP_TODO: T1 R1,R2 implement change (pending → completed)",
       "STEP_DIFF: src/foo.ts added endpoint",
       "STEP_CMD: npm test (cmd-npm-test) success テスト成功",
       "STEP_BLOCKER: general need_replan タスクが大きすぎる",
@@ -36,7 +36,7 @@ describe("parseExecutorStepSnapshot", () => {
     const todo = snapshot.step_todo[0];
     expect(todo.id).toBe("T1");
     expect(todo.requirements).toEqual(["R1", "R2"]);
-    expect(todo.description).toBe("implement feature");
+    expect(todo.description).toBe("implement change");
     expect(todo.from).toBe("pending");
     expect(todo.to).toBe("completed");
 
@@ -148,7 +148,7 @@ describe("getExecutorVerificationEvidence", () => {
   it("accepts diff-only verification when STEP_VERIFY is ready", () => {
     const snapshot = parseExecutorStepSnapshot(
       [
-        "STEP_DIFF: agents/orch-executor.md tighten audit gate",
+        "STEP_DIFF: agents/orch-executor.md tighten verification gate",
         "STEP_VERIFY: ready - diff evidence re-checked",
       ].join("\n"),
       "sess-diff",

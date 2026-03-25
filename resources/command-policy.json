@@ -10,7 +10,7 @@
     },
     "summary": {
       "type": "object",
-      "required": ["loop_status", "helper_availability"],
+      "required": ["loop_status", "available_helper_commands"],
       "properties": {
         "loop_status": {
           "type": "string",
@@ -21,109 +21,12 @@
           ],
           "description": "Mechanical gate for starting the executor loop."
         },
-        "helper_availability": {
-          "type": "object",
-          "required": [
-            "helper:grep",
-            "helper:rg",
-            "helper:sort",
-            "helper:sort-with-flags",
-            "helper:uniq",
-            "helper:uniq-with-flags",
-            "helper:wc",
-            "helper:head",
-            "helper:tail",
-            "helper:cut",
-            "helper:tr",
-            "helper:comm",
-            "helper:cat",
-            "helper:ls",
-            "helper:jq",
-            "helper:true",
-            "helper:false",
-            "helper:test",
-            "helper:bracket"
-          ],
-          "description": "Map of helper command IDs from helper-commands.json to their availability status (available/unavailable). Every helper command ID must be present.",
-          "properties": {
-            "helper:grep": {
-              "type": "string",
-              "enum": ["available", "unavailable"]
-            },
-            "helper:rg": {
-              "type": "string",
-              "enum": ["available", "unavailable"]
-            },
-            "helper:sort": {
-              "type": "string",
-              "enum": ["available", "unavailable"]
-            },
-            "helper:sort-with-flags": {
-              "type": "string",
-              "enum": ["available", "unavailable"]
-            },
-            "helper:uniq": {
-              "type": "string",
-              "enum": ["available", "unavailable"]
-            },
-            "helper:uniq-with-flags": {
-              "type": "string",
-              "enum": ["available", "unavailable"]
-            },
-            "helper:wc": {
-              "type": "string",
-              "enum": ["available", "unavailable"]
-            },
-            "helper:head": {
-              "type": "string",
-              "enum": ["available", "unavailable"]
-            },
-            "helper:tail": {
-              "type": "string",
-              "enum": ["available", "unavailable"]
-            },
-            "helper:cut": {
-              "type": "string",
-              "enum": ["available", "unavailable"]
-            },
-            "helper:tr": {
-              "type": "string",
-              "enum": ["available", "unavailable"]
-            },
-            "helper:comm": {
-              "type": "string",
-              "enum": ["available", "unavailable"]
-            },
-            "helper:cat": {
-              "type": "string",
-              "enum": ["available", "unavailable"]
-            },
-            "helper:ls": {
-              "type": "string",
-              "enum": ["available", "unavailable"]
-            },
-            "helper:jq": {
-              "type": "string",
-              "enum": ["available", "unavailable"]
-            },
-            "helper:true": {
-              "type": "string",
-              "enum": ["available", "unavailable"]
-            },
-            "helper:false": {
-              "type": "string",
-              "enum": ["available", "unavailable"]
-            },
-            "helper:test": {
-              "type": "string",
-              "enum": ["available", "unavailable"]
-            },
-            "helper:bracket": {
-              "type": "string",
-              "enum": ["available", "unavailable"]
-            }
+        "available_helper_commands": {
+          "type": "array",
+          "items": {
+            "type": "string"
           },
-          "additionalProperties": false
+          "description": "List of base helper command names (for example 'rg', 'grep', 'wc') that are available for this task after preflight. Executor may call these commands directly with appropriate flags and arguments."
         }
       },
       "additionalProperties": true

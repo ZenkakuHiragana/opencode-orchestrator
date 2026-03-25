@@ -467,7 +467,7 @@ describe("orchestrator resources migration", () => {
     }
   });
 
-  it("command-policy.json should have helper_availability in schema properties", () => {
+  it("command-policy.json should have available_helper_commands in schema properties", () => {
     const commandPolicyPath = path.resolve(
       __dirname,
       "../resources/command-policy.json",
@@ -475,7 +475,7 @@ describe("orchestrator resources migration", () => {
     const content = JSON.parse(fs.readFileSync(commandPolicyPath, "utf8"));
     // This is a JSON schema definition file, so we check the schema structure
     expect(
-      content.properties?.summary?.properties?.helper_availability,
+      content.properties?.summary?.properties?.available_helper_commands,
     ).toBeDefined();
   });
 });

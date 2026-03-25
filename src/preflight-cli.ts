@@ -929,7 +929,7 @@ const preflightCliTool = tool({
           version?: number;
           summary?: {
             loop_status?: string;
-            helper_availability?: Record<string, "available" | "unavailable">;
+            available_helper_commands?: string[];
           };
           commands?: {
             id?: string;
@@ -945,23 +945,19 @@ const preflightCliTool = tool({
             resultById.set(r.id, r);
           }
 
-          // Update helper_availability
-          const helperAvailability: Record<
-            string,
-            "available" | "unavailable"
-          > = policyJson.summary?.helper_availability
-            ? { ...policyJson.summary.helper_availability }
-            : {};
-          for (const helper of helperCommandsData.helper_commands) {
-            const r = resultById.get(helper.id);
-            helperAvailability[helper.id] =
-              r && r.available ? "available" : "unavailable";
-          }
+          // Update available_helper_commands as list of base command names
+          const availableHelperCommands = helperCommandsData.helper_commands
+            .filter((helper) => {
+              const r = resultById.get(helper.id);
+              return r && r.available;
+            })
+            .map((helper) => helper.command);
 
           if (!policyJson.summary) {
             policyJson.summary = {};
           }
-          policyJson.summary.helper_availability = helperAvailability;
+          policyJson.summary.available_helper_commands =
+            availableHelperCommands;
 
           // Update availability for non-helper commands
           for (const cmd of policyJson.commands) {
