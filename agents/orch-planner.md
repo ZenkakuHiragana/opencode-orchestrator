@@ -183,6 +183,7 @@
     - be resolved in this planning pass (for example, by asking the human a focused question via `question` or delegating a short update to the Refiner), or
     - be called out explicitly as blocking items in your "Required changes" / "Next actions" sections.
   - You MUST NOT describe loop-blocking open decisions merely as vague next steps like "decide things that should be decided" without naming what those things are.
+  - When the spec-checker reports issues that are **purely about command availability** (for example, treating all `must_exec` commands as unavailable only because `command-policy.json` has not yet been updated by preflight), you MUST treat them as **signals that preflight is required or incomplete**, not as final loop-blocking judgments. After preflight has run and you have re-read the latest `command-policy.json`, you may downgrade or ignore such availability-only issues when deciding loop readiness.
 
 ## 4. Preflight via `preflight-cli`
 
@@ -221,6 +222,13 @@
 
   - Every embedded helper command ID MUST be present in this map.
   - This update MUST happen on the first preflight run and whenever environment changes are reported.
+
+- **Reloading command-policy after preflight**
+  - After `preflight-cli` completes (whether `status` is `ok` or `failed`), you MUST re-read the task's `command-policy.json` from `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/command-policy.json` using the latest on-disk contents.
+  - Treat this reloaded `command-policy.json` as the **only authoritative source** for:
+    - `summary.loop_status`, and
+    - each command's `availability`.
+  - When spec-checker availability-related issues conflict with the reloaded `command-policy.json` (for example, spec-checker treated all commands as unavailable but preflight has since marked all required `must_exec` commands as `available` and `loop_status: "ready_for_loop"`), you MUST rely on the reloaded `command-policy.json` for loop readiness and treat the earlier availability-only spec-check issues as outdated diagnostics.
 
 - **Comparing command sets**
   - Before calling `preflight-cli`, compare the exact command list you are about to probe with the most recently confirmed preflight command list for this task.
@@ -408,6 +416,7 @@ Your response layout MUST follow this structure (and respect the global language
 3. **Required changes** section:
    - If changes are needed, list 1–3 concrete items.
    - Any loop-blocking open decisions from `spec.md` MUST be listed here individually, each with a short Japanese label (for example, `Open decision: ...`) so that the human does not need to open `spec.md` just to know what must be decided.
+   - When the executor loop is **not** ready, do NOT start this section with blanket statements such as "問題はありません" or "新たな問題はありません". Even when you want to say that preflight did not introduce new environment failures, prefer formulations like "preflight の再実行では環境エラーの状況は変わっていません。なお、Executor ループ開始のゲートとしては次が未解決です:" so that the existence of remaining blockers is obvious.
    - If nothing is needed, state that explicitly (for example, `None`).
 
 4. **Next actions** section:
@@ -441,11 +450,14 @@ Before sending any human-facing reply, quickly verify:
      4. Next actions.
 
 3. **Loop readiness logic**
-   - If you claimed `Executor loop ready: yes`, then all of the following hold:
+   - If you claimed `Executor loop ready: yes`, then **all** of the following hold:
      - `command-policy.json.summary.loop_status == "ready_for_loop"`,
-     - all `must_exec` commands are marked `availability: "available"`,
-     - there are no unresolved high-severity spec issues from the spec-checker.
-   - If any `must_exec` command is unavailable or high-severity spec issues remain, you marked the loop as not ready.
+     - all `must_exec` commands are marked `availability: "available"` in `command-policy.json.commands[]`,
+     - there are no unresolved high-severity spec issues from the spec-checker,
+     - there are no remaining loop-blocking open decisions in `spec.md` (as defined in the spec-check section),
+     - there is no known inconsistency between `command-policy.json` and the most recent preflight results (for example, a command with `usage: "must_exec"` is still marked `availability: "unavailable"` in the policy while preflight reports `available: true`, or vice versa),
+     - `status.json.proposals` does not contain unresolved gating proposals (for example, `kind: "env_blocked"` or other proposals that explicitly say the loop cannot safely continue).
+   - If **any** of these conditions fails (for example, any `must_exec` command is unavailable, spec-checker still reports high-severity issues, loop-blocking open decisions remain, preflight and policy disagree, or there are unresolved env_blocked/need_replan proposals), you **must** mark the executor loop as not ready and clearly explain why.
 
 4. **Pipeline soundness**
    - Requirements and acceptance criteria are clear and bounded enough that Todo-Writer can turn them into todos without guesswork.
