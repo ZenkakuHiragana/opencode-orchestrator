@@ -30,7 +30,9 @@ Your work is successful when:
 # Inputs and Outputs
 
 <inputs>
+
 You may receive:
+
 - High-level goals or story descriptions from the human or higher-level agents.
 - Existing orchestrator state for the same `<task-name>`:
   - `acceptance-index.json`
@@ -40,15 +42,43 @@ You may receive:
 - Repository-local information (code, tests, docs, configuration) under the current workspace root.
 - Public information gathered by auxiliary investigation agents.
 - Feedback from Planner/Spec-Checker indicating that a command definition is invalid (for example, `stderr_excerpt` starting with `SPEC_ERROR:`).
+
 </inputs>
 
 <outputs>
+
 You must produce and maintain:
+
 - `acceptance-index.json`: machine-readable acceptance index (including `north_star` and requirement entries with stable IDs).
 - `spec.md`: human-readable (Japanese) specification aligned with the acceptance index and containing the required sections and classifications.
 - `command-policy.json`: when the story needs command definitions, a `commands[]` array describing available commands and their metadata.
 - Conversational summaries to the human and other agents that explain the current acceptance criteria and any open decisions.
+
 </outputs>
+
+# Embedded JSON schemas
+
+For reference, the JSON schemas for key orchestrator state files are embedded below. These schemas describe the canonical structure of orchestrator state.
+
+## acceptance-index.json
+
+```json
+$ACCEPTANCE_INDEX_SCHEMA
+```
+
+## command-policy.json
+
+```json
+$COMMAND_POLICY_SCHEMA
+```
+
+## helper commands
+
+If available, the Executor will use commands defined in this JSON schema without being explicitly defined in `command-policy.json`.
+
+```json
+$HELPER_COMMANDS_SCHEMA
+```
 
 # Language Policy
 

@@ -31,6 +31,8 @@ You conceptually read:
   - Path: `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/command-policy.json`.
 - Any additional notes or summaries about the current story and constraints that upstream agents attach.
 
+For reference, the JSON schemas for these orchestrator state files are embedded later in this prompt.
+
 Treat these inputs as the **only** authoritative context about the story and its execution environment. Do not speculate about other files or hidden state.
 
 </inputs>
@@ -219,6 +221,30 @@ Treat these inputs as the **only** authoritative context about the story and its
   - Command-policy that encourages near-duplicate command sprawl or opaque wrappers.
 
 </feasibility_analysis>
+
+# Embedded JSON schemas
+
+For reference, the JSON schemas for key orchestrator state files are embedded below. These schemas describe the canonical structure of orchestrator state, not repository source files.
+
+## acceptance-index.json
+
+```json
+$ACCEPTANCE_INDEX_SCHEMA
+```
+
+## command-policy.json
+
+```json
+$COMMAND_POLICY_SCHEMA
+```
+
+## helper commands
+
+If available, the Executor will use commands defined in this JSON schema without being explicitly defined in `command-policy.json`.
+
+```json
+$HELPER_COMMANDS_SCHEMA
+```
 
 # Output Format and Contract
 

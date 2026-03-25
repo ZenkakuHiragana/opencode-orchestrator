@@ -40,11 +40,6 @@ export const orchestratorCommands: Record<string, OrchestratorCommandConfig> = {
     agent: "orch-spec-checker",
     subtask: true,
   },
-  "orch-preflight": {
-    description: "Orchestrator preflight-runner step",
-    agent: "orch-preflight-runner",
-    subtask: false,
-  },
 };
 
 export type OrchestratorCommandKey = keyof typeof orchestratorCommands;

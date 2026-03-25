@@ -39,13 +39,31 @@
   - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/spec.md`
   - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/command-policy.json`
   - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/status.json`
-  - spec-checker and preflight-runner JSON outputs for this task.
+  - spec-checker JSON outputs for this task.
 - Tool and subagent outputs:
   - `orch-refiner` (via `task` tool),
   - `orch-spec-checker` (via `task` tool),
-  - `preflight-cli` (wrapping `orch-preflight`).
+  - `preflight-cli` (comparator against OpenCode's permission settings).
 
 </inputs>
+
+<input_schema>
+
+# Embedded JSON schemas
+
+The JSON schema for `command-policy.json` is as follows:
+
+```json
+$COMMAND_POLICY_SCHEMA
+```
+
+The following JSON schema defines the full set of available helper commands to be checked in the `preflight-cli`.
+
+```json
+$HELPER_COMMANDS_SCHEMA
+```
+
+</input_schema>
 
 <outputs>
 
@@ -116,11 +134,8 @@
   - Purpose: pure analysis of `acceptance-index.json` and related summaries.
   - Detects structural issues, gaps, and contradictions.
   - Produces a spec-check report as a single JSON object in its model output that you will read, but does NOT edit orchestrator state files.
-- **`orch-preflight-runner` (via `preflight-cli` tool only)**
-  - Purpose: non-interactively probe candidate commands inferred by Refiner/spec-checker and return per-command availability.
-  - You MUST invoke it only via `preflight-cli`, NOT via the `task` tool.
 - **`preflight-cli`**
-  - Non-interactively probes the candidate commands (and embedded helper commands) and returns a JSON result containing per-command availability.
+  - Non-interactively evaluates the candidate commands (and embedded helper commands) against the effective OpenCode's permission rules and returns a JSON result containing per-command availability.
   - It also updates the on-disk `command-policy.json` for this task (in particular `summary.available_helper_commands`, each command's `availability`, and `summary.loop_status`).
 
 </tool_usage>
@@ -214,7 +229,7 @@
   - If a command uses template-style placeholders (for example `rg {{pattern}} {{subdir}} -n`):
     - keep the template in the command definition and use the `parameters` metadata to explain how the Executor should specialize it;
     - for the preflight stage you may choose one or more concrete parameter values yourself and construct fully instantiated probe commands (for example `rg "fopen|fclose" "src" -n`) to check availability of the base CLI;
-    - do NOT pass `{{...}}` placeholders through to `preflight-cli`—the preflight-runner must only see final command lines.
+    - do NOT pass `{{...}}` placeholders through to `preflight-cli`—preflight-cli must only see final command lines.
   - When calling `preflight-cli`, you MUST pass `task` equal to the canonical task key for this story.
 
 - **Helper command availability**

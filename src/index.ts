@@ -8,7 +8,6 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { orchestratorAgents } from "./orchestrator-agents.js";
 import { orchestratorCommands } from "./orchestrator-commands.js";
-import { setPreflightRunnerBashPermissionSource } from "./preflight-permission-store.js";
 import {
   rewriteAgentConfigPaths,
   rewritePromptPaths,
@@ -39,28 +38,39 @@ export const OrchestratorPlugin: Plugin = async (input) => {
     "helper-commands": loadJsonSchema("helper-commands"),
   };
 
-  // Detect when this plugin instance is running inside an `orch-preflight`
-  // command session. In that case we must *not* register the `preflight-cli`
-  // tool, otherwise subagents such as `orch-preflight-runner` could see and
-  // call it, recreating recursive `opencode run --command orch-preflight`
-  // chains. We intentionally keep this detection very simple and rely only on
-  // process.argv so that it works even if agent-level tool permissions are
-  // ignored by the runtime.
-  const argv = process.argv ?? [];
-  const isOrchPreflightCommand =
-    argv.includes("orch-preflight") && argv.includes("--command");
+  const schemaPlaceholderMap: Record<string, keyof typeof schemaCache> = {
+    // JSON schema for acceptance-index.json (for reference only).
+    $ACCEPTANCE_INDEX_SCHEMA: "acceptance-index",
+    // JSON schema for command-policy.json (for reference only).
+    $COMMAND_POLICY_SCHEMA: "command-policy",
+    // Predefined helper commands (for shell composition).
+    $HELPER_COMMANDS_SCHEMA: "helper-commands",
+  } as const;
+
+  const expandSchemaPlaceholders = (
+    body: string | undefined,
+  ): string | undefined => {
+    if (!body) return body;
+    let out = body;
+    for (const [placeholder, key] of Object.entries(schemaPlaceholderMap)) {
+      const schemaBody = schemaCache[key];
+      if (!schemaBody) continue;
+      if (out.includes(placeholder)) {
+        out = out.split(placeholder).join(schemaBody.trim());
+      }
+    }
+    return out;
+  };
 
   // NOTE: We intentionally type this as `any` so that we can conditionally
-  // omit `preflight-cli` without fighting the strict Tool registry type. At
+  // extend the tool set without fighting the strict Tool registry type. At
   // runtime the shape is still `{ [name: string]: Tool }`.
   const tools: any = {
     autocommit,
     orch_todo_read: orchTodoReadTool,
     orch_todo_write: orchTodoWriteTool,
+    "preflight-cli": preflightCli,
   };
-  if (!isOrchPreflightCommand) {
-    tools["preflight-cli"] = preflightCli;
-  }
 
   return {
     tool: tools,
@@ -96,45 +106,6 @@ export const OrchestratorPlugin: Plugin = async (input) => {
           prompt = rewritePromptPaths(raw);
         }
 
-        // Attach shared JSON schema fragments to the end of the prompt when
-        // relevant. This keeps acceptance-index/command-policy definitions in
-        // resources/*.json as a single source of truth while still exposing them
-        // to each orchestrator agent via a ```json code block.
-        const schemaNames: string[] = [];
-        if (name === "orch-refiner" || name === "orch-spec-checker") {
-          schemaNames.push(
-            "acceptance-index",
-            "command-policy",
-            "helper-commands",
-          );
-        } else if (name === "orch-planner") {
-          schemaNames.push("command-policy", "helper-commands");
-        } else if (name === "orch-executor") {
-          schemaNames.push("command-policy");
-        }
-
-        if (schemaNames.length > 0) {
-          const parts: string[] = [];
-          if (prompt) parts.push(prompt);
-          for (const sName of schemaNames) {
-            const body = schemaCache[sName];
-            if (!body) continue;
-            const label =
-              sName === "acceptance-index"
-                ? "JSON schema for acceptance-index.json"
-                : sName === "command-policy"
-                  ? "JSON schema for command-policy.json"
-                  : "Predefined helper commands (available for shell composition)";
-            parts.push(
-              `${label} (for reference):\n\n` +
-                "```json\n" +
-                body.trim() +
-                "\n```",
-            );
-          }
-          prompt = parts.join("\n\n");
-        }
-
         // For the auditor agent, also attach the effective bash permission map so that
         // the model can see exactly which commands are allowed/denied. This keeps the
         // permission.bash configuration in TypeScript as the single source of truth
@@ -155,6 +126,8 @@ export const OrchestratorPlugin: Plugin = async (input) => {
             prompt = prompt ? `${prompt}\n\n${block}` : block;
           }
         }
+
+        prompt = expandSchemaPlaceholders(prompt);
 
         const existing = config.agent[name] ?? {};
 
@@ -180,19 +153,6 @@ export const OrchestratorPlugin: Plugin = async (input) => {
         // permission patterns so that the final agent config only contains
         // absolute paths appropriate for this environment.
         config.agent[name] = rewriteAgentConfigPaths(merged);
-
-        if (name === "orch-preflight-runner") {
-          const effectiveAgent = config.agent[name] as {
-            permission?: { bash?: unknown };
-          };
-          const effectiveGlobal = config as {
-            permission?: { bash?: unknown };
-          };
-          setPreflightRunnerBashPermissionSource({
-            globalBash: effectiveGlobal?.permission?.bash,
-            agentBash: effectiveAgent?.permission?.bash,
-          });
-        }
       }
 
       // Wire orchestrator commands: metadata from TypeScript + markdown
