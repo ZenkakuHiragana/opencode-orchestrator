@@ -63,8 +63,7 @@ for (const line of lines) {
 
 function findMmdcPath() {
   const binDir = path.join(repoRoot, "node_modules", ".bin");
-  const cmdName = process.platform === "win32" ? "mmdc.cmd" : "mmdc";
-  const fullPath = path.join(binDir, cmdName);
+  const fullPath = path.join(binDir, "mmdc");
   if (fs.existsSync(fullPath)) {
     return fullPath;
   }
@@ -96,8 +95,19 @@ function renderMermaidBlocks(blocks) {
 
     fs.writeFileSync(tmpMmdPath, block.code, "utf8");
 
-    const args = ["-i", tmpMmdPath, "-o", absPath];
-    const result = spawnSync(mmdcPath, args, {
+    let cmd = mmdcPath;
+    let args = ["-i", tmpMmdPath, "-o", absPath];
+
+    if (process.platform === "win32") {
+      // On Windows, use cmd.exe to execute the script. We intentionally avoid
+      // additional quoting here because cmd /c will handle simple paths and
+      // arguments without spaces correctly, and our generated paths are
+      // under the repo root.
+      cmd = "cmd";
+      args = ["/c", mmdcPath, "-i", tmpMmdPath, "-o", absPath];
+    }
+
+    const result = spawnSync(cmd, args, {
       stdio: "inherit",
     });
 
