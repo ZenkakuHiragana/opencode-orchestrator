@@ -9,6 +9,10 @@ export interface LoopOptions {
   maxLoop: number;
   // Safety-related options
   maxRestarts: number;
+  // When true, skip command-policy.json gate and relax Executor command
+  // restrictions. This is intentionally dangerous and should only be used
+  // for local experimentation.
+  dangerouslySkipCommandPolicy: boolean;
   // Files to attach to each opencode run (user-specified),
   // before adding canonical orchestrator attachments.
   files: string[];
@@ -48,6 +52,7 @@ export function printLoopUsage() {
       "  --commit             ループ完了時に autocommit を依頼する\n" +
       "  --max-loop <n>      最大ステップ数 (デフォルト: 100)\n" +
       "  --max-restarts <n>  safety 関連の再起動上限 (デフォルト: 20)\n" +
+      "  --dangerously-skip-command-policy  command-policy.json ゲートと Executor のコマンド制約を無視する。OpenCode の権限設定のみ適用される\n" +
       "  --file, -f <path>   各ステップの opencode run に添付するファイル\n" +
       "  --help, -h          このヘルプを表示する\n" +
       "\n" +
@@ -62,6 +67,7 @@ export function parseLoopArgs(argv: string[]): LoopOptions {
   let commitOnDone = false;
   let maxLoop = 100;
   let maxRestarts = 20;
+  let dangerouslySkipCommandPolicy = false;
   const files: string[] = [];
 
   const rest: string[] = [];
@@ -104,6 +110,8 @@ export function parseLoopArgs(argv: string[]): LoopOptions {
         throw new Error("--max-restarts must be a non-negative number");
       }
       maxRestarts = n;
+    } else if (arg === "--dangerously-skip-command-policy") {
+      dangerouslySkipCommandPolicy = true;
     } else if (arg === "--file" || arg === "-f") {
       const next = argv[++i];
       if (!next) {
@@ -147,6 +155,7 @@ export function parseLoopArgs(argv: string[]): LoopOptions {
     commitOnDone,
     maxLoop,
     maxRestarts,
+    dangerouslySkipCommandPolicy,
     files,
   };
 }

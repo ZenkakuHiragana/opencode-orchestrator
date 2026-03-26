@@ -37,7 +37,16 @@ export async function runLoop(opts: LoopOptions): Promise<boolean> {
 
   let status: OrchestratorStatus = loadStatusJson(statusPath);
 
-  enforceCommandPolicyGate(stateDir);
+  if (!opts.dangerouslySkipCommandPolicy) {
+    enforceCommandPolicyGate(stateDir);
+  } else {
+    console.error(
+      "[opencode-orchestrator] WARN: --dangerously-skip-command-policy が指定されたため command-policy.json ゲートをスキップします。このモードでは Executor が計画フェーズで設定したコマンド許可リストを無視するようになり、OpenCode のコマンド権限設定のみ適用されます。",
+    );
+    // 子プロセス側の orchestrator plugin が Executor system prompt から
+    // <command_policy> ブロックを削除できるよう、環境変数でフラグを渡す。
+    process.env.OPENCODE_ORCH_EXEC_SKIP_COMMAND_POLICY = "1";
+  }
 
   const acceptanceIndexPath = path.join(stateDir, "acceptance-index.json");
   const fileArgs = buildFileArgs(opts, stateDir);

@@ -62,6 +62,23 @@ export const OrchestratorPlugin: Plugin = async (input) => {
     return out;
   };
 
+  const stripTaggedBlock = (
+    body: string | undefined,
+    tagName: string,
+  ): string | undefined => {
+    if (!body) return body;
+    const open = `<${tagName}>`;
+    const close = `</${tagName}>`;
+    let start = body.indexOf(open);
+    if (start === -1) return body;
+    let end = body.indexOf(close, start);
+    if (end === -1) return body;
+    // 単純化: 最初のペアだけ削除する。複数ブロックを想定する場合はループに拡張可能。
+    const before = body.slice(0, start);
+    const after = body.slice(end + close.length);
+    return before + after;
+  };
+
   // NOTE: We intentionally type this as `any` so that we can conditionally
   // extend the tool set without fighting the strict Tool registry type. At
   // runtime the shape is still `{ [name: string]: Tool }`.
@@ -104,6 +121,14 @@ export const OrchestratorPlugin: Plugin = async (input) => {
         if (fs.existsSync(bodyPath)) {
           const raw = loadMarkdownBody(bodyPath);
           prompt = rewritePromptPaths(raw);
+        }
+
+        // 危険モード: Executor system prompt から <command_policy> ブロックを削除する。
+        if (
+          name === "orch-executor" &&
+          process.env.OPENCODE_ORCH_EXEC_SKIP_COMMAND_POLICY === "1"
+        ) {
+          prompt = stripTaggedBlock(prompt, "command_policy");
         }
 
         // For the auditor agent, also attach the effective bash permission map so that
