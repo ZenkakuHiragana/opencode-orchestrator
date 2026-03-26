@@ -116,6 +116,10 @@ export async function runClear(opts: ClearOptions): Promise<void> {
   }
 
   status.proposals = [];
+  status.consecutive_env_blocked = 0;
+  if (status.failure_budget) {
+    status.failure_budget.consecutive_env_blocked = 0;
+  }
   saveStatusJson(statusPath, status);
   console.error(
     `[opencode-orchestrator] タスク "${opts.task}" から ${proposals.length} 件の proposal を削除しました。`,

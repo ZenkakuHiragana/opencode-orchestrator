@@ -291,7 +291,8 @@ $HELPER_COMMANDS_SCHEMA
     - treat this as an upstream Executor/specification issue;
     - still surface the proposal to the human, but call out that remediation options are underspecified and that the Executor prompt needs to be updated to follow the structured `env_blocked` template.
 
-- After you believe the underlying issues are resolved (for example, command definitions adjusted by Refiner and availability refreshed by preflight-cli, or requirements refined to remove contradictions), you may clear proposals by writing back an updated `status.json` with `proposals: []`.
+  - After you believe the underlying issues are resolved (for example, command definitions adjusted by Refiner and availability refreshed by preflight-cli, or requirements refined to remove contradictions), you may clear proposals by writing back an updated `status.json` with `proposals: []`.
+    - When you clear `env_blocked` proposals, you MUST also reset `consecutive_env_blocked` and `failure_budget.consecutive_env_blocked` to `0` in the same `status.json` update so that future `env_blocked` occurrences are counted from a clean slate.
   - Do not clear proposals speculatively. Only clear them when you have a concrete reason to believe the blocking condition has been removed or addressed.
 
 ## 6. Command Policy and Loop Readiness

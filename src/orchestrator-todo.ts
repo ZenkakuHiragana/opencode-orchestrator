@@ -340,7 +340,7 @@ export const orchTodoWriteTool = tool({
               artifact_filename: z
                 .string()
                 .describe(
-                  "Filename under artifacts/ directory (e.g., T12-api-survey.json).",
+                  "Filename under artifacts/ directory (e.g., T12-sample-survey.json).",
                 )
                 .optional(),
             })
@@ -401,7 +401,7 @@ export const orchTodoWriteTool = tool({
               artifact_filename: z
                 .string()
                 .describe(
-                  "Filename under artifacts/ directory (e.g., T12-api-survey.json).",
+                  "Filename under artifacts/ directory (e.g., T12-sample-survey.json).",
                 )
                 .optional(),
             })
@@ -522,7 +522,7 @@ export const orchTodoWriteTool = tool({
                   artifact_filename: z
                     .string()
                     .describe(
-                      "Filename under artifacts/ directory (e.g., T12-api-survey.json).",
+                      "Filename under artifacts/ directory (e.g., T12-sample-survey.json).",
                     )
                     .optional(),
                 })

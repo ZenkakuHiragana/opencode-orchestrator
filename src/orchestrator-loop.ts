@@ -188,6 +188,10 @@ export async function runLoop(opts: LoopOptions): Promise<boolean> {
 
   status.last_session_id = sessionId!;
   status.proposals = [];
+  status.consecutive_env_blocked = 0;
+  if (status.failure_budget) {
+    status.failure_budget.consecutive_env_blocked = 0;
+  }
   saveStatusJson(statusPath, status);
 
   let done = false;

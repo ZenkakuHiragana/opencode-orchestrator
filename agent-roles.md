@@ -582,7 +582,7 @@ sequenceDiagram
 ```jsonc
 {
   "version": 1,
-  "north_star": "このタスクの最重要目的を1-2行で（例: パフォーマンス劣化を許容せずAPIを追加する）",
+  "north_star": "このタスクの最重要目的を1-2行で（例: 既存の動作を維持しつつAPIを追加する）",
   "requirements": [
     {
       "id": "R1-some-requirement", // 安定 ID（文字列）

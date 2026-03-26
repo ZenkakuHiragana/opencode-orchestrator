@@ -243,13 +243,13 @@ describe("orchTodoWriteTool", () => {
       JSON.stringify({
         todos: [
           {
-            id: "T1-task-survey",
+            id: "T1-sample-survey",
             summary: "old summary",
             status: "pending",
             related_requirement_ids: ["R1"],
           },
           {
-            id: "T18-task-survey-connection-and-status",
+            id: "T18-sample-secondary",
             summary: "connection status overview",
             status: "in_progress",
             related_requirement_ids: ["R1", "R2"],
@@ -266,7 +266,7 @@ describe("orchTodoWriteTool", () => {
         updates: [
           {
             filter: {
-              id: "T1-task-survey",
+              id: "T1-sample-survey",
               related_requirement_ids: ["R1"],
             },
             patch: {
@@ -297,8 +297,8 @@ describe("orchTodoWriteTool", () => {
     };
     expect(parsed.ok).toBe(true);
     expect(parsed.updatedIds).toEqual([
-      "T1-task-survey",
-      "T18-task-survey-connection-and-status",
+      "T1-sample-survey",
+      "T18-sample-secondary",
     ]);
 
     const saved = JSON.parse(
@@ -313,10 +313,8 @@ describe("orchTodoWriteTool", () => {
       }>;
     };
 
-    const t1 = saved.todos.find((t) => t.id === "T1-task-survey");
-    const t18 = saved.todos.find(
-      (t) => t.id === "T18-task-survey-connection-and-status",
-    );
+    const t1 = saved.todos.find((t) => t.id === "T1-sample-survey");
+    const t18 = saved.todos.find((t) => t.id === "T18-sample-secondary");
 
     expect(t1?.summary).toBe("new summary");
     expect(t1?.execution_contract).toEqual({
@@ -724,15 +722,15 @@ describe("orchTodoWriteTool", () => {
         mode: "planner_replace_canonical",
         canonicalTodos: [
           {
-            id: "T12-task-survey",
-            summary: "Investigate public interface surface",
+            id: "T12-sample-survey",
+            summary: "Investigate external interface details",
             status: "pending",
             related_requirement_ids: ["R1"],
             execution_contract: {
               intent: "investigate",
               artifact_schema: "investigation_v1",
-              artifact_filename: "T12-task-survey.json",
-              expected_evidence: ["API inventory", "stability classification"],
+              artifact_filename: "T12-sample-survey.json",
+              expected_evidence: ["API coverage summary", "stability grouping"],
             },
           },
         ],
@@ -760,8 +758,8 @@ describe("orchTodoWriteTool", () => {
     expect(saved.todos[0]?.execution_contract).toEqual({
       intent: "investigate",
       artifact_schema: "investigation_v1",
-      artifact_filename: "T12-task-survey.json",
-      expected_evidence: ["API inventory", "stability classification"],
+      artifact_filename: "T12-sample-survey.json",
+      expected_evidence: ["API coverage summary", "stability grouping"],
     });
 
     if (previousXdgStateHome === undefined) {
@@ -784,8 +782,8 @@ describe("orchTodoWriteTool", () => {
       JSON.stringify({
         todos: [
           {
-            id: "T12-api-survey",
-            summary: "Investigate public interface surface",
+            id: "T12-sample-investigation",
+            summary: "Investigate external interface details",
             status: "in_progress",
             related_requirement_ids: ["R1"],
           },
@@ -800,13 +798,14 @@ describe("orchTodoWriteTool", () => {
         mode: "executor_update_statuses",
         statusUpdates: [
           {
-            id: "T12-api-survey",
+            id: "T12-sample-investigation",
             status: "completed",
             result_artifacts: [
               {
                 kind: "investigation_v1",
-                path: "/state/artifacts/T12-api-survey.json",
-                summary: "multiple usage sites and some risky dependency edges",
+                path: "/state/artifacts/T12-sample-investigation.json",
+                summary:
+                  "multiple usage locations and several risky dependency edges",
               },
             ],
           },
@@ -834,8 +833,8 @@ describe("orchTodoWriteTool", () => {
     expect(saved.todos[0]?.result_artifacts).toEqual([
       {
         kind: "investigation_v1",
-        path: "/state/artifacts/T12-api-survey.json",
-        summary: "multiple usage sites and some risky dependency edges",
+        path: "/state/artifacts/T12-sample-investigation.json",
+        summary: "multiple usage locations and several risky dependency edges",
       },
     ]);
 
@@ -927,7 +926,7 @@ describe("orchTodoWriteTool", () => {
       JSON.stringify({
         todos: [
           {
-            id: "T12-api-survey",
+            id: "T12-sample-investigation",
             summary: "Investigate public API surface",
             status: "pending",
             related_requirement_ids: ["R1"],
@@ -943,12 +942,12 @@ describe("orchTodoWriteTool", () => {
         mode: "executor_update_statuses",
         statusUpdates: [
           {
-            id: "T12-api-survey",
+            id: "T12-sample-investigation",
             status: "in_progress",
             result_artifacts: [
               {
                 kind: "investigation_v1",
-                path: "/state/artifacts/T12-api-survey.json",
+                path: "/state/artifacts/T12-sample-investigation.json",
                 summary: "partial results",
               },
             ],
@@ -963,7 +962,7 @@ describe("orchTodoWriteTool", () => {
     expect(parsed.error).toContain(
       "result_artifacts may only be recorded when status is 'completed'",
     );
-    expect(parsed.error).toContain("T12-api-survey");
+    expect(parsed.error).toContain("T12-sample-investigation");
     expect(parsed.error).toContain("in_progress");
 
     if (previousXdgStateHome === undefined) {
@@ -986,14 +985,14 @@ describe("orchTodoWriteTool", () => {
       JSON.stringify({
         todos: [
           {
-            id: "T12-api-survey",
+            id: "T12-sample-investigation",
             summary: "Investigate public API surface",
             status: "in_progress",
             related_requirement_ids: ["R1"],
             result_artifacts: [
               {
                 kind: "investigation_v1",
-                path: "/state/artifacts/T12-phase1.json",
+                path: "/state/artifacts/T12-sample-phase1.json",
                 summary: "Phase 1 results",
               },
             ],
@@ -1009,12 +1008,12 @@ describe("orchTodoWriteTool", () => {
         mode: "executor_update_statuses",
         statusUpdates: [
           {
-            id: "T12-api-survey",
+            id: "T12-sample-investigation",
             status: "completed",
             result_artifacts: [
               {
                 kind: "investigation_v1",
-                path: "/state/artifacts/T12-phase2.json",
+                path: "/state/artifacts/T12-sample-phase2.json",
                 summary: "Phase 2 results",
               },
             ],
@@ -1036,10 +1035,10 @@ describe("orchTodoWriteTool", () => {
 
     expect(saved.todos[0]?.result_artifacts).toHaveLength(2);
     expect(saved.todos[0]?.result_artifacts?.[0]?.path).toBe(
-      "/state/artifacts/T12-phase1.json",
+      "/state/artifacts/T12-sample-phase1.json",
     );
     expect(saved.todos[0]?.result_artifacts?.[1]?.path).toBe(
-      "/state/artifacts/T12-phase2.json",
+      "/state/artifacts/T12-sample-phase2.json",
     );
 
     if (previousXdgStateHome === undefined) {

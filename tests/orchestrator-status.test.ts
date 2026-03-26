@@ -300,8 +300,8 @@ describe("buildReplanRequest", () => {
   it("normalizes executor blockers and auditor failures into one request", () => {
     const executorStep = parseExecutorStepSnapshot(
       [
-        "STEP_BLOCKER: general need_replan タスクが大きすぎる",
-        "STEP_BLOCKER: T4-auth need_replan 認証周りを分割したい",
+        "STEP_BLOCKER: general need_replan タスクの粒度が大きすぎる",
+        "STEP_BLOCKER: T4-auth need_replan 認証関連の作業単位を見直したい",
         "STEP_INTENT: replan R3-auth,R4-ui 要件単位で再計画したい",
         "STEP_AUDIT: in_progress R3-auth,R4-ui",
       ].join("\n"),
@@ -316,7 +316,7 @@ describe("buildReplanRequest", () => {
         {
           id: "R3-auth",
           passed: false,
-          reason: "認証要件の証拠が不足している",
+          reason: "認証に関する受け入れ条件の証拠が不足している",
         },
         { id: "R4-ui", passed: true },
       ],
@@ -327,19 +327,19 @@ describe("buildReplanRequest", () => {
       issues: [
         {
           source: "executor",
-          summary: "タスクが大きすぎる",
+          summary: "タスクの粒度が大きすぎる",
           related_todo_ids: [],
           related_requirement_ids: ["R3-auth", "R4-ui"],
         },
         {
           source: "executor",
-          summary: "認証周りを分割したい",
+          summary: "認証関連の作業単位を見直したい",
           related_todo_ids: ["T4-auth"],
           related_requirement_ids: ["R3-auth", "R4-ui"],
         },
         {
           source: "auditor",
-          summary: "認証要件の証拠が不足している",
+          summary: "認証に関する受け入れ条件の証拠が不足している",
           related_todo_ids: [],
           related_requirement_ids: ["R3-auth"],
         },

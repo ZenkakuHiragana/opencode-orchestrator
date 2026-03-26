@@ -217,7 +217,7 @@ canonical todos:
     - Required for `investigate` and `verify` intents.
     - Optional for `implement`.
   - `artifact_filename`: the filename under the artifacts directory where the artifact should
-    be written (e.g. `"T12-api-survey.json"`). Use the pattern:
+    be written (e.g. `"T12-sample-survey.json"`). Use the pattern:
     - `<todo-id>-<short-descriptor>.json`
 
 - Use `execution_contract` especially for higher-risk, auditor-sensitive, or repeatedly
@@ -251,7 +251,7 @@ canonical todos:
     by the acceptance criteria.
 - File naming convention:
   - `<todo-id>-<short-descriptor>.json`
-  - e.g. `T12-api-survey.json`, `T18-regression-results.json`.
+  - e.g. `T12-sample-survey.json`, `T18-sample-regression.json`.
 </artifacts>
 
 ## Execution Contract vs Result Artifacts

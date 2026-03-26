@@ -227,7 +227,7 @@ npx opencode-orchestrator list
 
 ```text
 my-task         loop_status=ready_for_loop    summary=API エンドポイント追加
-large-refactor  loop_status=needs_refinement  summary=大規模リファクタリング
+large-refactor  loop_status=needs_refinement  summary=大きめのリファクタリング
 ```
 
 主なオプション:

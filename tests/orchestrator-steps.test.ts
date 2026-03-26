@@ -494,7 +494,7 @@ describe("runExecutorAndAuditorStep", () => {
   it("merges auditor failures into replan_request when replanning is already required", async () => {
     const status = createStatus();
     const execStdout = [
-      "STEP_BLOCKER: T4-login need_replan ログインtodoを分割したい",
+      "STEP_BLOCKER: T4-login need_replan ログイン関連の作業単位を見直したい",
       "STEP_INTENT: replan R3-login 監査で指摘された要件を再整理したい",
       "STEP_VERIFY: ready cmd-login-test ログイン処理の検証は実行済み",
       "STEP_AUDIT: ready R3-login",
@@ -506,7 +506,7 @@ describe("runExecutorAndAuditorStep", () => {
         {
           id: "R3-login",
           passed: false,
-          reason: "ログインの受け入れ条件が未達",
+          reason: "ログインに関する受け入れ条件が未達",
         },
       ],
     };
@@ -542,13 +542,13 @@ describe("runExecutorAndAuditorStep", () => {
       issues: [
         {
           source: "executor",
-          summary: "ログインtodoを分割したい",
+          summary: "ログイン関連の作業単位を見直したい",
           related_todo_ids: ["T4-login"],
           related_requirement_ids: ["R3-login"],
         },
         {
           source: "auditor",
-          summary: "ログインの受け入れ条件が未達",
+          summary: "ログインに関する受け入れ条件が未達",
           related_todo_ids: [],
           related_requirement_ids: ["R3-login"],
         },
