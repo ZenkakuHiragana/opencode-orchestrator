@@ -128,9 +128,10 @@ export const OrchestratorPlugin: Plugin = async (input) => {
           prompt = rewritePromptPaths(raw);
         }
 
-        // 危険モード: Executor system prompt から <command_policy> ブロックを削除する。
+        // 危険モード: Executor/Todo-Writer の system prompt から
+        // <command_policy> ブロックを削除する。
         if (
-          name === "orch-executor" &&
+          (name === "orch-executor" || name === "orch-todo-writer") &&
           process.env.OPENCODE_ORCH_EXEC_SKIP_COMMAND_POLICY === "1"
         ) {
           prompt = stripTaggedBlock(prompt, "command_policy");
@@ -212,70 +213,12 @@ export const OrchestratorPlugin: Plugin = async (input) => {
         };
       }
     },
-    // Executor 用 bash サンドボックスのための事前フック。Executor 専用の
-    // opencode run プロセスでは、orchestrator 側から
-    // OPENCODE_ORCH_EXEC_BWRAP_ARGS が JSON 配列として渡されており、これ
-    // を使って bash コマンドを bwrap 経由に書き換える。その前に
-    // preflight-cli と同じ permission.bash 評価ロジックで deny 判定を行う。
-    "tool.execute.before": async (input: any, output: any) => {
-      if (input.tool !== "bash") return;
-
-      const args = output.args ?? {};
-      const origCommand: unknown = args.command;
-      if (typeof origCommand !== "string" || origCommand.trim().length === 0) {
-        return;
-      }
-
-      // 1) permission.bash のパターン評価を preflight-cli と同じロジックで
-      //    再利用する。Executor サンドボックスモードでは allow 以外
-      //    (ask/deny) のコマンドはすべて拒否する。もともとの bash ツールは
-      //    ask を許容するが、このモードでは command-policy をバイパスして
-      //    いるため、より厳格に扱う。
-      const permissionSource: PreflightRunnerBashPermissionSource =
-        getPreflightRunnerBashPermissionSource();
-      const permission = evaluateEffectiveBashPermission(
-        origCommand,
-        permissionSource,
-      );
-
-      if (permission.decision !== "allow") {
-        const pattern = permission.matchedPattern ?? "(no pattern)";
-        throw new Error(
-          `bash command blocked by permission.bash (decision: ${permission.decision}, pattern: ${pattern})`,
-        );
-      }
-
-      const bwrapArgsJson = process.env.OPENCODE_ORCH_EXEC_BWRAP_ARGS;
-      if (!bwrapArgsJson) {
-        // サンドボックス未指定の場合は、権限チェックのみ行い bwrap ラップは
-        // 行わずにそのまま実行させる。
-        return;
-      }
-
-      const parsed = JSON.parse(bwrapArgsJson);
-      if (
-        !Array.isArray(parsed) ||
-        !parsed.every((v) => typeof v === "string")
-      ) {
-        // ここに到達するのは、実装バグや外部から環境変数を壊されたケース。
-        // サンドボックス無しでの実行には絶対にフォールバックせず、ツール
-        // 呼び出し自体を失敗させる。
-        throw new Error(
-          "OPENCODE_ORCH_EXEC_BWRAP_ARGS must be a string array JSON",
-        );
-      }
-      const bwrapArgs: string[] = parsed;
-
-      const shellQuote = (s: string): string => {
-        return `'${s.replace(/'/g, "'\\''")}'`;
-      };
-
-      const bwrapPart = ["bwrap", ...bwrapArgs].map(shellQuote).join(" ");
-      const finalCommand = `${bwrapPart} -- bash -lc ${shellQuote(origCommand)}`;
-
-      args.command = finalCommand;
-      output.args = args;
-    },
+    // Executor/Todo-Writer 用の追加フックは現在使用していない。
+    // 危険モードにおけるシェルサンドボックス化は、bash ツールの上書きでは
+    // なく Executor 用 `opencode run --command orch-exec` プロセス全体を
+    // Bubblewrap でラップする方式に切り替えているため、ここでは追加処理を
+    // 行わない。
+    "tool.execute.before": async () => {},
   };
 };
 

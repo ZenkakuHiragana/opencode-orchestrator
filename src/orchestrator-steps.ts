@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 import type { LoopOptions } from "./cli-args.js";
-import { runOpencode } from "./orchestrator-process.js";
+import { runOpencode, runOpencodeBwrap } from "./orchestrator-process.js";
 import {
   buildAuditPrompt,
   buildExecutorPrompt,
@@ -75,6 +75,16 @@ export async function maybeRunTodoWriterStep(
 
   const todowriterLog = path.join(logDir, `todowriter_step_${stepId}.txt`);
   const todowriterPrompt = buildTodoWriterPrompt(status);
+  // Todo-Writer 用の opencode run 子プロセスにも、危険モード時は
+  // command-policy スキップ用のフラグのみを渡す。bwrap サンドボックスは
+  // Executor 専用とし、Todo-Writer 側では使用しない。
+  const todoEnv: NodeJS.ProcessEnv | undefined = (() => {
+    const env: NodeJS.ProcessEnv = {};
+    if (opts.dangerouslySkipCommandPolicy || opts.bwrapSkipCommandPolicy) {
+      env.OPENCODE_ORCH_EXEC_SKIP_COMMAND_POLICY = "1";
+    }
+    return Object.keys(env).length > 0 ? env : undefined;
+  })();
   const planRes = await runOpencode(
     [
       "run",
@@ -87,6 +97,8 @@ export async function maybeRunTodoWriterStep(
       todowriterPrompt,
     ],
     todowriterLog,
+    true,
+    todoEnv,
   );
 
   const todowriterSafety = planRes.stdout.includes(
@@ -232,9 +244,7 @@ export async function runExecutorAndAuditorStep(
 
   const execPrompt = buildExecutorPrompt(isNextAfterAudit, status);
   // Executor 用の opencode run 子プロセスにのみ、サンドボックス関連の
-  // フラグと bwrap 引数を環境変数として渡す。ループ本体の process.env
-  // は変更しない。bwrap 引数は runLoop 側で検証済みのものをそのまま
-  // 使用する。
+  // フラグを環境変数として渡す。ループ本体の process.env は変更しない。
   const execEnv: NodeJS.ProcessEnv | undefined = (() => {
     const env: NodeJS.ProcessEnv = {};
 
@@ -242,28 +252,23 @@ export async function runExecutorAndAuditorStep(
       env.OPENCODE_ORCH_EXEC_SKIP_COMMAND_POLICY = "1";
     }
 
-    if (opts.bwrapSkipCommandPolicy) {
-      env.OPENCODE_ORCH_EXEC_BWRAP_ARGS = JSON.stringify(opts.bwrapArgs);
-    }
-
     return Object.keys(env).length > 0 ? env : undefined;
   })();
 
-  const execRes = await runOpencode(
-    [
-      "run",
-      "--command",
-      "orch-exec",
-      "--session",
-      sessionId,
-      ...execFileArgs,
-      "--",
-      execPrompt,
-    ],
-    orchLog,
-    true,
-    execEnv,
-  );
+  const execArgs = [
+    "run",
+    "--command",
+    "orch-exec",
+    "--session",
+    sessionId,
+    ...execFileArgs,
+    "--",
+    execPrompt,
+  ];
+
+  const execRes = opts.bwrapSkipCommandPolicy
+    ? await runOpencodeBwrap(opts.bwrapArgs, execArgs, orchLog, true, execEnv)
+    : await runOpencode(execArgs, orchLog, true, execEnv);
 
   const safetyTripped = execRes.stdout.includes(
     "I'm sorry, but I cannot assist with that request.",

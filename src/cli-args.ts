@@ -69,8 +69,8 @@ export function printLoopUsage() {
       "    OpenCode の permission.bash 権限設定は引き続き適用される。\n" +
       "  --bwrap-skip-command-policy (Windows では利用不可)\n" +
       "    計画フェーズで決めたコマンド定義を無視して自由なコマンド実行を許可する。\n" +
-      "    ただし、Bubblewrap サンドボックス環境でコマンドが実行される。\n" +
-      "    OpenCode の permission.bash 権限の確認はこの CLI で独自に確認される。\n" +
+      "    ただし、Executor 用の opencode run プロセス全体を Bubblewrap サンドボックス内で実行する。\n" +
+      "    OpenCode の permission.bash 権限設定はサンドボックス内でもそのまま適用される。\n" +
       "  --bwrap-arg <arg>    bwrap に渡す追加引数 (複数指定可)\n" +
       "  --file, -f <path>   各ステップの opencode run に添付するファイル\n" +
       "  --help, -h          このヘルプを表示する\n" +

@@ -91,20 +91,71 @@ export async function runLoop(opts: LoopOptions): Promise<boolean> {
           }
         };
 
+        const maybeBind = (p: string) => {
+          try {
+            if (fs.existsSync(p)) {
+              defaultArgs.push("--bind", p, p);
+            }
+          } catch {
+            // ignore
+          }
+        };
+
         maybeRoBind("/usr");
         maybeRoBind("/bin");
         maybeRoBind("/sbin");
         maybeRoBind("/lib");
         maybeRoBind("/lib64");
+        // DNS 解決や各種設定ファイルへの依存を考慮して /etc も公開する。
+        maybeRoBind("/etc");
+
+        // OpenCode / orchestrator の設定・状態・バイナリが参照する典型的な
+        // ユーザーローカルディレクトリをサンドボックスからも見えるようにする。
+        const homeDir = process.env.HOME;
+        if (homeDir && homeDir.length > 0) {
+          const xdgConfigHome =
+            process.env.XDG_CONFIG_HOME || path.join(homeDir, ".config");
+          const xdgShareHome =
+            process.env.XDG_SHARE_HOME || path.join(homeDir, ".local", "share");
+          const xdgStateHome =
+            process.env.XDG_STATE_HOME || path.join(homeDir, ".local", "state");
+          const xdgCacheHome =
+            process.env.XDG_CACHE_HOME || path.join(homeDir, ".cache");
+          const npmrcPath = path.join(homeDir, ".npmrc");
+          const opencodeCacheDir = path.join(xdgCacheHome, "opencode");
+          const opencodeConfigDir = path.join(xdgConfigHome, "opencode");
+          const opencodeShareDir = path.join(xdgShareHome, "opencode");
+          const opencodeStateDir = path.join(xdgStateHome, "opencode");
+          const opencodeHomeDir = path.join(homeDir, ".opencode");
+
+          // 設定ディレクトリは読み取り専用で十分。
+          maybeRoBind(opencodeConfigDir);
+          // npm のグローバル設定 (~/.npmrc) も read-only で見せておく。プラグイン
+          // の取得や私設レジストリ利用などで参照される可能性がある。
+          maybeRoBind(npmrcPath);
+
+          // 状態ディレクトリや .opencode は書き込みが発生する可能性が高いので
+          // 読み書きバインドにする。
+          maybeBind(opencodeCacheDir);
+          maybeBind(opencodeShareDir);
+          maybeBind(opencodeStateDir);
+          maybeBind(opencodeHomeDir);
+        }
 
         defaultArgs.push("--dev", "/dev");
         defaultArgs.push("--proc", "/proc");
-        defaultArgs.push("--dir", "/tmp");
+        // /tmp は各 Executor サンドボックス専用の tmpfs にする。
+        defaultArgs.push("--tmpfs", "/tmp");
         defaultArgs.push("--bind", repoDir, "/workspace");
         defaultArgs.push("--bind", stateDir, stateDir);
         defaultArgs.push("--chdir", "/workspace");
         defaultArgs.push("--unshare-pid");
-        defaultArgs.push("--unshare-net");
+        // ネットワークはデフォルトでは隔離しない。models.dev などの
+        // LLM エンドポイントへのアクセスが必要なケースが多いため、
+        // 完全なネットワーク分離を行いたい場合は --bwrap-arg で
+        // 明示的に --unshare-net を指定してもらう。親プロセス終了時には
+        // サンドボックスも確実に終了させたいので --die-with-parent を付与する。
+        defaultArgs.push("--die-with-parent");
         defaultArgs.push("--new-session");
 
         effectiveArgs = defaultArgs;
