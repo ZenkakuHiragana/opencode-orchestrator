@@ -169,6 +169,39 @@ npx opencode-orchestrator loop --task my-task-key \
 - `--max-restarts M`: 安全装置誤爆時の再起動上限 (デフォルト 20)
 - `--commit`: ループ完了時に自動的にコミットをする
 - `--file/-f <path>`: 各ステップの `opencode run` に添付する追加ファイル
+- `--dangerously-skip-command-policy`:
+  - 計画フェーズで決めた「許可コマンドリスト」を無視し、Executor が
+    OpenCode 標準の permission.bash 設定の範囲で自由にコマンドを
+    組み立てるようにします。
+- `--bwrap-skip-command-policy` (Linux のみ有効):
+  - 上記に加え、`bash` ツールに割り込んで実行フェーズの
+    シェルコマンド実行を Bubblewrap サンドボックス内で行います。
+  - Executor 用の `bash` ツール呼び出しに対して、プラグイン側で
+    permission.bash のパターン評価 (`allow` / `ask` / `deny`) を独自に行い、
+    `allow` 以外のコマンドはすべて拒否します。
+    > [!CAUTION]
+    > OpenCode による権限チェックが機能しなくなります。
+    > 簡易的な再実装は行っていますが、厳密な運用を求める場合は
+    > 手動でサンドボックス環境を構築し、
+    > `--dangerously-skip-command-policy` を使用してください。
+    >
+    > ```bash
+    > cd /path/to/your/worktree
+    >
+    > # 外側から bwrap で丸ごとサンドボックスに入れた上で、内側で危険モードを使う
+    > bwrap \
+    >   --ro-bind /usr /usr \
+    >   --ro-bind /bin /bin \
+    >   --ro-bind /lib /lib \
+    >   --ro-bind /lib64 /lib64 \
+    >   --dev /dev \
+    >   --proc /proc \
+    >   --dir /tmp \
+    >   --bind "$PWD" /workspace \
+    >   --chdir /workspace \
+    >   --unshare-pid --unshare-net --new-session \
+    >   -- bash -lc 'npx opencode-orchestrator loop --dangerously-skip-command-policy --task your-task-key'
+    > ```
 
 実行フェーズでは、次の順でコマンドが呼び出されます。
 

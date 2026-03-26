@@ -10,9 +10,21 @@ export interface LoopOptions {
   // Safety-related options
   maxRestarts: number;
   // When true, skip command-policy.json gate and relax Executor command
-  // restrictions. This is intentionally dangerous and should only be used
-  // for local experimentation.
+  // restrictions **without** any sandbox. This is intentionally very
+  // dangerous and should only be used for local experimentation.
   dangerouslySkipCommandPolicy: boolean;
+  // When true, attempt to run the Executor step (opencode run --command
+  // orch-exec ...) inside a Bubblewrap sandbox and also skip the
+  // command-policy.json gate. This is still dangerous, but intended to be
+  // "dangerous with an external sandbox". On non-Linux platforms or when
+  // Bubblewrap is unavailable, this flag is ignored and the loop falls back
+  // to the normal policy-respecting mode.
+  bwrapSkipCommandPolicy: boolean;
+  // Extra arguments to pass to `bwrap` when bwrapSkipCommandPolicy is
+  // enabled. Each entry corresponds to a single CLI argument. The user is
+  // responsible for constructing a valid Bubblewrap invocation (bind
+  // mounts, namespaces, etc.).
+  bwrapArgs: string[];
   // Files to attach to each opencode run (user-specified),
   // before adding canonical orchestrator attachments.
   files: string[];
@@ -52,7 +64,14 @@ export function printLoopUsage() {
       "  --commit             ループ完了時に autocommit を依頼する\n" +
       "  --max-loop <n>      最大ステップ数 (デフォルト: 100)\n" +
       "  --max-restarts <n>  safety 関連の再起動上限 (デフォルト: 20)\n" +
-      "  --dangerously-skip-command-policy  command-policy.json ゲートと Executor のコマンド制約を無視する。OpenCode の権限設定のみ適用される\n" +
+      "  --dangerously-skip-command-policy\n" +
+      "    計画フェーズで決めたコマンド定義を無視して自由なコマンド実行を許可する。\n" +
+      "    OpenCode の permission.bash 権限設定は引き続き適用される。\n" +
+      "  --bwrap-skip-command-policy (Windows では利用不可)\n" +
+      "    計画フェーズで決めたコマンド定義を無視して自由なコマンド実行を許可する。\n" +
+      "    ただし、Bubblewrap サンドボックス環境でコマンドが実行される。\n" +
+      "    OpenCode の permission.bash 権限の確認はこの CLI で独自に確認される。\n" +
+      "  --bwrap-arg <arg>    bwrap に渡す追加引数 (複数指定可)\n" +
       "  --file, -f <path>   各ステップの opencode run に添付するファイル\n" +
       "  --help, -h          このヘルプを表示する\n" +
       "\n" +
@@ -68,6 +87,8 @@ export function parseLoopArgs(argv: string[]): LoopOptions {
   let maxLoop = 100;
   let maxRestarts = 20;
   let dangerouslySkipCommandPolicy = false;
+  let bwrapSkipCommandPolicy = false;
+  const bwrapArgs: string[] = [];
   const files: string[] = [];
 
   const rest: string[] = [];
@@ -112,6 +133,14 @@ export function parseLoopArgs(argv: string[]): LoopOptions {
       maxRestarts = n;
     } else if (arg === "--dangerously-skip-command-policy") {
       dangerouslySkipCommandPolicy = true;
+    } else if (arg === "--bwrap-skip-command-policy") {
+      bwrapSkipCommandPolicy = true;
+    } else if (arg === "--bwrap-arg") {
+      const next = argv[++i];
+      if (!next) {
+        throw new Error("--bwrap-arg requires an argument");
+      }
+      bwrapArgs.push(next);
     } else if (arg === "--file" || arg === "-f") {
       const next = argv[++i];
       if (!next) {
@@ -156,6 +185,8 @@ export function parseLoopArgs(argv: string[]): LoopOptions {
     maxLoop,
     maxRestarts,
     dangerouslySkipCommandPolicy,
+    bwrapSkipCommandPolicy,
+    bwrapArgs,
     files,
   };
 }

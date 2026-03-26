@@ -37,15 +37,98 @@ export async function runLoop(opts: LoopOptions): Promise<boolean> {
 
   let status: OrchestratorStatus = loadStatusJson(statusPath);
 
-  if (!opts.dangerouslySkipCommandPolicy) {
-    enforceCommandPolicyGate(stateDir);
-  } else {
-    console.error(
-      "[opencode-orchestrator] WARN: --dangerously-skip-command-policy が指定されたため command-policy.json ゲートをスキップします。このモードでは Executor が計画フェーズで設定したコマンド許可リストを無視するようになり、OpenCode のコマンド権限設定のみ適用されます。",
+  const isWindows = process.platform === "win32";
+
+  // 危険系フラグの相互排他チェック
+  if (opts.dangerouslySkipCommandPolicy && opts.bwrapSkipCommandPolicy) {
+    throw new Error(
+      "--dangerously-skip-command-policy と --bwrap-skip-command-policy は同時には指定できません",
     );
-    // 子プロセス側の orchestrator plugin が Executor system prompt から
-    // <command_policy> ブロックを削除できるよう、環境変数でフラグを渡す。
-    process.env.OPENCODE_ORCH_EXEC_SKIP_COMMAND_POLICY = "1";
+  }
+
+  if (opts.bwrapSkipCommandPolicy) {
+    if (isWindows) {
+      console.error(
+        "[opencode-orchestrator] WARN: --bwrap-skip-command-policy は Windows 環境ではサポートされていないため無視されます。通常の command-policy 準拠モードで実行します。",
+      );
+      enforceCommandPolicyGate(stateDir);
+    } else {
+      // bwrap が利用可能か事前にチェックする
+      const bwrapCheck = spawnSync("bwrap", ["--version"], {
+        stdio: "ignore",
+      });
+      if (bwrapCheck.status !== 0) {
+        throw new Error(
+          "--bwrap-skip-command-policy が指定されましたが、'bwrap' コマンドが見つからないか実行できません。" +
+            " 先に bubblewrap パッケージをインストールするか、このフラグを外して実行してください。",
+        );
+      }
+
+      console.error(
+        "[opencode-orchestrator] WARN: --bwrap-skip-command-policy が指定されたため command-policy.json ゲートをスキップし、Executor ステップを Bubblewrap サンドボックス内で実行します。",
+      );
+      // bwrap モードでは command-policy.json 自体はロードせず、Executor 用
+      // 子プロセスの起動時にのみサンドボックス用の環境変数を付与して制御する。
+
+      // CLI 起動時に bwrap 引数の構文チェックと簡易な実行チェックを行う。
+      // ここで失敗した場合はループ全体を中断する。
+      const repoDir = process.cwd();
+      const stateDir = getOrchestratorStateDir(opts.task);
+      let effectiveArgs: string[];
+
+      if (opts.bwrapArgs.length > 0) {
+        effectiveArgs = opts.bwrapArgs.slice();
+      } else {
+        const defaultArgs: string[] = [];
+
+        const maybeRoBind = (p: string) => {
+          try {
+            if (fs.existsSync(p)) {
+              defaultArgs.push("--ro-bind", p, p);
+            }
+          } catch {
+            // ignore
+          }
+        };
+
+        maybeRoBind("/usr");
+        maybeRoBind("/bin");
+        maybeRoBind("/sbin");
+        maybeRoBind("/lib");
+        maybeRoBind("/lib64");
+
+        defaultArgs.push("--dev", "/dev");
+        defaultArgs.push("--proc", "/proc");
+        defaultArgs.push("--dir", "/tmp");
+        defaultArgs.push("--bind", repoDir, "/workspace");
+        defaultArgs.push("--bind", stateDir, stateDir);
+        defaultArgs.push("--chdir", "/workspace");
+        defaultArgs.push("--unshare-pid");
+        defaultArgs.push("--unshare-net");
+        defaultArgs.push("--new-session");
+
+        effectiveArgs = defaultArgs;
+      }
+
+      const dryRun = spawnSync("bwrap", [...effectiveArgs, "--", "true"], {
+        stdio: "ignore",
+      });
+      if (dryRun.status !== 0) {
+        throw new Error(
+          "--bwrap-skip-command-policy が指定されましたが、指定された bwrap 引数でのサンドボックス初期化に失敗しました。" +
+            " 引数を見直すか、このフラグを外して実行してください。",
+        );
+      }
+
+      // 後続のステップで再利用できるよう、検証済みの引数を上書きしておく。
+      opts.bwrapArgs = effectiveArgs;
+    }
+  } else if (opts.dangerouslySkipCommandPolicy) {
+    console.error(
+      "[opencode-orchestrator] WARN: --dangerously-skip-command-policy が指定されたため command-policy.json ゲートをサンドボックス無しでスキップします。このモードでは Executor が計画フェーズで設定したコマンド許可リストを無視するようになり、OpenCode のコマンド権限設定のみ適用されます。",
+    );
+  } else {
+    enforceCommandPolicyGate(stateDir);
   }
 
   const acceptanceIndexPath = path.join(stateDir, "acceptance-index.json");

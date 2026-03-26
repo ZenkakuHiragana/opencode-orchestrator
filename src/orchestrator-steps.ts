@@ -231,6 +231,24 @@ export async function runExecutorAndAuditorStep(
   })();
 
   const execPrompt = buildExecutorPrompt(isNextAfterAudit, status);
+  // Executor 用の opencode run 子プロセスにのみ、サンドボックス関連の
+  // フラグと bwrap 引数を環境変数として渡す。ループ本体の process.env
+  // は変更しない。bwrap 引数は runLoop 側で検証済みのものをそのまま
+  // 使用する。
+  const execEnv: NodeJS.ProcessEnv | undefined = (() => {
+    const env: NodeJS.ProcessEnv = {};
+
+    if (opts.dangerouslySkipCommandPolicy || opts.bwrapSkipCommandPolicy) {
+      env.OPENCODE_ORCH_EXEC_SKIP_COMMAND_POLICY = "1";
+    }
+
+    if (opts.bwrapSkipCommandPolicy) {
+      env.OPENCODE_ORCH_EXEC_BWRAP_ARGS = JSON.stringify(opts.bwrapArgs);
+    }
+
+    return Object.keys(env).length > 0 ? env : undefined;
+  })();
+
   const execRes = await runOpencode(
     [
       "run",
@@ -243,6 +261,8 @@ export async function runExecutorAndAuditorStep(
       execPrompt,
     ],
     orchLog,
+    true,
+    execEnv,
   );
 
   const safetyTripped = execRes.stdout.includes(
