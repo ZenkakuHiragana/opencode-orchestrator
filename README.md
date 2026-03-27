@@ -169,6 +169,7 @@ npx opencode-orchestrator loop --task my-task-key
   - 計画フェーズで決めた「許可コマンドリスト」を無視し、Executor が
     OpenCode 標準の permission.bash 設定の範囲で自由にコマンドを
     組み立てるようにします。
+  - Todo-Writer もそれを加味した計画を立てるようになります。
 - `--bwrap-skip-command-policy` (Linux のみ有効):
   - 上記に加え、Executor エージェントの `opencode run` を Bubblewrap サンドボックスで実行します。
   - 次の引数を指定して Bubblewrap をセットアップしています。
