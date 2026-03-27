@@ -46,9 +46,9 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "build:readme": "node scripts/generate-npm-readme.mjs",
-    "prepublishOnly": "npm run build:readme && cp README.npm.md README.md",
+    "prepublishOnly": "npm run build:readme",
     "postpublish": "git restore README.md || git checkout -- README.md || true",
-    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,md}\"",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,mjs,md}\"",
     "test": "vitest run",
     "lint": "eslint src/ tests/"
   },

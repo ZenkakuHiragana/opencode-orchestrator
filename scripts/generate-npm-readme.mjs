@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..");
 const srcPath = path.join(repoRoot, "README.md");
-const destPath = path.join(repoRoot, "README.npm.md");
+const destPath = path.join(repoRoot, "README.md");
 
 const diagramDirRelative = "docs/diagrams";
 const diagramDir = path.join(repoRoot, diagramDirRelative);
