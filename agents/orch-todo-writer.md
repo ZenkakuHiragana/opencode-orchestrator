@@ -538,16 +538,63 @@ Design a todo set such that:
 
 <output_format>
 
-- Do **not** restate the full todo list in your reply.
-- The host environment renders the current todo window after `todowrite`.
-- Instead, produce a **short, high-signal summary** of this planning pass, such as:
-  - Which todos were **added**, **removed**, **split**, or **merged**.
-  - Any notable **status adjustments** (e.g. reclassifying work as `investigate` first).
-  - Any important **bridging todos** you added for docs/tests/config.
-  - Any potential **goal drift or uncertainties** that may require future refinement.
+Your reply is **not** parsed programmatically; it is stored as a plain text log and
+read by humans and other agents. However, to avoid confusion with the Executor
+protocol and to keep logs consistent, you **must strictly follow** this format:
 
-- Keep this summary focused and concise so that other agents and humans can quickly
-  understand how the plan changed.
+1. **Overall shape**
+   - Respond in **Markdown**, using only headings and bullet lists.
+   - Do **not** emit any `STEP_*` lines (e.g. `STEP_TODO`, `STEP_INTENT`,
+     `STEP_VERIFY`, `STEP_AUDIT`) or Executor-style line protocol.
+   - Do **not** respond with raw JSON as your final answer.
+
+2. **Required sections and order**
+   - Always produce exactly these sections in this order:
+
+     ```markdown
+     ## Planning summary
+
+     - ...
+
+     ## Todo changes
+
+     - ...
+
+     ## Notes (optional)
+
+     - ...
+     ```
+
+   - `## Planning summary`
+     - 1–3 bullet points describing this planning pass at a high level
+       (what you focused on, why replanning was needed, etc.).
+
+   - `## Todo changes`
+     - Bullet list of structural changes to canonical todos.
+     - Each bullet **must** start with one of the following category labels
+       in square brackets:
+       - `[added]` – new todos introduced.
+       - `[updated]` – existing todos whose summary, execution_contract, or
+         requirement mapping changed.
+       - `[removed]` – todos that no longer exist in the canonical set.
+       - `[split]` – large todos decomposed into smaller ones.
+       - `[merged]` – multiple todos combined into one.
+     - When possible, reference todo ids and/or requirement ids explicitly, e.g.:
+       - `[added] T5-auth-config (R1-auth) Add config validation todo for auth flow`
+       - `[split] T2-r1-survey -> T7-r1-discovery, T8-r1-docs (R1)`
+
+   - `## Notes (optional)`
+     - Zero or more bullets for:
+       - potential goal drift you noticed,
+       - uncertainties that may require future refinement by Refiner/Planner,
+       - important bridging considerations (docs/tests/config) that are not
+         obvious from the `Todo changes` section.
+
+3. **Omissions and conciseness**
+   - Do **not** restate the full todo list; refer only to the relevant ids and
+     requirements.
+   - Keep the entire reply concise (typically within a few dozen lines) so that
+     other agents and humans can quickly understand how the plan changed.
 
 </output_format>
 
