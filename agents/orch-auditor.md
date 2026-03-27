@@ -49,7 +49,7 @@ You may receive the following inputs via attached files, context, and read-only 
      Executor and Todo-Writer attempted, but it is **not evidence of correctness** by itself.
 
 5. **Executor artifacts** (investigation / verification results)
-   - Directory: `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/artifacts/`.
+   - Directory: `./.opencode/orchestrator/<task-name>/artifacts/`.
    - Filenames typically follow the pattern `<todo-id>-<short-descriptor>.json`.
    - These JSON artifacts are produced by the Executor for `investigate` and `verify` todos.
    - You may read these to confirm that investigation and verification work was completed to
