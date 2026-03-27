@@ -1,4 +1,4 @@
-name: Coverage Badge
+name: CI and Coverage
 
 on:
   push:
@@ -13,20 +13,22 @@ jobs:
       contents: read
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
-          node-version: 20
+          node-version: "20.x"
           cache: npm
 
       - run: npm ci
 
       - name: Run tests with coverage
+        id: tests
         run: npx vitest run --coverage --reporter=json
         continue-on-error: true
 
       - name: Generate and upload coverage badge
+        if: ${{ always() }}
         run: |
           # coverage-summary.json が vitest から生成される
           if [ -f coverage/coverage-summary.json ]; then
@@ -81,3 +83,7 @@ jobs:
           name: coverage-badge
           path: coverage-badge.json
           retention-days: 30
+
+      - name: Fail if tests failed
+        if: ${{ always() && steps.tests.outcome == 'failure' }}
+        run: exit 1

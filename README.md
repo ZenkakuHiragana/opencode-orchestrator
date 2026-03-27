@@ -1,6 +1,6 @@
 # OpenCode Orchestrator Plugin
 
-[![Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/ZenkakuHiragana/952d30e89702c55163f5dd20cb0eef6e/raw/coverage-badge.json)](https://github.com/ZenkakuHiragana/opencode-orchestrator/actions/workflows/coverage.yml)
+[![CI](https://github.com/ZenkakuHiragana/opencode-orchestrator/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/ZenkakuHiragana/opencode-orchestrator/actions/workflows/ci.yml) [![Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/ZenkakuHiragana/952d30e89702c55163f5dd20cb0eef6e/raw/coverage-badge.json)](https://github.com/ZenkakuHiragana/opencode-orchestrator/actions/workflows/ci.yml)
 このリポジトリは、OpenCode 用のマルチエージェント・オーケストレータを
 npm プラグインおよび CLI アプリケーションとして提供するためのコードと
 エージェント定義をまとめたものです。

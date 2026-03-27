@@ -610,7 +610,17 @@ export async function runExecutorAndAuditorStep(
     } catch {
       // Cleanup failure is non-fatal; continue without aborting the loop.
     }
+  } else if (lastAuditStatus === "ready") {
+    // ready だが shouldAudit=false ということは、STEP_VERIFY 側の
+    // 根拠不足などで監査を走らせないパス。すでに上の分岐で
+    // verification_gap のメッセージは出しているが、ここでも
+    // 「ready だが証拠不足のため auditor を起動しない」と補足する。
+    console.error(
+      "[opencode-orchestrator] STEP_AUDIT: ready だが STEP_VERIFY の証拠不足のため、このステップでは auditor を起動しません。",
+    );
   } else {
+    // STEP_AUDIT: ready が 1 度も報告されていない場合にだけ、
+    // 「ready が出ていない」というメッセージを出す。
     console.error(
       "[opencode-orchestrator] このステップでは executor から STEP_AUDIT: ready が出ていないため、auditor は起動しません。",
     );
