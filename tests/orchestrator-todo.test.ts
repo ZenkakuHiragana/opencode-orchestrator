@@ -803,7 +803,7 @@ describe("orchTodoWriteTool", () => {
             result_artifacts: [
               {
                 kind: "investigation_v1",
-                path: "/state/artifacts/T12-sample-investigation.json",
+                path: ".opencode/orchestrator/artifact-done/artifacts/T12-sample-investigation.json",
                 summary:
                   "multiple usage locations and several risky dependency edges",
               },
@@ -833,7 +833,7 @@ describe("orchTodoWriteTool", () => {
     expect(saved.todos[0]?.result_artifacts).toEqual([
       {
         kind: "investigation_v1",
-        path: "/state/artifacts/T12-sample-investigation.json",
+        path: ".opencode/orchestrator/artifact-done/artifacts/T12-sample-investigation.json",
         summary: "multiple usage locations and several risky dependency edges",
       },
     ]);
@@ -879,12 +879,12 @@ describe("orchTodoWriteTool", () => {
             result_artifacts: [
               {
                 kind: "verification_v1",
-                path: "/state/artifacts/T18-verify-1.json",
+                path: ".opencode/orchestrator/multi-artifact/artifacts/T18-verify-1.json",
                 summary: "Unit test results",
               },
               {
                 kind: "verification_v1",
-                path: "/state/artifacts/T18-verify-2.json",
+                path: ".opencode/orchestrator/multi-artifact/artifacts/T18-verify-2.json",
                 summary: "Integration test results",
               },
             ],
@@ -947,7 +947,7 @@ describe("orchTodoWriteTool", () => {
             result_artifacts: [
               {
                 kind: "investigation_v1",
-                path: "/state/artifacts/T12-sample-investigation.json",
+                path: ".opencode/orchestrator/artifact-reject/artifacts/T12-sample-investigation.json",
                 summary: "partial results",
               },
             ],
@@ -992,7 +992,7 @@ describe("orchTodoWriteTool", () => {
             result_artifacts: [
               {
                 kind: "investigation_v1",
-                path: "/state/artifacts/T12-sample-phase1.json",
+                path: ".opencode/orchestrator/artifact-append/artifacts/T12-sample-phase1.json",
                 summary: "Phase 1 results",
               },
             ],
@@ -1013,7 +1013,7 @@ describe("orchTodoWriteTool", () => {
             result_artifacts: [
               {
                 kind: "investigation_v1",
-                path: "/state/artifacts/T12-sample-phase2.json",
+                path: ".opencode/orchestrator/artifact-append/artifacts/T12-sample-phase2.json",
                 summary: "Phase 2 results",
               },
             ],
@@ -1035,10 +1035,10 @@ describe("orchTodoWriteTool", () => {
 
     expect(saved.todos[0]?.result_artifacts).toHaveLength(2);
     expect(saved.todos[0]?.result_artifacts?.[0]?.path).toBe(
-      "/state/artifacts/T12-sample-phase1.json",
+      ".opencode/orchestrator/artifact-append/artifacts/T12-sample-phase1.json",
     );
     expect(saved.todos[0]?.result_artifacts?.[1]?.path).toBe(
-      "/state/artifacts/T12-sample-phase2.json",
+      ".opencode/orchestrator/artifact-append/artifacts/T12-sample-phase2.json",
     );
 
     if (previousXdgStateHome === undefined) {

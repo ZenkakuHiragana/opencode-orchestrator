@@ -242,16 +242,16 @@ canonical todos:
 ## Artifact Storage Conventions
 
 <artifacts>
+
 - All **investigation** and **verification** artifacts must be stored under:
-  - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/artifacts/`
-- Do **not** place orchestrator-internal artifacts in the repository working tree unless
-  the artifact itself is a deliverable required by the acceptance criteria.
+  - `./.opencode/orchestrator/<task-name>/artifacts/`
 - Use **JSON** as the primary format for orchestrator-internal artifacts.
   - Markdown is acceptable only for human-facing final reports explicitly required
     by the acceptance criteria.
 - File naming convention:
   - `<todo-id>-<short-descriptor>.json`
   - e.g. `T12-sample-survey.json`, `T18-sample-regression.json`.
+
 </artifacts>
 
 ## Execution Contract vs Result Artifacts

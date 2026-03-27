@@ -227,7 +227,7 @@ Across all intents:
 <artifact_rules>
 
 - All investigation and verification artifacts must be written under:
-  `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/artifacts/`.
+  `./.opencode/orchestrator/<task-name>/artifacts/`.
 - If `execution_contract.artifact_filename` is present, use it; otherwise derive a filename like `<todo-id>-<short-descriptor>.json`.
 - Artifacts must be **JSON**, not free-form Markdown, unless acceptance criteria explicitly require a human-facing report.
 - After writing an artifact, update the todo via `orch_todo_write` with `mode=executor_update_statuses` to set `result_artifacts` entries with:

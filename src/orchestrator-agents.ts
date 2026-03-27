@@ -175,7 +175,7 @@ export const orchestratorAgents: Record<string, OrchestratorAgentConfig> = {
         "orch-public-researcher": "allow",
       },
       write: {
-        "$XDG_STATE_HOME/opencode/orchestrator/*/artifacts/*": "allow",
+        ".opencode/orchestrator/*/artifacts/*": "allow",
       },
       external_directory: {
         "$XDG_STATE_HOME/opencode/orchestrator/**": "allow",

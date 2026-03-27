@@ -119,7 +119,7 @@ Follow this high-level protocol on every run:
 
 4. **Evaluate artifacts (supporting evidence only)**
    - Artifacts are stored under
-     `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/artifacts/` with filenames like
+     `./.opencode/orchestrator/<task-name>/artifacts/` with filenames like
      `<todo-id>-<short-descriptor>.json`.
 
    - When evaluating an `investigate` todo, read the corresponding `investigation_v1` artifact

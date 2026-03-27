@@ -24,6 +24,15 @@ export function getOrchestratorLogsDir(task: string): string {
   return path.join(getOrchestratorRoot(task), "logs");
 }
 
+// Compute the workspace-local artifacts directory for a given task. This directory lives
+// under the repository working tree (typically /workspace for Executor runs) so that
+// edit/patch tools can write JSON artifacts there. The orchestrator does not enforce
+// the workspace root here; callers are responsible for resolving this path relative to
+// their actual project root.
+export function getOrchestratorWorkspaceArtifactsDir(task: string): string {
+  return path.join(".opencode", "orchestrator", task, "artifacts");
+}
+
 // Internal helper: replace XDG/state placeholders in a single string.
 function replaceStatePlaceholders(text: string): string {
   const baseDir = getOrchestratorBaseDir();
