@@ -125,6 +125,17 @@ describe("isDeniedPath", () => {
     expect(isDeniedPath("cmake-build-debug/output")).toBe(true);
   });
 
+  it("blocks orchestrator workspace artifacts directory and files", () => {
+    expect(
+      isDeniedPath(
+        ".opencode/orchestrator/my-task/artifacts/T12-sample-investigation.json",
+      ),
+    ).toBe(true);
+    expect(isDeniedPath(".opencode/orchestrator/my-task/artifacts/")).toBe(
+      true,
+    );
+  });
+
   // Negative cases
   it("allows normal project files", () => {
     expect(isDeniedPath("src/components/Button.tsx")).toBe(false);

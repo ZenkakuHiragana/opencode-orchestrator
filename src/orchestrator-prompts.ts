@@ -86,7 +86,8 @@ export function buildCommitPrompt(): string {
   return (
     "Create git commits for the changes made in this story, grouping related changes into coherent commits. " +
     "Use the `autocommit` tool instead of calling `git commit` directly via bash. " +
-    "Only commit changes that are appropriate for this task, and avoid committing build artifacts or secrets. " +
+    "Only commit changes that are appropriate for this task, and avoid committing build artifacts, " +
+    "task artifacts under ./opencode/orchestrator, or secrets. " +
     "If no commit is needed, explain why."
   );
 }

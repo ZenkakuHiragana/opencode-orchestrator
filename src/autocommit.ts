@@ -61,6 +61,9 @@ const DENY_PATTERNS: RegExp[] = [
   /CMakeCache\.txt$/,
   /cmake-build-(debug|release|relwithdebinfo|minsizerel)(\/|$)/i,
 
+  // Orchestrator workspace-local artifacts (internal JSON evidence that should not be committed)
+  /(^|\/)\.opencode\/orchestrator\/[A-Za-z0-9._-]+\/artifacts(\/|$)/,
+
   // Logs / temp files
   /\.log$/i,
   /\.tmp$/i,

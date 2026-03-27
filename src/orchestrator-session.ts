@@ -110,8 +110,17 @@ export function buildFileArgs(opts: LoopOptions, stateDir: string): string[] {
 
   files.push(...opts.files);
 
+  // In normal policy-respecting mode, attach command-policy.json so that
+  // Planner/Executor can see the planned command set. In skip modes
+  // (dangerouslySkipCommandPolicy / bwrapSkipCommandPolicy), do **not**
+  // attach it so that downstream agents are not tempted to treat a stale
+  // or intentionally-ignored policy file as authoritative.
   const commandPolicyPath = path.join(stateDir, "command-policy.json");
-  if (fs.existsSync(commandPolicyPath)) {
+  if (
+    !opts.dangerouslySkipCommandPolicy &&
+    !opts.bwrapSkipCommandPolicy &&
+    fs.existsSync(commandPolicyPath)
+  ) {
     files.push(commandPolicyPath);
   }
 
