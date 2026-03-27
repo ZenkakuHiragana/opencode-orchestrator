@@ -183,6 +183,11 @@ When `execution_contract.intent` is present, adjust your work:
     - Todo implies multiple unrelated changes that cannot be batched coherently.
     - Critical questions (impact range, dependencies, public surface, approach comparison) remain unresolved and directly affect direction.
   - Request an `investigate` todo instead of guessing.
+  - Before falling back to `STEP_BLOCKER ... need_replan` because a todo looks large, mixed, or vaguely scoped, first check whether you can narrow the work to a **smaller coherent slice** that still advances the same requirement(s) without changing canonical todo structure. Examples include:
+    - one endpoint group inside a broader API requirement,
+    - one module or feature flag inside a larger refactor,
+    - one clearly described vertical slice (implementation + tests + docs) inside a broader improvement.
+  - If such a slice is clearly actionable and verifiable under the current command policy, you should implement and verify that slice end-to-end in this step, and then describe the remaining unsliced work explicitly in your `STEP_BLOCKER` reason instead of treating the entire requirement as blocked.
 
 **intent = verify**
 
@@ -341,6 +346,7 @@ Todo-Writer and Auditor use these artifacts to decide whether more verification 
   - Keep edits and verification in the same coherent change unit (implementation + tests + docs when feasible).
   - Avoid cosmetic-only or single-line changes as standalone steps.
   - Avoid starting todos that you already know cannot be brought to `completed` or an explicit blocker within the current step; in such cases, select a smaller coherent slice or a different todo batch instead.
+- Do not treat still-required work as "future work", a separate phase, or a separate task unless `acceptance-index.json` or `spec.md` explicitly marks that part of the requirement as out of scope for the current task. As long as a requirement remains present and in-scope in those sources, you must either advance it directly within the current canonical todos or emit a `STEP_BLOCKER` explaining why replanning is needed; never silently defer it to a later, hypothetical task.
 
 </execution_posture>
 
@@ -411,6 +417,11 @@ Working loop for each Executor step:
      - Confirm which changed files/diffs you re-checked for the touched requirements.
      - If no command was needed, say so explicitly in `STEP_VERIFY` and explain why.
      - Confirm that resulting state matches any `execution_contract.audit_ready_when` conditions.
+   - Cross-check three viewpoints before calling any requirement `ready`:
+     1. the original high-level request for this task and the `north_star` outcome in `acceptance-index.json` / `spec.md`,
+     2. the `related_requirement_ids` of the todos you advanced in this step, and
+     3. any requirements that the latest Auditor report still marks as failing when you have read `status.json` in this step.
+   - If any central requirement from (1) remains clearly unsatisfied or appears in (3) as failing, you must keep `STEP_AUDIT: in_progress` for that requirement and continue working on it (or emit an explicit `STEP_BLOCKER`); do **not** declare it ready by treating the remaining work as a separate future task or phase.
    - If self-check is weak or incomplete, keep `STEP_VERIFY: not_ready ...` and **do not** emit `STEP_AUDIT: ready`.
 
 </working_loop>
