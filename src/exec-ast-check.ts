@@ -26,7 +26,10 @@ export function assertExecHelperSourceIsSafe(source: string): void {
       }
     }
     if (ts.isNewExpression(node)) {
-      if (ts.isIdentifier(node.expression) && node.expression.text === "Function") {
+      if (
+        ts.isIdentifier(node.expression) &&
+        node.expression.text === "Function"
+      ) {
         fail("new Function() is not allowed");
       }
     }

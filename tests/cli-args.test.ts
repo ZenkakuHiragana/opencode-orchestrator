@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { parseExecArgs, parseListArgs, parseLoopArgs } from "../src/cli-args.js";
+import {
+  parseExecArgs,
+  parseListArgs,
+  parseLoopArgs,
+} from "../src/cli-args.js";
 
 describe("parseLoopArgs", () => {
   it("parses minimal required arguments", () => {
@@ -122,5 +126,18 @@ describe("parseExecArgs", () => {
     const opts = parseExecArgs(["--file", "helper.mjs"]);
     expect(opts.filePath).toBe("helper.mjs");
     expect(opts.scriptSource).toBe("");
+  });
+
+  it("rejects absolute allow-fs paths", () => {
+    const absPath = process.platform === "win32" ? "C:\\tmp" : "/tmp";
+    expect(() => parseExecArgs(["--allow-fs-read", absPath])).toThrow(
+      "must be a workspace-relative path or glob",
+    );
+  });
+
+  it("rejects parent-directory traversal in allow-fs paths", () => {
+    expect(() => parseExecArgs(["--allow-fs-write", "../secret/**"])).toThrow(
+      "must not contain .. path traversal",
+    );
   });
 });

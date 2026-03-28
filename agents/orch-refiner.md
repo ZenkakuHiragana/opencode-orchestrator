@@ -218,6 +218,34 @@ $HELPER_COMMANDS_SCHEMA
        > [!WARNING]
        > Refine and fix the command definitions while preserving their intent as much as possible.
 
+7. **Sandboxed helper command decision (`exec` route)**
+   - For each requirement, decide whether mechanical processing needs an explicit
+     sandboxed helper command.
+   - Default to ordinary `commands[]` entries and built-in helper commands.
+     Introduce `npx opencode-orchestrator exec` only when the requirement needs
+     machine-executed filesystem work such as enumeration, extraction,
+     count-matching, gap detection, or scaffold generation that cannot be
+     expressed cleanly through existing commands alone.
+   - When `exec` is needed, encode it as one or more explicit
+     `command-policy.json.commands[]` entries.
+     - The command entry itself should be the Executor's authorization surface.
+     - Prefer a concrete command or a tightly templated command whose parameters
+       cover only the necessary variation.
+     - Express the smallest necessary `--allow-fs-read`, `--allow-fs-write`, and
+       timeout scope in the command definition and its parameter metadata.
+     - Prefer workspace-relative paths rooted at the repository working
+       directory.
+     - Do **not** use `..` path traversal or any path that escapes the working
+       directory; allowed paths should stay inside the repository/artifacts area
+       needed for this task.
+     - Use `usage_notes` to explain the command's purpose, expected artifacts,
+       and any important parameter constraints.
+   - Do not duplicate this authorization in separate task-wide `helper_mode` or
+     `helper_exec` blocks. `command-policy.json.commands[]` is the canonical
+     source of truth for whether and how `exec` may be used.
+   - Spec-Checker will validate that these `exec` command definitions are
+     justified, scoped appropriately, and connected to acceptance evidence.
+
 </protocol>
 
 # Interaction with Other Agents and Tools

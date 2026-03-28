@@ -299,7 +299,7 @@ $HELPER_COMMANDS_SCHEMA
 
 - After you have both a spec-check report and a preflight result (if preflight was run), rely on `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/command-policy.json` as the single source of truth for loop readiness.
 - Ownership:
-  - **Refiner owns**: `commands[]` definitions — `id`, `command`, `role`, `usage`, `probe_command`, `parameters`, `related_requirements`, and `usage_notes`. These are the canonical command definitions and are the Refiner's single source of truth. You must not add, remove, or modify any of these fields directly.
+  - **Refiner owns**: `commands[]` definitions — `id`, `command`, `role`, `usage`, `probe_command`, `parameters`, `related_requirements`, and `usage_notes`. This includes any explicit `npx opencode-orchestrator exec` command templates and their scope/parameter constraints. These are the canonical command definitions and are the Refiner's single source of truth. You must not add, remove, or modify any of these fields directly.
   - **Preflight-cli and related tooling own**: availability annotations and helper status for commands.
   - **Planner owns**:
     - interpreting availability and helper status,
@@ -319,6 +319,7 @@ $HELPER_COMMANDS_SCHEMA
     - `usage_notes`.
 - Ensure that:
   - `commands[]` always reflects the Refiner-owned command definitions (no Planner-invented commands), and
+  - any sandboxed helper authorization is represented through explicit `commands[]` entries rather than Planner-side inferred metadata,
   - the loop is considered startable only when the combination of `summary.loop_status` and command availability truly supports implementation and verification for all major requirements, and
   - there are no remaining **loop-blocking open decisions** in `spec.md` that would force Todo-Writer or Executor to guess requirements, command-policy, or verification strategy.
 - If `loop_status` is not `"ready_for_loop"`:

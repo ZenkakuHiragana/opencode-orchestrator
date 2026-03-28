@@ -481,8 +481,20 @@ Design a todo set such that:
       Executor guesswork or clarifies evidence.
     - No todo is left completely orphaned from the requirement set without a deliberate reason
       (e.g. a global validation task explicitly applying to all requirements).
-  - Prefer stable todo IDs and gradual evolution over churn: - If a todo still represents the same underlying unit of work, refine its summary rather
-    than replacing it with a new ID.
+    - Prefer stable todo IDs and gradual evolution over churn: - If a todo still represents the same underlying unit of work, refine its summary rather
+      than replacing with a new ID.
+
+## 6. Helper Execution (`exec`) Route Considerations
+
+- When `command-policy.json` or the acceptance-index indicates that mechanical
+  processing is needed, prefer **batch todos** over per-item micro-todos:
+  - Inventory / scaffold / enrichment / audit batches are preferred over "enumerate each X" style items.
+- When a todo depends on sandboxed helper execution, reference the relevant
+  command-policy entry via `execution_contract.command_ids` and describe only the
+  todo-level completion boundary in `expected_evidence`, `audit_ready_when`, and
+  artifact fields.
+- Do not create per-item todos for work that is inherently mechanical; instead
+  create a single batch todo with clear `execution_contract`.
 
 </protocol>
 

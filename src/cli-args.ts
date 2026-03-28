@@ -1,3 +1,4 @@
+import path from "node:path";
 import { getOrchestratorStateDir } from "./orchestrator-paths.js";
 
 export interface LoopOptions {
@@ -66,14 +67,29 @@ export function printExecUsage() {
       "制限付き helper スクリプトを実行します。helper-source を省略した場合は --file または stdin を使います。\n" +
       "\n" +
       "オプション:\n" +
-      "  --allow-fs-read <path>   読み取りを許可する絶対パス/グロブ (複数可)\n" +
-      "  --allow-fs-write <path>  書き込みを許可する絶対パス/グロブ (複数可)\n" +
+      "  --allow-fs-read <path>   読み取りを許可する作業ディレクトリ基準の相対パス/グロブ (複数可)\n" +
+      "  --allow-fs-write <path>  書き込みを許可する作業ディレクトリ基準の相対パス/グロブ (複数可)\n" +
       "  --timeout <ms>           実行タイムアウト (デフォルト: 30000)\n" +
       "  --max-output <bytes>     stdout/stderr 合計の最大収集量 (デフォルト: 65536)\n" +
       "  --file <path>            helper ソースファイルを指定する\n" +
       "  --arg <value>            helper 内で argv として見せる値 (複数可)\n" +
       "  --help, -h               このヘルプを表示する",
   );
+}
+
+function validateRelativePathSpec(spec: string, flag: string): void {
+  if (path.isAbsolute(spec) || /^[A-Za-z]:/.test(spec)) {
+    throw new Error(
+      `${flag} must be a workspace-relative path or glob: ${spec}`,
+    );
+  }
+
+  const normalized = spec.replace(/\\/g, "/");
+  for (const segment of normalized.split("/")) {
+    if (segment === "..") {
+      throw new Error(`${flag} must not contain .. path traversal: ${spec}`);
+    }
+  }
 }
 
 export function printLoopUsage() {
@@ -272,12 +288,14 @@ export function parseExecArgs(argv: string[]): ExecOptions {
       if (!next) {
         throw new Error("--allow-fs-read requires a path");
       }
+      validateRelativePathSpec(next, "--allow-fs-read");
       pushSpecs(allowFsRead, next);
     } else if (arg === "--allow-fs-write") {
       const next = argv[++i];
       if (!next) {
         throw new Error("--allow-fs-write requires a path");
       }
+      validateRelativePathSpec(next, "--allow-fs-write");
       pushSpecs(allowFsWrite, next);
     } else if (arg === "--timeout") {
       const next = argv[++i];

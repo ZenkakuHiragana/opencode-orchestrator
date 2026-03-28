@@ -13,12 +13,14 @@ describe("assertExecHelperSourceIsSafe", () => {
   });
 
   it("rejects process access", () => {
-    expect(() => assertExecHelperSourceIsSafe("process.exit(1);"))
-      .toThrowError(/process is not allowed/);
+    expect(() => assertExecHelperSourceIsSafe("process.exit(1);")).toThrowError(
+      /process is not allowed/,
+    );
   });
 
   it("rejects import declarations", () => {
-    expect(() => assertExecHelperSourceIsSafe('import fs from "node:fs";'))
-      .toThrowError(/import declarations are not allowed/);
+    expect(() =>
+      assertExecHelperSourceIsSafe('import fs from "node:fs";'),
+    ).toThrowError(/import declarations are not allowed/);
   });
 });

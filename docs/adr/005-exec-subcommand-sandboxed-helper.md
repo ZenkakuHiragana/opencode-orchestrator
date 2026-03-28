@@ -120,7 +120,7 @@ exec-runner.ts
 
 ### 6. パス指定の原則
 
-- `--allow-fs-read` / `--allow-fs-write` は **最小限の絶対パス** に寄せる
+- `--allow-fs-read` / `--allow-fs-write` は **作業ディレクトリ基準の相対パス** に寄せる
 - glob の使用は抑制し、必要な場合のみ限定されたパターンを使う
 - symlink をなるべく避ける
 - 成果物は専用の work dir / artifacts dir に集約する
@@ -157,28 +157,34 @@ CLI 側で透過的に処理する。
 
 追加する判断軸:
 
-- `helper_mode`: `built-in` | `exec`
-  - `built-in`: command-policy に登録された既存コマンド・helper のみを使う
-  - `exec`: `exec` サブコマンドによる制限付き helper 実行経路を使う
-- `read_roots`: 読み取り許可ルートの配列
-- `write_roots`: 書き込み許可ルートの配列
-- `timeout_ms`: 実行タイムアウト
-- `expected_artifacts`: 生成される成果物と証拠
+- built-in helper/既存 command で足りるかを先に判断する
+- `exec` が必要なら、`command-policy.json.commands[]` に明示的な
+  `npx opencode-orchestrator exec ...` コマンド定義として書く
+- `--allow-fs-read` / `--allow-fs-write` / timeout / helper purpose は
+  その command 定義と `usage_notes` に寄せる
+- path は workspace-relative を基本とし、`..` による上位ディレクトリ参照や
+  repo 外への到達を禁止する
+- task-wide な `helper_mode` / `helper_exec` のような別メタデータは持たず、
+  command-policy を唯一の認可面にする
 
 #### Spec-Checker
 
 次を検査する:
 
-- 全件網羅や監査が必要なのに mechanization path がない
-- `exec` を使うのに read/write scope が広すぎる
-- built-in helper で足りるのに不要な経路を要求している
-- expected_artifacts と evidence 要件が結び付いていない
+- 全件網羅や監査が必要なのに、built-in/helper でも explicit な `exec`
+  command でも到達経路がない
+- `exec` command の read/write scope が広すぎる
+- `exec` command が `..` や repo 外へ出る path を含んでいる
+- built-in helper で足りるのに不要な `exec` command を定義している
+- `exec` command の役割や成果物が acceptance/evidence に結び付いていない
 
 #### Todo-Writer
 
 - per-item の細粒度 ToDo を作らず、inventory / scaffold / enrichment / audit
   のバッチ ToDo にする
-- `exec` を使う ToDo では helper purpose と artifact を明示する
+- `exec` を使う ToDo では `execution_contract.command_ids` で該当 command を参照し、
+  completion boundary と artifact だけを ToDo 側に書く
+- read/write scope や timeout を `execution_contract` に複写しない
 
 #### Executor
 
@@ -186,7 +192,7 @@ CLI 側で透過的に処理する。
 
 1. 既存コマンドで足りるならそれを使う
 2. built-in helper で足りるならそれを使う
-3. 計画で `exec` が許され、必要なら `exec` を使う
+3. `command-policy.json.commands[]` に explicit な `exec` command があり、必要ならそれを使う
 4. それでも足りない場合は blocker ではなく再計画要求
 
 制約:
@@ -218,11 +224,11 @@ API サーフェスを制限することで多層防御とする。
 
 SDK を helper に提供する方式として 3 つを検討した:
 
-| 方式 | 概要 | 判断 |
-|---|---|---|
-| スクリプト結合 | runner が SDK 定義 + helper を結合して実行 | **採用**: 最もシンプル |
-| 動的 import | helper を `.mjs` 配置し `await import()` で実行 | 不採用: モジュール解決が複雑 |
-| グローバル注入 | `globalThis` に SDK を生やしてから実行 | 不採用: `globalThis` 禁止方針と矛盾 |
+| 方式           | 概要                                            | 判断                                |
+| -------------- | ----------------------------------------------- | ----------------------------------- |
+| スクリプト結合 | runner が SDK 定義 + helper を結合して実行      | **採用**: 最もシンプル              |
+| 動的 import    | helper を `.mjs` 配置し `await import()` で実行 | 不採用: モジュール解決が複雑        |
+| グローバル注入 | `globalThis` に SDK を生やしてから実行          | 不採用: `globalThis` 禁止方針と矛盾 |
 
 スクリプト結合はカスタム loader や module resolution の複雑さを
 避けつつ、SDK 関数を helper のスコープに直接提供できる。

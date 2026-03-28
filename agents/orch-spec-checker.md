@@ -219,6 +219,27 @@ Treat these inputs as the **only** authoritative context about the story and its
   - Missing commands for obvious repository workflows.
   - Acceptance criteria requiring subjective interpretation with no evidence hook.
   - Command-policy that encourages near-duplicate command sprawl or opaque wrappers.
+- **Sandboxed helper command validation (`exec`)**
+  - If requirements clearly need full-enumeration, mechanical audit, or scripted
+    batch processing but there is no plausible built-in/helper path and no
+    explicit `commands[]` entry using `npx opencode-orchestrator exec`, flag at
+    least a **warning-level issue**.
+    - If this leaves no realistic path to satisfy or verify a major acceptance
+      criterion, bias toward `status: "needs_revision"` and
+      `feasible_for_loop: false`.
+  - If an `exec` command definition uses broader filesystem scope than necessary
+    (for example, repo root when a subdirectory or artifact directory would be
+    sufficient), flag as a **warning-level issue**.
+  - If an `exec` command definition uses `..` traversal, absolute paths without
+    a clear need, or any path pattern that appears to escape the repository
+    working directory/artifacts area, flag as at least a **warning-level
+    issue** and explain that sandbox scope should stay repository-local.
+  - If built-in commands or approved helper commands are clearly sufficient but
+    an `exec` command is defined anyway, flag as an **info-level issue** with a
+    suggestion to simplify.
+  - If an `exec` command definition does not make its expected output or proof
+    role clear via requirement linkage, command role, usage notes, or related
+    todo evidence, flag as a **warning-level issue**.
 
 </feasibility_analysis>
 

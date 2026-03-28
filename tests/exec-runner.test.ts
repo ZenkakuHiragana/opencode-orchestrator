@@ -76,4 +76,18 @@ describe("runExec", () => {
     expect(args.join(" ")).toContain("--allow-fs-read=");
     expect(args.join(" ")).toContain("--allow-fs-write=");
   });
+
+  it("rejects absolute allow-fs specs before spawning", async () => {
+    await expect(
+      runExec({
+        allowFsRead: [process.platform === "win32" ? "C:\\tmp" : "/tmp"],
+        allowFsWrite: [],
+        timeoutMs: 1000,
+        maxOutputBytes: 1024,
+        scriptSource: "console.log('hi');",
+        scriptArgs: [],
+      }),
+    ).rejects.toThrow("workspace-relative");
+    expect(mockSpawn).not.toHaveBeenCalled();
+  });
 });

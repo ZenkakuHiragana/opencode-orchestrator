@@ -37,6 +37,19 @@ function getPermissionFlag(): string {
 function normalizePathSpecs(specs: string[]): string[] {
   const out = new Set<string>();
   for (const spec of specs) {
+    if (path.isAbsolute(spec) || /^[A-Za-z]:/.test(spec)) {
+      throw new Error(`exec path spec must be workspace-relative: ${spec}`);
+    }
+
+    const normalized = spec.replace(/\\/g, "/");
+    for (const segment of normalized.split("/")) {
+      if (segment === "..") {
+        throw new Error(
+          `exec path spec must not contain .. traversal: ${spec}`,
+        );
+      }
+    }
+
     out.add(path.resolve(spec));
   }
   return [...out];
