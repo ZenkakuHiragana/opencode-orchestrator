@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { parseListArgs, parseLoopArgs } from "../src/cli-args.js";
+import { parseExecArgs, parseListArgs, parseLoopArgs } from "../src/cli-args.js";
 
 describe("parseLoopArgs", () => {
   it("parses minimal required arguments", () => {
@@ -92,5 +92,35 @@ describe("parseListArgs", () => {
     expect(() => parseListArgs(["--proposals"])).toThrow(
       "--proposals requires --task <task-name>",
     );
+  });
+});
+
+describe("parseExecArgs", () => {
+  it("parses helper source and path limits", () => {
+    const opts = parseExecArgs([
+      "--allow-fs-read",
+      "src/**,tests/**",
+      "--allow-fs-write",
+      "artifacts/**",
+      "--timeout",
+      "1234",
+      "--max-output",
+      "4321",
+      "console.log('hi')",
+      "--arg",
+      "x",
+    ]);
+    expect(opts.allowFsRead).toEqual(["src/**", "tests/**"]);
+    expect(opts.allowFsWrite).toEqual(["artifacts/**"]);
+    expect(opts.timeoutMs).toBe(1234);
+    expect(opts.maxOutputBytes).toBe(4321);
+    expect(opts.scriptSource).toContain("console.log('hi')");
+    expect(opts.scriptArgs).toEqual(["x"]);
+  });
+
+  it("accepts --file without inline source", () => {
+    const opts = parseExecArgs(["--file", "helper.mjs"]);
+    expect(opts.filePath).toBe("helper.mjs");
+    expect(opts.scriptSource).toBe("");
   });
 });

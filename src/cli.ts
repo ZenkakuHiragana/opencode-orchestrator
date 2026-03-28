@@ -6,7 +6,9 @@ import * as fs from "node:fs";
 import {
   parseLoopArgs,
   parseListArgs,
+  parseExecArgs,
   printLoopUsage,
+  printExecUsage,
   printListUsage,
 } from "./cli-args.js";
 import {
@@ -15,6 +17,7 @@ import {
   buildFileArgs,
 } from "./orchestrator-loop.js";
 import { runList } from "./orchestrator-list.js";
+import { runExec } from "./exec-runner.js";
 import {
   parseClearArgs,
   printClearUsage,
@@ -27,8 +30,8 @@ import {
 } from "./orchestrator-install.js";
 import { parseAuditResult } from "./orchestrator-audit.js";
 
-export { parseLoopArgs, parseListArgs } from "./cli-args.js";
-export { printLoopUsage, printListUsage } from "./cli-args.js";
+export { parseLoopArgs, parseListArgs, parseExecArgs } from "./cli-args.js";
+export { printLoopUsage, printListUsage, printExecUsage } from "./cli-args.js";
 export {
   runLoop,
   enforceCommandPolicyGate,
@@ -68,6 +71,7 @@ export async function runCli(argv: string[]): Promise<number> {
   if (
     subcommand !== "loop" &&
     subcommand !== "list" &&
+    subcommand !== "exec" &&
     subcommand !== "clear" &&
     subcommand !== "install"
   ) {
@@ -89,6 +93,10 @@ export async function runCli(argv: string[]): Promise<number> {
     }
     if (subcommand === "list") {
       printListUsage();
+      return 0;
+    }
+    if (subcommand === "exec") {
+      printExecUsage();
       return 0;
     }
     if (subcommand === "clear") {
@@ -121,6 +129,18 @@ export async function runCli(argv: string[]): Promise<number> {
     return 0;
   }
 
+  if (actualSubcommand === "exec") {
+    const opts = parseExecArgs(args);
+    const result = await runExec(opts);
+    if (result.stdout) {
+      process.stdout.write(result.stdout);
+    }
+    if (result.stderr) {
+      process.stderr.write(result.stderr);
+    }
+    return result.code === 0 ? 0 : 1;
+  }
+
   if (actualSubcommand === "clear") {
     const opts = parseClearArgs(args);
     await runClear(opts);
@@ -147,6 +167,7 @@ function printUsage() {
       "サブコマンド:\n" +
       '  loop  --task <task-name> [--session <ses_...> | --continue] [--commit] [--max-loop N] [--max-restarts M] [--file <path>] "prompt..."\n' +
       "  list  [--json]   orchestrator タスク一覧または proposal 一覧を表示\n" +
+      '  exec  [--allow-fs-read <path>] [--allow-fs-write <path>] [--file <path>] ["helper-source"]\n' +
       "  clear --task <task-name> --proposals [-y]   指定タスクの proposal を削除\n" +
       "  install [-g|--global]   OpenCode 設定ファイルにプラグインを追加\n" +
       "\n" +
