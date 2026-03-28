@@ -79,7 +79,7 @@
 - Orchestrator ループ
   - 旧シェル版 `orchestrator-loop.sh` は Orchestrator / Auditor のハングや安全装置トリップを検出し、ウォッチドッグ + timeout で保護します。
   - 新 CLI 版 `opencode-orchestrator loop` でも同様に `MAX_LOOP` / `MAX_RESTARTS` 相当の制御を行います。デフォルト値を変える場合は README とコメントを更新してください。
-  - `status.json` には `replan_request` に加えて `failure_budget` も保存されます。`consecutive_verification_gaps` は `STEP_AUDIT: ready` に `STEP_VERIFY: ready` が伴わないケースのみ連続カウントし、通常の非監査ステップではリセットされます。
+  - `status.json` には `failure_budget` も保存されます。`consecutive_verification_gaps` は `STEP_AUDIT: ready` に `STEP_VERIFY: ready` が伴わないケースのみ連続カウントし、通常の非監査ステップではリセットされます。
   - Executor プロトコルでは各 step で `STEP_INTENT:` と `STEP_VERIFY:` を必ず出力する前提です。ID 列はカンマ区切りで、`R1,R2` / `R1, R2` の両方を許容します。
 
 ## 7. エディタ / 補完ツールルール
@@ -125,7 +125,7 @@ system prompt を編集する際は、ここから外れる権限を勝手に与
   - リポジトリ内のコード／ドキュメント（`read` / `glob` / `grep`）
   - Spec-Checker / Preflight の結果 JSON（`task` ツール / `preflight-cli` 経由）
 - 主な書き込み対象
-  - 原則 **書かない**。唯一の例外として、`status.json.proposals` を空配列にするなど「proposal の整理」だけが許可されている（`src/orchestrator-agents.ts` の permission を参照）。
+  - 原則 **書かない**。唯一の例外として、`proposals.json` の整理だけが許可されている（`src/orchestrator-agents.ts` の permission を参照）。
 - 呼べるもの
   - `task` → `orch-refiner`, `orch-spec-checker`
   - `preflight-cli` ツール → Refiner が定義した command descriptors と helper commands について、permission.bash ルールをローカル評価し、`command-policy.json` の `availability` と `available_helper_commands`、`loop_status` を更新する。
@@ -154,7 +154,7 @@ system prompt を編集する際は、ここから外れる権限を勝手に与
 - 主な読み取り対象
   - `acceptance-index.json` / `spec.md`
   - `todo.json`（既存 canonical todo）
-  - `status.json`（特に `replan_request`）
+  - `status.json`（特に `failure_budget`）
 - 主な書き込み対象
   - `todo.json`（`orch_todo_write` ツール経由）
     - `mode=planner_replace_canonical` / `planner_add_todos` / `planner_update_todos` のみ

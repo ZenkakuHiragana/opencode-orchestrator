@@ -35,6 +35,7 @@ export interface ListOptions {
   format: "text" | "json";
   task?: string;
   showProposals?: boolean;
+  openOnly?: boolean;
 }
 
 export interface ExecOptions {
@@ -56,7 +57,8 @@ export function printListUsage() {
       "オプション:\n" +
       "  --json                タスク一覧を JSON 形式で出力する\n" +
       "  --task <name>         対象タスクを 1 つに絞り込む (--proposals と併用)\n" +
-      "  --proposals           タスク一覧の代わりに指定タスクの proposal 一覧を表示する",
+      "  --proposals           タスク一覧の代わりに指定タスクの proposal 一覧を表示する\n" +
+      "  --open                proposal 一覧では status='open' のものだけ表示する",
   );
 }
 
@@ -238,6 +240,7 @@ export function parseListArgs(argv: string[]): ListOptions {
   let format: "text" | "json" = "text";
   let task: string | undefined;
   let showProposals = false;
+  let openOnly = false;
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -251,6 +254,8 @@ export function parseListArgs(argv: string[]): ListOptions {
       task = next;
     } else if (arg === "--proposals") {
       showProposals = true;
+    } else if (arg === "--open") {
+      openOnly = true;
     } else if (arg.startsWith("-")) {
       throw new Error(`unknown option for list: ${arg}`);
     } else {
@@ -262,7 +267,7 @@ export function parseListArgs(argv: string[]): ListOptions {
     throw new Error("--proposals requires --task <task-name>");
   }
 
-  return { format, task, showProposals };
+  return { format, task, showProposals, openOnly };
 }
 
 function pushSpecs(target: string[], value: string): void {

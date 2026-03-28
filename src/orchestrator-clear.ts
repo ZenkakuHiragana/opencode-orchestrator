@@ -2,23 +2,27 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 import { getOrchestratorStateDir } from "./orchestrator-paths.js";
-import { loadStatusJson, saveStatusJson } from "./orchestrator-status.js";
+import { loadProposals, saveProposals } from "./orchestrator-proposals.js";
 
 export interface ClearOptions {
   task: string;
   clearProposals: boolean;
   yes: boolean;
+  resolveId?: string;
+  dismissId?: string;
 }
 
 export function printClearUsage(): void {
   console.error(
-    "使い方: opencode-orchestrator clear --task <task-name> --proposals [-y]\n" +
+    "使い方: opencode-orchestrator clear --task <task-name> [--proposals | --resolve <id> | --dismiss <id>] [-y]\n" +
       "\n" +
-      "指定したタスクの orchestrator 状態から proposal を削除します。現時点では status.json.proposals だけが対象です。\n" +
+      "指定したタスクの proposals.json を更新します。\n" +
       "\n" +
       "オプション:\n" +
       "  --task <name>   対象となるタスクキー (例: 'my-task')\n" +
-      "  --proposals     status.json.proposals を削除する\n" +
+      "  --proposals     すべての open proposal を resolved にする\n" +
+      "  --resolve <id>  指定した proposal を resolved にする\n" +
+      "  --dismiss <id>  指定した proposal を dismissed にする\n" +
       "  -y              確認なしで削除を実行する",
   );
 }
@@ -27,6 +31,8 @@ export function parseClearArgs(argv: string[]): ClearOptions {
   let task: string | undefined;
   let clearProposals = false;
   let yes = false;
+  let resolveId: string | undefined;
+  let dismissId: string | undefined;
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -38,6 +44,18 @@ export function parseClearArgs(argv: string[]): ClearOptions {
       task = next;
     } else if (arg === "--proposals") {
       clearProposals = true;
+    } else if (arg === "--resolve") {
+      const next = argv[++i];
+      if (!next) {
+        throw new Error("--resolve requires a proposal id");
+      }
+      resolveId = next;
+    } else if (arg === "--dismiss") {
+      const next = argv[++i];
+      if (!next) {
+        throw new Error("--dismiss requires a proposal id");
+      }
+      dismissId = next;
     } else if (arg === "-y") {
       yes = true;
     } else if (arg.startsWith("-")) {
@@ -50,20 +68,22 @@ export function parseClearArgs(argv: string[]): ClearOptions {
   if (!task) {
     throw new Error("--task は clear サブコマンドで必須です");
   }
-  if (!clearProposals) {
-    throw new Error("現在 clear がサポートしているのは --proposals のみです");
+  if (!clearProposals && !resolveId && !dismissId) {
+    throw new Error(
+      "clear には --proposals, --resolve, --dismiss のいずれかが必要です",
+    );
   }
 
-  return { task, clearProposals, yes };
+  return { task, clearProposals, yes, resolveId, dismissId };
 }
 
 export async function runClear(opts: ClearOptions): Promise<void> {
   const stateDir = getOrchestratorStateDir(opts.task);
-  const statusPath = path.join(stateDir, "status.json");
-  const status = loadStatusJson(statusPath);
-  const proposals = Array.isArray(status.proposals) ? status.proposals : [];
+  const proposalsPath = path.join(stateDir, "proposals.json");
+  const proposalsFile = loadProposals(proposalsPath);
+  const proposals = proposalsFile.proposals;
 
-  if (!opts.clearProposals) {
+  if (!opts.clearProposals && !opts.resolveId && !opts.dismissId) {
     console.error(
       "[opencode-orchestrator] clear: 実行対象が指定されていません (--proposals が必要です)",
     );
@@ -115,13 +135,37 @@ export async function runClear(opts: ClearOptions): Promise<void> {
     }
   }
 
-  status.proposals = [];
-  status.consecutive_env_blocked = 0;
-  if (status.failure_budget) {
-    status.failure_budget.consecutive_env_blocked = 0;
+  const now = new Date().toISOString();
+  if (opts.clearProposals) {
+    for (const proposal of proposalsFile.proposals) {
+      if (proposal.status === "open") {
+        proposal.status = "resolved";
+        proposal.resolved_at = now;
+        proposal.resolved_by = "cli";
+      }
+    }
   }
-  saveStatusJson(statusPath, status);
+
+  if (opts.resolveId || opts.dismissId) {
+    const target = proposalsFile.proposals.find((proposal) => {
+      if (opts.resolveId) return proposal.id === opts.resolveId;
+      return proposal.id === opts.dismissId;
+    });
+    if (!target) {
+      throw new Error(
+        `proposal id not found: ${opts.resolveId ?? opts.dismissId}`,
+      );
+    }
+    if (target.status !== "open") {
+      throw new Error(`proposal is already closed: ${target.id}`);
+    }
+    target.status = opts.dismissId ? "dismissed" : "resolved";
+    target.resolved_at = now;
+    target.resolved_by = "cli";
+  }
+
+  saveProposals(proposalsPath, proposalsFile);
   console.error(
-    `[opencode-orchestrator] タスク "${opts.task}" から ${proposals.length} 件の proposal を削除しました。`,
+    `[opencode-orchestrator] タスク "${opts.task}" の proposal を更新しました。`,
   );
 }

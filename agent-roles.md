@@ -33,7 +33,7 @@
     - `command-policy.json` … Planner が合成するコマンドポリシー
     - `status.json` … `orchestrator-loop` が更新するループ状態
       - 直近の executor / auditor スナップショットに加えて、
-        Todo-Writer が再計画入力として優先参照する `replan_request` を含む。
+        直近の proposal queue (`proposals.json`) と failure budget を参照できる。
 
 以下、エージェント／コマンドごとに、(A) 役割, (B) 主な入力ファイル, (C) 主な出力ファイル,
 (D) プロンプト上の出力仕様 を整理します。
@@ -136,9 +136,9 @@ sequenceDiagram
     CLI->>StateDir: status.json を初期化（current_cycle=1）
 
     loop 最大 maxLoop 回まで繰り返し
-        CLI->>StateDir: status.json.replan_request を参照
+        CLI->>StateDir: proposals.json を参照
 
-        alt step === 1 の場合、または replan_required === true の場合
+        alt step === 1 の場合、または open proposal がある場合
             CLI->>TWCommand: orch-todo-write コマンドを呼び出し
             TWCommand-->>TWAgent: orch-todo-writer サブエージェントとして起動
             TWAgent->>TWTool: orch_todo_write ツール\n（mode=planner_replace_canonical）
@@ -171,10 +171,7 @@ sequenceDiagram
         else STEP_VERIFY に根拠がない場合
             EXAgent-->>CLI: STEP_AUDIT: ready を返したが STEP_VERIFY の根拠不足
             CLI->>StateDir: failure_budget.consecutive_verification_gaps を加算
-            CLI->>StateDir: replan_request.issues に verification_gap を追加
-            alt consecutive_verification_gaps が 2 以上の時
-                CLI->>StateDir: replan_required = true を設定
-            end
+            CLI->>StateDir: proposals.json に verification_gap proposal を追加
             Note over CLI: このステップでは Auditor は起動されない
         end
 
@@ -213,9 +210,8 @@ sequenceDiagram
 | --------------------- | ------------------------------------------------------------------------------------------------------------------ |
 | `last_executor_step`  | `step_todo` / `step_diff` / `step_cmd` / `step_intent` / `step_verify` / `step_audit` / `requirement_traceability` |
 | `last_auditor_report` | `{ done, requirements[{id, passed, reason}] }`                                                                     |
-| `replan_request`      | ブロック事由・失敗種別の正規化されたリスト（Todo-Writer の次パスで参照）                                           |
+| `proposals.json`      | Executor / Auditor / Todo-Writer からの再計画・ブロック提案の永続キュー                                            |
 | `failure_budget`      | verification_gap・audit_failed 等の連続カウント                                                                    |
-| `replan_required`     | failure_budget の閾値超過で true                                                                                   |
 | `current_cycle`       | ステップ番号（1 始まり）                                                                                           |
 
 `requirement_traceability` は `parseExecutorStepSnapshot()` の中で `buildRequirementDiffTrace()` により `step_todo` / `step_diff` / `step_intent` / `step_audit` から自動導出される。各ステップで Auditor が requirement から代表ファイルへ追跡できる道筋が確保されている。
@@ -396,7 +392,8 @@ sequenceDiagram
   - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/acceptance-index.json`
   - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/spec.md`
   - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/status.json`
-    - `replan_request` がある場合は、Todo-Writer にとっての第一級の再計画入力として扱う。
+  - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/proposals.json`
+    - open な提案がある場合は、Todo-Writer にとっての第一級の再計画入力として扱う。
   - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/todo.json`
   - `orch_todo_read` ツールからの既存 canonical todo 群
 
@@ -461,7 +458,7 @@ sequenceDiagram
     - `STEP_AUDIT:` 行（ちょうど 1 個）
   - `STEP_INTENT` / `STEP_VERIFY` の ID 列はカンマ区切りで、`R1,R2` と `R1, R2` の両方を受理する。
   - これらは `src/orchestrator-status.ts` の `parseExecutorStepSnapshot` などでパースされ、
-    `status.json` の `last_executor_step` / `replan_request` / `failure_budget` / `proposals`
+    `status.json` の `last_executor_step` / `failure_budget`
     などに反映される。
 
 ## 8. orch-auditor / orch-audit
@@ -483,7 +480,7 @@ sequenceDiagram
   - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/spec.md`
   - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/acceptance-index.json`
   - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/status.json`
-    - `last_executor_step`、`last_auditor_report`、`replan_request`、TODO 状況、`proposals` など。参考情報であり、
+    - `last_executor_step`、`last_auditor_report`、`failure_budget`、TODO 状況、`proposals.json` など。参考情報であり、
       それ自体を証拠とは見なさない。
   - Git 差分・ログ・テストログなど（添付ファイルや `bash` 読み取り系コマンド経由）。
 
@@ -547,8 +544,9 @@ sequenceDiagram
 - (C) 主な出力ファイル
   - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/status.json`
     - `last_session_id`, `current_cycle`, `last_executor_step`, `last_auditor_report`,
-      `replan_required`, `replan_reason`, `replan_request`, `failure_budget`, `proposals`
-      などを更新。
+      `failure_budget` などを更新。
+  - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/proposals.json`
+    - open / resolved / dismissed proposal の状態を更新。
   - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/logs/` 配下
     - `orch_step_XXX.txt` / `audit_step_XXX.jsonl` / `todowriter_step_XXX.txt` などのログ。
   - `orchestrator_session_*.json`
@@ -688,14 +686,15 @@ sequenceDiagram
 - 互換性のため、Reader 側は `CanonicalTodo[]` だけがトップにある配列形式も許容しているが、
   Orchestrator が自前で書き出す場合は上記オブジェクト形式が使われる。
 
-### 11.4 status.json（orchestrator-loop 状態）
+### 11.4 status.json（orchestrator-loop 状態 / migration context）
 
 - パス: `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/status.json`
 - オーナー: `orchestrator-loop.ts`（`runLoop()` 内からのみ更新）
 - 型定義: `src/orchestrator-status.ts` の `OrchestratorStatus`。
 
 `status.json` は、CLI（orchestrator-loop）が機械的に書き込むスナップショットのみを持つ、比較的
-小さな JSON です。現時点で CLI が書き込んでいるフィールドは、次の通りです。
+小さな JSON です。ライブの proposal surface は `proposals.json` にあり、この節は loop 状態の
+migration context として読むものです。現時点で CLI が書き込んでいるフィールドは、次の通りです。
 
 ```jsonc
 {
@@ -750,25 +749,6 @@ sequenceDiagram
     "done": false,
     "requirements": [{ "id": "R1", "passed": false, "reason": "..." }],
   },
-  "replan_required": false,
-  "replan_reason": "...",
-  "replan_request": {
-    "requested_at_cycle": 3,
-    "issues": [
-      {
-        "source": "executor",
-        "summary": "...",
-        "related_todo_ids": ["T4-auth"],
-        "related_requirement_ids": [],
-      },
-      {
-        "source": "auditor",
-        "summary": "...",
-        "related_todo_ids": [],
-        "related_requirement_ids": ["R1"],
-      },
-    ],
-  },
   "consecutive_env_blocked": 0,
   "failure_budget": {
     "todo_writer_safety_restarts": 0,
@@ -780,26 +760,49 @@ sequenceDiagram
     "last_failure_kind": "verification_gap",
     "last_failure_summary": "監査準備を宣言したが STEP_VERIFY の根拠が不足している",
   },
+}
+```
+
+#### 11.4.1 proposals.json（live proposal queue）
+
+- パス: `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/proposals.json`
+- オーナー: `orchestrator-loop.ts` と `orch-todo-writer`
+- 型定義: `src/orchestrator-proposals.ts` の `ProposalsFile` / `ProposalEntry`
+
+```jsonc
+{
+  "version": 1,
   "proposals": [
     {
       "id": "p-...",
-      "source": "executor", // または "auditor"
+      "source": "executor", // または "auditor" / "todo_writer"
       "cycle": 3,
-      "kind": "env_blocked", // 例: env_blocked / need_replan など
-      "summary": "...", // English short text
-      "details": "...", // 任意
+      "kind": "env_blocked", // env_blocked / need_replan / verification_gap / contract_gap / audit_failure / scope_change / priority_shift
+      "priority": "high",
+      "summary": "...",
+      "details": "...",
+      "related_requirement_ids": ["R1"],
+      "related_todo_ids": ["T1"],
+      "status": "open", // open / resolved / dismissed
+      "auto_resolvable": true,
+      "created_at": "2026-03-29T00:00:00.000Z",
+      "resolved_at": "2026-03-29T01:00:00.000Z",
+      "resolved_by": "auto",
     },
   ],
 }
 ```
 
+- `open` proposals are re-fed into replanning on later Todo-Writer passes until they are resolved or dismissed.
+- `resolved` / `dismissed` proposals remain in the file for auditability.
+
 - `requirement_traceability` は `parseExecutorStepSnapshot` 内で `buildRequirementDiffTrace()` により
   自動的に導出される。`STEP_TODO` / `STEP_DIFF` / `STEP_INTENT` / `STEP_AUDIT` から requirement ID と
   代表ファイル一覧を抽出し、各 requirement に対して `representative_files` を対応づける。
   Auditor や Planner が「どのファイルがどの requirement を満たすか」を todo だけで追跡できる。
-- `replan_request` は `last_executor_step.step_blocker` と `last_auditor_report.requirements`
-  から CLI が正規化して構築する「現在の再計画要求」です。Todo-Writer は、生の履歴スナップショット
-  を直接解釈する前に、まずこのフィールドを参照する想定です。
+- `proposals.json` は `last_executor_step.step_blocker` と `last_auditor_report.requirements`
+  から CLI が正規化して構築する「現在の再計画キュー」です。Todo-Writer は、生の履歴スナップショット
+  を直接解釈する前に、まずこのキューを参照する想定です。
 - `failure_budget.consecutive_verification_gaps` は `STEP_AUDIT: ready` なのに
   `STEP_VERIFY: ready` が伴わなかったステップだけを連続カウントし、通常の
   `STEP_AUDIT: in_progress` / 未監査ステップではリセットされます。

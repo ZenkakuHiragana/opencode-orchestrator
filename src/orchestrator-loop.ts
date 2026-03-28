@@ -8,6 +8,10 @@ import {
   getOrchestratorLogsDir,
   getOrchestratorStateDir,
 } from "./orchestrator-paths.js";
+import {
+  hasOpenNonAutoResolvableProposals,
+  loadProposals,
+} from "./orchestrator-proposals.js";
 import type { LoopOptions } from "./cli-args.js";
 import { runOpencode } from "./orchestrator-process.js";
 import { buildCommitPrompt } from "./orchestrator-prompts.js";
@@ -183,20 +187,20 @@ export async function runLoop(opts: LoopOptions): Promise<boolean> {
   }
 
   const acceptanceIndexPath = path.join(stateDir, "acceptance-index.json");
+  const proposalsPath = path.join(stateDir, "proposals.json");
   const fileArgs = buildFileArgs(opts, stateDir);
 
   let sessionId = opts.sessionId;
+  const proposalsFile = loadProposals(proposalsPath);
 
-  if (
-    !sessionId &&
-    Array.isArray(status.proposals) &&
-    status.proposals.length > 0
-  ) {
+  if (!sessionId && hasOpenNonAutoResolvableProposals(proposalsFile)) {
     console.error(
-      "[opencode-orchestrator] status.json.proposals に未処理の proposal が残っているため、新しいセッションを開始できません。",
+      "[opencode-orchestrator] proposals.json に未解決の非自動解決 proposal が残っているため、新しいセッションを開始できません。",
     );
     console.error("[opencode-orchestrator] 以前の実行で記録された proposal:");
-    for (const p of status.proposals) {
+    for (const p of proposalsFile.proposals.filter(
+      (proposal) => proposal.status === "open",
+    )) {
       console.error(
         `  - [${p.source}] kind=${p.kind} cycle=${p.cycle} id=${p.id}`,
       );
@@ -238,7 +242,6 @@ export async function runLoop(opts: LoopOptions): Promise<boolean> {
   );
 
   status.last_session_id = sessionId!;
-  status.proposals = [];
   status.consecutive_env_blocked = 0;
   if (status.failure_budget) {
     status.failure_budget.consecutive_env_blocked = 0;
@@ -261,7 +264,10 @@ export async function runLoop(opts: LoopOptions): Promise<boolean> {
     status.current_cycle = step;
 
     const needReplan =
-      status.replan_required === true || forceTodoWriterNextStep;
+      forceTodoWriterNextStep ||
+      loadProposals(proposalsPath).proposals.some(
+        (proposal) => proposal.status === "open" && proposal.auto_resolvable,
+      );
     if (fs.existsSync(acceptanceIndexPath) && (step === 1 || needReplan)) {
       const todoWriterResult: TodoWriterStepResult =
         await maybeRunTodoWriterStep(

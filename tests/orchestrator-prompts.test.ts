@@ -51,23 +51,38 @@ describe("buildExecutorPrompt", () => {
 
 describe("buildTodoWriterPrompt", () => {
   it("keeps replan guidance focused on normalized handoff issues", () => {
-    const prompt = buildTodoWriterPrompt({
-      version: 1,
-      replan_request: {
-        requested_at_cycle: 4,
-        issues: [
-          {
-            source: "executor",
-            summary: "todo の証拠境界を狭めたい",
-            related_todo_ids: ["TW-009"],
-            related_requirement_ids: ["R6"],
-          },
-        ],
+    const prompt = buildTodoWriterPrompt(
+      {
+        version: 1,
+        last_session_id: "sess-1",
       },
-    });
+      [
+        {
+          id: "p-1",
+          source: "executor",
+          cycle: 4,
+          kind: "need_replan",
+          priority: "high",
+          summary: "todo の証拠境界を狭めたい",
+          related_todo_ids: ["TW-009"],
+          related_requirement_ids: ["R6"],
+          status: "open",
+          auto_resolvable: true,
+          created_at: "2026-03-29T00:00:00.000Z",
+        },
+      ],
+    );
 
-    expect(prompt).toContain("status.json.replan_request");
+    expect(prompt).toContain("proposals.json");
+    expect(prompt).toContain("kind=need_replan");
     expect(prompt).toContain("TW-009");
     expect(prompt).toContain("R6");
+  });
+
+  it("returns an empty prompt when there are no open proposals or status hints", () => {
+    const prompt = buildTodoWriterPrompt({ version: 1 });
+
+    expect(prompt).toBe("");
+    expect(prompt).not.toContain("replan_request");
   });
 });

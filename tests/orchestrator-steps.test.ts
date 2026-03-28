@@ -13,6 +13,7 @@ import {
   type TodoWriterStepResult,
   type ExecutorAuditorStepResult,
 } from "../src/orchestrator-steps.js";
+import { loadProposals } from "../src/orchestrator-proposals.js";
 
 vi.mock("../src/orchestrator-process.js", () => ({
   runOpencode: vi.fn(),
@@ -29,6 +30,9 @@ const baseOpts: LoopOptions = {
   sessionId: undefined,
   continueLast: false,
   commitOnDone: false,
+  dangerouslySkipCommandPolicy: false,
+  bwrapSkipCommandPolicy: false,
+  bwrapArgs: [],
 };
 
 function createStatus(): OrchestratorStatus {
@@ -37,6 +41,32 @@ function createStatus(): OrchestratorStatus {
     last_session_id: "sess-1",
     consecutive_env_blocked: 0,
   };
+}
+
+function writeProposalsJson(
+  dir: string,
+  proposals: Array<{
+    id: string;
+    source: "executor" | "auditor" | "todo_writer";
+    cycle: number;
+    kind: string;
+    priority: "low" | "medium" | "high" | "critical";
+    summary: string;
+    details?: string;
+    related_requirement_ids: string[];
+    related_todo_ids: string[];
+    status: "open" | "resolved" | "dismissed";
+    auto_resolvable: boolean;
+    created_at: string;
+    resolved_at?: string;
+    resolved_by?: "cli" | "planner" | "todo_writer" | "auto";
+  }>,
+): void {
+  fs.writeFileSync(
+    path.join(dir, "proposals.json"),
+    JSON.stringify({ version: 1, proposals }, null, 2),
+    "utf8",
+  );
 }
 
 describe("maybeRunTodoWriterStep", () => {
@@ -107,23 +137,8 @@ describe("maybeRunTodoWriterStep", () => {
     });
   });
 
-  it("clears replan metadata after todo-writer consumes a replanning step", async () => {
-    const status: OrchestratorStatus = {
-      ...createStatus(),
-      replan_required: true,
-      replan_reason: "general: 粒度を分割したい",
-      replan_request: {
-        requested_at_cycle: 3,
-        issues: [
-          {
-            source: "executor",
-            summary: "粒度を分割したい",
-            related_todo_ids: [],
-            related_requirement_ids: [],
-          },
-        ],
-      },
-    };
+  it("resolves open auto-resolvable proposals after todo-writer success", async () => {
+    const status = createStatus();
     const tmpState = fs.mkdtempSync(
       path.join(os.tmpdir(), "orch-steps-state-replan-clear-"),
     );
@@ -134,6 +149,21 @@ describe("maybeRunTodoWriterStep", () => {
     const todoPath = path.join(tmpState, "todo.json");
     fs.writeFileSync(acceptancePath, "{}", "utf8");
     fs.writeFileSync(todoPath, JSON.stringify({ todos: [] }), "utf8");
+    writeProposalsJson(tmpState, [
+      {
+        id: "p-1",
+        source: "executor",
+        cycle: 3,
+        kind: "need_replan",
+        priority: "high",
+        summary: "粒度を分割したい",
+        related_todo_ids: [],
+        related_requirement_ids: [],
+        status: "open",
+        auto_resolvable: true,
+        created_at: "2026-03-29T00:00:00.000Z",
+      },
+    ]);
 
     mockRunOpencode.mockResolvedValueOnce({ code: 0, stdout: "" } as any);
 
@@ -153,28 +183,163 @@ describe("maybeRunTodoWriterStep", () => {
     );
 
     expect(res.abortLoop).toBe(false);
-    expect(status.replan_required).toBe(false);
-    expect(status.replan_reason).toBeNull();
-    expect(status.replan_request).toBeNull();
+    const proposals = loadProposals(path.join(tmpState, "proposals.json"));
+    expect(proposals.proposals[0]?.status).toBe("resolved");
+    expect(proposals.proposals[0]?.resolved_by).toBe("auto");
+    expect(proposals.proposals[0]?.resolved_at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
   });
 
-  it("preserves replan metadata and retries when todo-writer exits non-zero", async () => {
-    const status: OrchestratorStatus = {
-      ...createStatus(),
-      replan_required: true,
-      replan_reason: "general: 粒度を分割したい",
-      replan_request: {
-        requested_at_cycle: 3,
-        issues: [
-          {
-            source: "executor",
-            summary: "粒度を分割したい",
-            related_todo_ids: [],
-            related_requirement_ids: [],
-          },
-        ],
+  it("leaves non-auto-resolvable proposals open after todo-writer success", async () => {
+    const status = createStatus();
+    const tmpState = fs.mkdtempSync(
+      path.join(os.tmpdir(), "orch-steps-state-replan-preserve-open-"),
+    );
+    const tmpLogs = fs.mkdtempSync(
+      path.join(os.tmpdir(), "orch-steps-logs-replan-preserve-open-"),
+    );
+    const acceptancePath = path.join(tmpState, "acceptance-index.json");
+    const todoPath = path.join(tmpState, "todo.json");
+    fs.writeFileSync(acceptancePath, "{}", "utf8");
+    fs.writeFileSync(todoPath, JSON.stringify({ todos: [] }), "utf8");
+    writeProposalsJson(tmpState, [
+      {
+        id: "p-open-auto",
+        source: "executor",
+        cycle: 3,
+        kind: "need_replan",
+        priority: "high",
+        summary: "粒度を分割したい",
+        related_todo_ids: [],
+        related_requirement_ids: [],
+        status: "open",
+        auto_resolvable: true,
+        created_at: "2026-03-29T00:00:00.000Z",
       },
-    };
+      {
+        id: "p-open-env",
+        source: "executor",
+        cycle: 3,
+        kind: "env_blocked",
+        priority: "critical",
+        summary: "環境依存の失敗",
+        details: "missing tool",
+        related_todo_ids: [],
+        related_requirement_ids: ["R8"],
+        status: "open",
+        auto_resolvable: false,
+        created_at: "2026-03-29T00:00:00.000Z",
+      },
+    ]);
+
+    mockRunOpencode.mockResolvedValueOnce({ code: 0, stdout: "" } as any);
+
+    await maybeRunTodoWriterStep(
+      baseOpts,
+      2,
+      "002",
+      tmpState,
+      tmpLogs,
+      acceptancePath,
+      "sess-1",
+      [],
+      status,
+      path.join(tmpState, "status.json"),
+      0,
+      false,
+    );
+
+    const proposals = loadProposals(path.join(tmpState, "proposals.json"));
+    expect(
+      proposals.proposals.find((p) => p.id === "p-open-auto")?.status,
+    ).toBe("resolved");
+    expect(proposals.proposals.find((p) => p.id === "p-open-env")?.status).toBe(
+      "open",
+    );
+  });
+
+  it("passes only open proposals into the Todo-Writer prompt", async () => {
+    const status = createStatus();
+    const tmpState = fs.mkdtempSync(
+      path.join(os.tmpdir(), "orch-steps-state-prompt-filter-"),
+    );
+    const tmpLogs = fs.mkdtempSync(
+      path.join(os.tmpdir(), "orch-steps-logs-prompt-filter-"),
+    );
+    const acceptancePath = path.join(tmpState, "acceptance-index.json");
+    fs.writeFileSync(acceptancePath, "{}", "utf8");
+    writeProposalsJson(tmpState, [
+      {
+        id: "p-open",
+        source: "executor",
+        cycle: 3,
+        kind: "need_replan",
+        priority: "high",
+        summary: "open summary",
+        related_todo_ids: ["T-open"],
+        related_requirement_ids: ["R7"],
+        status: "open",
+        auto_resolvable: true,
+        created_at: "2026-03-29T00:00:00.000Z",
+      },
+      {
+        id: "p-resolved",
+        source: "auditor",
+        cycle: 3,
+        kind: "audit_failure",
+        priority: "high",
+        summary: "resolved summary",
+        related_todo_ids: ["T-resolved"],
+        related_requirement_ids: ["R19"],
+        status: "resolved",
+        auto_resolvable: true,
+        created_at: "2026-03-29T00:00:00.000Z",
+        resolved_at: "2026-03-29T01:00:00.000Z",
+        resolved_by: "auto",
+      },
+      {
+        id: "p-dismissed",
+        source: "auditor",
+        cycle: 3,
+        kind: "audit_failure",
+        priority: "high",
+        summary: "dismissed summary",
+        related_todo_ids: ["T-dismissed"],
+        related_requirement_ids: ["R19"],
+        status: "dismissed",
+        auto_resolvable: true,
+        created_at: "2026-03-29T00:00:00.000Z",
+        resolved_at: "2026-03-29T01:00:00.000Z",
+        resolved_by: "cli",
+      },
+    ]);
+
+    mockRunOpencode.mockResolvedValueOnce({ code: 0, stdout: "" } as any);
+
+    await maybeRunTodoWriterStep(
+      baseOpts,
+      2,
+      "002",
+      tmpState,
+      tmpLogs,
+      acceptancePath,
+      "sess-1",
+      [],
+      status,
+      path.join(tmpState, "status.json"),
+      0,
+      false,
+    );
+
+    const todoWriterArgs = mockRunOpencode.mock.calls[0][0] as string[];
+    const prompt = todoWriterArgs[todoWriterArgs.length - 1] ?? "";
+    expect(prompt).toContain("open summary");
+    expect(prompt).not.toContain("resolved summary");
+    expect(prompt).not.toContain("dismissed summary");
+    expect(prompt).not.toContain("replan_request");
+  });
+
+  it("preserves open proposals and retries when todo-writer exits non-zero", async () => {
+    const status = createStatus();
     const tmpState = fs.mkdtempSync(
       path.join(os.tmpdir(), "orch-steps-state-replan-preserve-"),
     );
@@ -184,6 +349,21 @@ describe("maybeRunTodoWriterStep", () => {
     const acceptancePath = path.join(tmpState, "acceptance-index.json");
     const statusPath = path.join(tmpState, "status.json");
     fs.writeFileSync(acceptancePath, "{}", "utf8");
+    writeProposalsJson(tmpState, [
+      {
+        id: "p-2",
+        source: "executor",
+        cycle: 3,
+        kind: "need_replan",
+        priority: "high",
+        summary: "粒度を分割したい",
+        related_todo_ids: [],
+        related_requirement_ids: [],
+        status: "open",
+        auto_resolvable: true,
+        created_at: "2026-03-29T00:00:00.000Z",
+      },
+    ]);
 
     mockRunOpencode.mockResolvedValueOnce({
       code: 1,
@@ -207,19 +387,6 @@ describe("maybeRunTodoWriterStep", () => {
 
     expect(res.abortLoop).toBe(false);
     expect(res.forceTodoWriterNextStep).toBe(true);
-    expect(status.replan_required).toBe(true);
-    expect(status.replan_reason).toBe("general: 粒度を分割したい");
-    expect(status.replan_request).toEqual({
-      requested_at_cycle: 3,
-      issues: [
-        {
-          source: "executor",
-          summary: "粒度を分割したい",
-          related_todo_ids: [],
-          related_requirement_ids: [],
-        },
-      ],
-    });
 
     const saved = JSON.parse(
       fs.readFileSync(statusPath, "utf8"),
@@ -229,15 +396,12 @@ describe("maybeRunTodoWriterStep", () => {
       last_failure_summary:
         "todo-writer が non-zero exit を返したため再計画状態を維持する",
     });
-    expect(saved.replan_required).toBe(true);
-    expect(saved.replan_reason).toBe("general: 粒度を分割したい");
+    const proposals = loadProposals(path.join(tmpState, "proposals.json"));
+    expect(proposals.proposals[0]?.status).toBe("open");
   });
 
   it("attaches status.json to todo-writer replans with its own --file flag", async () => {
-    const status: OrchestratorStatus = {
-      ...createStatus(),
-      replan_required: true,
-    };
+    const status = createStatus();
     const tmpState = fs.mkdtempSync(
       path.join(os.tmpdir(), "orch-steps-state-todowriter-files-"),
     );
@@ -247,6 +411,21 @@ describe("maybeRunTodoWriterStep", () => {
     const acceptancePath = path.join(tmpState, "acceptance-index.json");
     const statusPath = path.join(tmpState, "status.json");
     fs.writeFileSync(acceptancePath, "{}", "utf8");
+    writeProposalsJson(tmpState, [
+      {
+        id: "p-3",
+        source: "executor",
+        cycle: 3,
+        kind: "need_replan",
+        priority: "high",
+        summary: "todo-writer に再計画してほしい",
+        related_todo_ids: [],
+        related_requirement_ids: [],
+        status: "open",
+        auto_resolvable: true,
+        created_at: "2026-03-29T00:00:00.000Z",
+      },
+    ]);
 
     mockRunOpencode.mockResolvedValueOnce({ code: 0, stdout: "" } as any);
 
@@ -266,7 +445,7 @@ describe("maybeRunTodoWriterStep", () => {
     );
 
     const todoWriterArgs = mockRunOpencode.mock.calls[0][0] as string[];
-    expect(todoWriterArgs).toEqual([
+    expect(todoWriterArgs.slice(0, 10)).toEqual([
       "run",
       "--command",
       "orch-todo-write",
@@ -277,16 +456,12 @@ describe("maybeRunTodoWriterStep", () => {
       "--file",
       statusPath,
       "--",
-      "",
     ]);
+    expect(todoWriterArgs[10]).toContain("proposals.json");
   });
 
   it("keeps replanning active when todo-writer leaves no valid todo.json", async () => {
-    const status: OrchestratorStatus = {
-      ...createStatus(),
-      replan_required: true,
-      replan_reason: "general: 既存todoを再構築したい",
-    };
+    const status = createStatus();
     const tmpState = fs.mkdtempSync(
       path.join(os.tmpdir(), "orch-steps-state-invalid-todo-cache-"),
     );
@@ -296,6 +471,21 @@ describe("maybeRunTodoWriterStep", () => {
     const acceptancePath = path.join(tmpState, "acceptance-index.json");
     const statusPath = path.join(tmpState, "status.json");
     fs.writeFileSync(acceptancePath, "{}", "utf8");
+    writeProposalsJson(tmpState, [
+      {
+        id: "p-4",
+        source: "executor",
+        cycle: 3,
+        kind: "need_replan",
+        priority: "high",
+        summary: "既存todoを再構築したい",
+        related_todo_ids: [],
+        related_requirement_ids: [],
+        status: "open",
+        auto_resolvable: true,
+        created_at: "2026-03-29T00:00:00.000Z",
+      },
+    ]);
 
     mockRunOpencode.mockResolvedValueOnce({ code: 0, stdout: "" } as any);
 
@@ -316,7 +506,6 @@ describe("maybeRunTodoWriterStep", () => {
 
     expect(res.abortLoop).toBe(false);
     expect(res.forceTodoWriterNextStep).toBe(true);
-    expect(status.replan_required).toBe(true);
 
     const saved = JSON.parse(
       fs.readFileSync(statusPath, "utf8"),
@@ -403,20 +592,10 @@ describe("runExecutorAndAuditorStep", () => {
     );
 
     expect(res.forceTodoWriterNextStep).toBe(true);
-    expect(status.replan_required).toBe(true);
-    // replan_reason は `<scope>: <reason>` 形式で保存される
-    expect(status.replan_reason).toBe("general: 粒度が大きすぎる");
-    expect(status.replan_request).toEqual({
-      requested_at_cycle: 1,
-      issues: [
-        {
-          source: "executor",
-          summary: "粒度が大きすぎる",
-          related_todo_ids: [],
-          related_requirement_ids: ["R1"],
-        },
-      ],
-    });
+    const proposals = loadProposals(path.join("/tmp/state", "proposals.json"));
+    expect(proposals.proposals.some((p) => p.kind === "need_replan")).toBe(
+      true,
+    );
   });
 
   it("invokes auditor when STEP_AUDIT ready and propagates done + report", async () => {
@@ -491,7 +670,7 @@ describe("runExecutorAndAuditorStep", () => {
     expect(r2).toMatchObject({ id: "R1", passed: true });
   });
 
-  it("merges auditor failures into replan_request when replanning is already required", async () => {
+  it("merges auditor failures into proposals.json when replanning is already required", async () => {
     const status = createStatus();
     const execStdout = [
       "STEP_BLOCKER: T4-login need_replan ログイン関連の作業単位を見直したい",
@@ -536,24 +715,68 @@ describe("runExecutorAndAuditorStep", () => {
       "/tmp/logs",
     );
 
-    expect(status.replan_required).toBe(true);
-    expect(status.replan_request).toEqual({
-      requested_at_cycle: 6,
-      issues: [
-        {
-          source: "executor",
-          summary: "ログイン関連の作業単位を見直したい",
-          related_todo_ids: ["T4-login"],
-          related_requirement_ids: ["R3-login"],
-        },
-        {
-          source: "auditor",
-          summary: "ログインに関する受け入れ条件が未達",
-          related_todo_ids: [],
-          related_requirement_ids: ["R3-login"],
-        },
-      ],
-    });
+    const proposals = loadProposals(path.join("/tmp/state", "proposals.json"));
+    expect(proposals.proposals.some((p) => p.kind === "need_replan")).toBe(
+      true,
+    );
+    expect(proposals.proposals.some((p) => p.kind === "audit_failure")).toBe(
+      true,
+    );
+  });
+
+  it("creates scope_change and priority_shift proposals from executor blockers", async () => {
+    const status = createStatus();
+    const tmpState = fs.mkdtempSync(
+      path.join(os.tmpdir(), "orch-steps-state-scope-shift-"),
+    );
+    const statusPath = path.join(tmpState, "status.json");
+    fs.writeFileSync(
+      path.join(tmpState, "acceptance-index.json"),
+      "{}",
+      "utf8",
+    );
+    fs.writeFileSync(
+      path.join(tmpState, "todo.json"),
+      JSON.stringify({ todos: [] }),
+      "utf8",
+    );
+
+    const execStdout = [
+      "STEP_TODO: T1 R1 scope change step",
+      "STEP_BLOCKER: T1 scope_change 範囲を再調整したい",
+      "STEP_BLOCKER: general priority_shift 優先度を組み替えたい",
+      "STEP_INTENT: implement R1 スコープ見直しを進めた",
+      "STEP_VERIFY: not_ready - まだ監査根拠が不足している",
+      "STEP_AUDIT: in_progress R1",
+    ].join("\n");
+
+    mockRunOpencode.mockResolvedValueOnce({
+      code: 0,
+      stdout: execStdout,
+    } as any);
+
+    const res = await runExecutorAndAuditorStep(
+      baseOpts,
+      7,
+      "sess-1",
+      [],
+      "/tmp/logs/orch_step_007.txt",
+      "/tmp/logs/audit_step_007.jsonl",
+      status,
+      statusPath,
+      0,
+      false,
+      "/tmp/logs",
+    );
+
+    expect(res.abortLoop).toBe(false);
+    const proposals = loadProposals(path.join(tmpState, "proposals.json"));
+    expect(proposals.proposals.some((p) => p.kind === "scope_change")).toBe(
+      true,
+    );
+    expect(proposals.proposals.some((p) => p.kind === "priority_shift")).toBe(
+      true,
+    );
   });
 
   it("skips auditor when no STEP_AUDIT ready is reported", async () => {
@@ -683,25 +906,28 @@ describe("runExecutorAndAuditorStep", () => {
   });
 
   it("aborts loop when proposals are already present in status", async () => {
-    const status: OrchestratorStatus = {
-      ...createStatus(),
-      proposals: [
-        {
-          id: "p-1",
-          source: "executor",
-          cycle: 1,
-          kind: "env_blocked",
-          summary: "env blocked",
-          details: "missing tool",
-        } as any,
-      ],
-    };
-
-    mockRunOpencode.mockResolvedValueOnce({ code: 0, stdout: "" } as any);
-
+    const status = createStatus();
     const tmpState = fs.mkdtempSync(
       path.join(os.tmpdir(), "orch-steps-state-proposals-"),
     );
+    writeProposalsJson(tmpState, [
+      {
+        id: "p-1",
+        source: "executor",
+        cycle: 1,
+        kind: "env_blocked",
+        priority: "critical",
+        summary: "env blocked",
+        details: "missing tool",
+        related_requirement_ids: ["R8"],
+        related_todo_ids: [],
+        status: "open",
+        auto_resolvable: false,
+        created_at: "2026-03-29T00:00:00.000Z",
+      },
+    ]);
+
+    mockRunOpencode.mockResolvedValueOnce({ code: 0, stdout: "" } as any);
 
     const res = await runExecutorAndAuditorStep(
       baseOpts,
@@ -724,6 +950,14 @@ describe("runExecutorAndAuditorStep", () => {
 
   it("skips auditor and records verification gap when audit is requested without STEP_VERIFY ready", async () => {
     const status = createStatus();
+    status.failure_budget = {
+      todo_writer_safety_restarts: 0,
+      executor_safety_restarts: 0,
+      consecutive_env_blocked: 0,
+      consecutive_audit_failures: 0,
+      consecutive_verification_gaps: 1,
+      consecutive_contract_gaps: 0,
+    };
     const tmpState = fs.mkdtempSync(
       path.join(os.tmpdir(), "orch-steps-state-verification-gap-"),
     );
@@ -756,19 +990,11 @@ describe("runExecutorAndAuditorStep", () => {
 
     expect(res.done).toBe(false);
     expect(mockRunOpencode).toHaveBeenCalledTimes(1);
-    expect(status.failure_budget?.consecutive_verification_gaps).toBe(1);
-    expect(status.replan_request).toEqual({
-      requested_at_cycle: 8,
-      issues: [
-        {
-          source: "executor",
-          summary:
-            "監査準備を宣言したが自己検証の根拠が不足している。STEP_VERIFY に command id・差分確認・no-command 理由を結び付け、必要なら todo を監査証拠単位で再分解したい (command id・差分確認・no-command 理由のいずれかを明示したい)",
-          related_todo_ids: [],
-          related_requirement_ids: ["R4-ui"],
-        },
-      ],
-    });
+    expect(status.failure_budget?.consecutive_verification_gaps).toBe(2);
+    const proposals = loadProposals(path.join(tmpState, "proposals.json"));
+    expect(proposals.proposals.some((p) => p.kind === "verification_gap")).toBe(
+      true,
+    );
   });
 
   it("resets verification-gap budget after a clean non-audit-ready step", async () => {
@@ -813,6 +1039,14 @@ describe("runExecutorAndAuditorStep", () => {
 
   it("records a contract gap when executor omits STEP_INTENT and STEP_VERIFY", async () => {
     const status = createStatus();
+    status.failure_budget = {
+      todo_writer_safety_restarts: 0,
+      executor_safety_restarts: 0,
+      consecutive_env_blocked: 0,
+      consecutive_audit_failures: 0,
+      consecutive_verification_gaps: 0,
+      consecutive_contract_gaps: 1,
+    };
     const tmpState = fs.mkdtempSync(
       path.join(os.tmpdir(), "orch-steps-state-contract-gap-"),
     );
@@ -838,23 +1072,23 @@ describe("runExecutorAndAuditorStep", () => {
     );
 
     expect(res.done).toBe(false);
-    expect(status.failure_budget?.consecutive_contract_gaps).toBe(1);
-    expect(status.replan_request).toEqual({
-      requested_at_cycle: 9,
-      issues: [
-        {
-          source: "executor",
-          summary:
-            "executor の出力が不足している。各 step で STEP_INTENT と STEP_VERIFY を必ず出力できるように todo と検証境界を明確にしたい",
-          related_todo_ids: [],
-          related_requirement_ids: ["R9"],
-        },
-      ],
-    });
+    expect(status.failure_budget?.consecutive_contract_gaps).toBe(2);
+    const proposals = loadProposals(path.join(tmpState, "proposals.json"));
+    expect(proposals.proposals.some((p) => p.kind === "contract_gap")).toBe(
+      true,
+    );
   });
 
   it("treats malformed STEP_INTENT and STEP_VERIFY values as a contract gap", async () => {
     const status = createStatus();
+    status.failure_budget = {
+      todo_writer_safety_restarts: 0,
+      executor_safety_restarts: 0,
+      consecutive_env_blocked: 0,
+      consecutive_audit_failures: 0,
+      consecutive_verification_gaps: 0,
+      consecutive_contract_gaps: 1,
+    };
     const tmpState = fs.mkdtempSync(
       path.join(os.tmpdir(), "orch-steps-state-malformed-protocol-"),
     );
@@ -883,19 +1117,11 @@ describe("runExecutorAndAuditorStep", () => {
       "/tmp/logs",
     );
 
-    expect(status.failure_budget?.consecutive_contract_gaps).toBe(1);
-    expect(status.replan_request).toEqual({
-      requested_at_cycle: 11,
-      issues: [
-        {
-          source: "executor",
-          summary:
-            "executor の出力が不足している。各 step で STEP_INTENT と STEP_VERIFY を必ず出力できるように todo と検証境界を明確にしたい",
-          related_todo_ids: [],
-          related_requirement_ids: ["R9"],
-        },
-      ],
-    });
+    expect(status.failure_budget?.consecutive_contract_gaps).toBe(2);
+    const proposals = loadProposals(path.join(tmpState, "proposals.json"));
+    expect(proposals.proposals.some((p) => p.kind === "contract_gap")).toBe(
+      true,
+    );
   });
 
   it("persists failure budget when executor restart cannot locate a new session", async () => {

@@ -23,33 +23,9 @@
     "last_auditor_report": {
       "$ref": "#/definitions/AuditorReportSnapshot"
     },
-    "replan_required": {
-      "type": "boolean",
-      "description": "Whether the loop currently requires a todo-writer replanning pass due to executor blockers, repeated protocol gaps, or auditor failures."
-    },
-    "replan_reason": {
-      "type": ["string", "null"],
-      "description": "Short reason for the replan_required flag, if true."
-    },
-    "replan_request": {
-      "type": ["object", "null"],
-      "allOf": [
-        {
-          "$ref": "#/definitions/ReplanRequest"
-        }
-      ],
-      "description": "Normalized replanning request derived from the latest executor blockers and auditor failures."
-    },
     "consecutive_env_blocked": {
       "type": "integer",
       "description": "Count of consecutive steps where the executor reported env_blocked."
-    },
-    "proposals": {
-      "type": "array",
-      "items": {
-        "$ref": "#/definitions/ProposalSnapshot"
-      },
-      "description": "List of proposals emitted by the executor/auditor that require manual intervention."
     },
     "failure_budget": {
       "$ref": "#/definitions/FailureBudgetSnapshot"
@@ -296,79 +272,6 @@
           "items": {
             "$ref": "#/definitions/AuditorRequirementSnapshot"
           }
-        }
-      },
-      "additionalProperties": true
-    },
-    "ReplanIssue": {
-      "type": "object",
-      "required": [
-        "source",
-        "summary",
-        "related_todo_ids",
-        "related_requirement_ids"
-      ],
-      "properties": {
-        "source": {
-          "type": "string",
-          "enum": ["executor", "auditor"]
-        },
-        "summary": {
-          "type": "string"
-        },
-        "related_todo_ids": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "related_requirement_ids": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        }
-      },
-      "additionalProperties": true
-    },
-    "ReplanRequest": {
-      "type": "object",
-      "required": ["requested_at_cycle", "issues"],
-      "properties": {
-        "requested_at_cycle": {
-          "type": "integer"
-        },
-        "issues": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/ReplanIssue"
-          }
-        }
-      },
-      "additionalProperties": true
-    },
-    "ProposalSnapshot": {
-      "type": "object",
-      "required": ["id", "source", "cycle", "kind", "summary"],
-      "properties": {
-        "id": {
-          "type": "string"
-        },
-        "source": {
-          "type": "string",
-          "enum": ["executor", "auditor"]
-        },
-        "cycle": {
-          "type": "integer"
-        },
-        "kind": {
-          "type": "string"
-        },
-        "summary": {
-          "type": "string"
-        },
-        "details": {
-          "type": "string"
         }
       },
       "additionalProperties": true

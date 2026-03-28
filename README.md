@@ -143,8 +143,10 @@ OpenCode を再起動すると有効化されます。Tab でエージェント�
 - `list`: 利用可能なタスク一覧を表示
 - `loop`: 指定したタスクの実行ループを開始
 - `clear`: 内部状態のクリア
-  - `--proposals`: 実行フェーズで発生した問題を解決する提案を無視して消去する
-  - Orch-Planner に解決を依頼しないで、手動で（強引に）解決状態にするためのコマンド
+  - `--proposals`: `proposals.json` の open な提案をまとめて `resolved` にする
+  - `--resolve <proposal-id>`: 指定した提案 1 件を `resolved` にする
+  - `--dismiss <proposal-id>`: 指定した提案 1 件を `dismissed` にする
+  - いずれも `proposals.json` を更新し、必要に応じてバックアップを作成する
 - `install`: OpenCode の設定ファイルを編集し、このプラグインを登録する
   - `-g`: ホームディレクトリのグローバル設定に登録する
 
@@ -229,7 +231,8 @@ large-refactor  loop_status=needs_refinement  summary=大きめのリファク�
 
 - `--json`: タスク一覧を JSON 配列で出力
 - `--proposals`: `--task` で指定したタスクの実行フェーズで発生している問題を解決するための提案の一覧。
-  - タスクの実行フェーズで問題が発生した時に何を解決するべきかの提案（proposal）が書き込まれます。
+  - `proposals.json` から読み出され、`status` / `priority` / `kind` / `source` を含む一覧として表示されます。
+  - `--open` を付けると open な提案だけに絞れます。
   - Orch-Planner はこの記録を自律的に読み取ることができます。人間がこの出力をコピーする必要はありません。
 
 JSON 出力例:
@@ -298,7 +301,8 @@ Spec-Checker / Preflight-Runner が出した結果を、Planner が集約して�
 - 状態: `$(getOrchestratorBaseDir)/my-task/state`
   - `acceptance-index.json` : Refiner が管理する受け入れ条件一覧
   - `spec.md` : 高レベルなゴール / 制約 / 終了条件 / 受け入れ条件の解釈指針
-  - `status.json` : Executor / Auditor の進捗スナップショット、Todo-Writer 向けの正規化された再計画要求 (`replan_request`)、および protocol/failsafe 用の `failure_budget`
+  - `status.json` : Executor / Auditor の進捗スナップショット、`last_executor_step` / `last_auditor_report` / `failure_budget`
+  - `proposals.json` : Executor / Auditor / Todo-Writer からの再計画・ブロック提案の永続キュー。open な提案は解決または却下されるまで残り、次回の replanning に再投入されます
   - `todo.json` : Todo-Writer エージェントによるタスクリスト
   - `command-policy.json` : spec-check + preflight によるコマンド可否
 - ログ: `$(getOrchestratorBaseDir)/my-task/logs`

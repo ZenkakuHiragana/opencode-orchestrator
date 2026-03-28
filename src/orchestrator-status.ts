@@ -80,27 +80,6 @@ export type AuditorReportSnapshot = {
   requirements: AuditorRequirementSnapshot[];
 };
 
-export type ProposalSnapshot = {
-  id: string;
-  source: "executor" | "auditor";
-  cycle: number;
-  kind: string;
-  summary: string;
-  details?: string;
-};
-
-export type ReplanIssue = {
-  source: "executor" | "auditor";
-  summary: string;
-  related_todo_ids: string[];
-  related_requirement_ids: string[];
-};
-
-export type ReplanRequest = {
-  requested_at_cycle: number;
-  issues: ReplanIssue[];
-};
-
 export type FailureBudgetSnapshot = {
   todo_writer_safety_restarts: number;
   executor_safety_restarts: number;
@@ -118,12 +97,8 @@ export type OrchestratorStatus = {
   current_cycle?: number;
   last_executor_step?: ExecutorStepSnapshot;
   last_auditor_report?: AuditorReportSnapshot;
-  replan_required?: boolean;
-  replan_reason?: string | null;
-  replan_request?: ReplanRequest | null;
   consecutive_env_blocked?: number;
   failure_budget?: FailureBudgetSnapshot;
-  proposals?: ProposalSnapshot[];
 };
 
 export function loadStatusJson(statusPath: string): OrchestratorStatus {
@@ -153,58 +128,6 @@ export function saveStatusJson(
   } catch {
     // Status updates are best-effort; do not break the loop on failure.
   }
-}
-
-export function buildReplanRequest(
-  requestedAtCycle: number,
-  lastExecutorStep?: ExecutorStepSnapshot,
-  lastAuditorReport?: AuditorReportSnapshot,
-): ReplanRequest | null {
-  const issues: ReplanIssue[] = [];
-  const executorRequirementIds = Array.from(
-    new Set(
-      (lastExecutorStep?.step_intent?.requirement_ids ?? []).concat(
-        lastExecutorStep?.step_audit?.requirement_ids ?? [],
-      ),
-    ),
-  );
-
-  if (lastExecutorStep) {
-    for (const blocker of lastExecutorStep.step_blocker) {
-      if (blocker.tag !== "need_replan") {
-        continue;
-      }
-      issues.push({
-        source: "executor",
-        summary: blocker.reason,
-        related_todo_ids: blocker.scope !== "general" ? [blocker.scope] : [],
-        related_requirement_ids: executorRequirementIds,
-      });
-    }
-  }
-
-  if (lastAuditorReport) {
-    for (const requirement of lastAuditorReport.requirements) {
-      if (requirement.passed) {
-        continue;
-      }
-      issues.push({
-        source: "auditor",
-        summary: requirement.reason ?? "監査で未達と判定された",
-        related_todo_ids: [],
-        related_requirement_ids: [requirement.id],
-      });
-    }
-  }
-
-  if (issues.length === 0) {
-    return null;
-  }
-
-  return {
-    requested_at_cycle: requestedAtCycle,
-    issues,
-  };
 }
 
 export function parseExecutorStepSnapshot(

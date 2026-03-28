@@ -18,6 +18,8 @@ artifacts and observable repository state in order to render a conservative pass
   not on intent, self-reported status, or optimistic summaries.
 - Be conservative: when in doubt, treat requirements as **not satisfied** and return
   `done: false` with precise reasons.
+- If you report failed requirements, the loop will record matching `audit_failure` proposals in
+  `proposals.json`; you do not write those proposals yourself.
 - Produce a machine-readable JSON verdict that downstream tooling can rely on without further
   interpretation.
 </goals>

@@ -15,15 +15,21 @@ import type {
   AuditorReportSnapshot,
   ExecutorStepSnapshot,
   OrchestratorStatus,
-  ReplanIssue,
 } from "./orchestrator-status.js";
 import {
-  buildReplanRequest,
   getExecutorVerificationEvidence,
   parseExecutorStepSnapshot,
   saveStatusJson,
-  ProposalSnapshot,
 } from "./orchestrator-status.js";
+import {
+  createProposalEntry,
+  type ProposalEntry,
+  getOpenProposals,
+  hasOpenNonAutoResolvableProposals,
+  loadProposals,
+  resolveAutoResolvableProposals,
+  saveProposals,
+} from "./orchestrator-proposals.js";
 import {
   appendFileArg,
   findSessionIdByTitle,
@@ -62,7 +68,9 @@ export async function maybeRunTodoWriterStep(
   forceTodoWriterNextStep: boolean,
 ): Promise<TodoWriterStepResult> {
   const failureBudget = ensureFailureBudget(status);
-  const needReplan = status.replan_required === true || forceTodoWriterNextStep;
+  const proposalsPath = path.join(path.dirname(statusPath), "proposals.json");
+  const openProposals = getOpenProposals(loadProposals(proposalsPath));
+  const needReplan = forceTodoWriterNextStep || openProposals.length > 0;
   if (!fs.existsSync(acceptanceIndexPath) || (step !== 1 && !needReplan)) {
     return {
       sessionId,
@@ -74,7 +82,7 @@ export async function maybeRunTodoWriterStep(
   }
 
   const todowriterLog = path.join(logDir, `todowriter_step_${stepId}.txt`);
-  const todowriterPrompt = buildTodoWriterPrompt(status);
+  const todowriterPrompt = buildTodoWriterPrompt(status, openProposals);
   // Todo-Writer 用の opencode run 子プロセスにも、危険モード時は
   // command-policy スキップ用のフラグのみを渡す。bwrap サンドボックスは
   // Executor 専用とし、Todo-Writer 側では使用しない。
@@ -151,10 +159,6 @@ export async function maybeRunTodoWriterStep(
     failureBudget.last_failure_kind = "todo_writer_failed";
     failureBudget.last_failure_summary =
       "todo-writer が non-zero exit を返したため再計画状態を維持する";
-    status.replan_required = true;
-    status.replan_reason =
-      status.replan_reason ??
-      "general: todo-writer が失敗したため既存の再計画要求を維持したい";
     saveStatusJson(statusPath, status);
     console.error(
       "[opencode-orchestrator] todo-writer ステップが非 0 ステータスで終了しました。",
@@ -174,10 +178,6 @@ export async function maybeRunTodoWriterStep(
     failureBudget.last_failure_kind = "todo_writer_invalid_todo_cache";
     failureBudget.last_failure_summary =
       "todo-writer が有効な todo.json を残さなかったため再計画状態を維持する";
-    status.replan_required = true;
-    status.replan_reason =
-      status.replan_reason ??
-      "general: todo-writer が有効な todo.json を生成できなかったため再計画を継続したい";
     saveStatusJson(statusPath, status);
     console.error(
       `[opencode-orchestrator] todo-writer が生成した todo.json が無効です: ${todoSummary.reason}`,
@@ -197,9 +197,13 @@ export async function maybeRunTodoWriterStep(
       `completed=${todoSummary.completed} cancelled=${todoSummary.cancelled}`,
   );
 
-  status.replan_required = false;
-  status.replan_reason = null;
-  status.replan_request = null;
+  const proposalsFile = loadProposals(proposalsPath);
+  const resolved = resolveAutoResolvableProposals(
+    proposalsFile,
+    "auto",
+    new Date().toISOString(),
+  );
+  saveProposals(proposalsPath, resolved);
   failureBudget.consecutive_contract_gaps = 0;
   failureBudget.consecutive_verification_gaps = 0;
   saveStatusJson(statusPath, status);
@@ -330,43 +334,67 @@ export async function runExecutorAndAuditorStep(
     step,
   );
   status.last_executor_step = stepSnapshot;
-  let contractGapIssue: ReplanIssue | null = null;
+  let needReplanProposal: ProposalEntry | null = null;
+  let contractGapProposal: ProposalEntry | null = null;
 
   if (!stepSnapshot.step_intent || !stepSnapshot.step_verify) {
     failureBudget.consecutive_contract_gaps += 1;
     failureBudget.last_failure_kind = "executor_contract_gap";
     failureBudget.last_failure_summary =
       "executor が必須の STEP_INTENT / STEP_VERIFY 行を出力しなかった";
-    contractGapIssue = {
-      source: "executor",
-      summary:
-        "executor の出力が不足している。各 step で STEP_INTENT と STEP_VERIFY を必ず出力できるように todo と検証境界を明確にしたい",
-      related_todo_ids: [],
-      related_requirement_ids:
-        stepSnapshot.step_audit?.requirement_ids ??
-        stepSnapshot.step_intent?.requirement_ids ??
-        [],
-    };
     if (failureBudget.consecutive_contract_gaps >= 2) {
-      status.replan_required = true;
-      status.replan_reason =
-        "general: executor の step 出力契約が連続で不足しているため、todo と検証境界を再計画したい";
       forceTodoWriterNextStep = true;
+      contractGapProposal = createProposalEntry({
+        source: "executor",
+        cycle: step,
+        kind: "contract_gap",
+        priority: "medium",
+        summary:
+          "executor の step 出力契約が連続で不足しているため、todo と検証境界を再計画したい",
+        details:
+          "executor の出力が不足している。各 step で STEP_INTENT と STEP_VERIFY を必ず出力できるように todo と検証境界を明確にしたい",
+        related_requirement_ids:
+          stepSnapshot.step_audit?.requirement_ids ??
+          stepSnapshot.step_intent?.requirement_ids ??
+          [],
+        related_todo_ids: [],
+        auto_resolvable: true,
+      });
     }
   } else {
     failureBudget.consecutive_contract_gaps = 0;
   }
-
-  const replanBlocker = stepSnapshot.step_blocker.find(
-    (b) => b.tag === "need_replan",
-  );
-  if (replanBlocker) {
-    status.replan_required = true;
-    status.replan_reason = `${replanBlocker.scope}: ${replanBlocker.reason}`;
-  }
   const otherBlockers = stepSnapshot.step_blocker.filter(
     (b) => b.tag && b.tag !== "need_replan",
   );
+
+  const proposalsPath = path.join(path.dirname(statusPath), "proposals.json");
+  const stepProposalFile = loadProposals(proposalsPath);
+  let stepProposalChanged = false;
+
+  for (const blocker of otherBlockers) {
+    if (blocker.tag !== "scope_change" && blocker.tag !== "priority_shift") {
+      continue;
+    }
+    stepProposalFile.proposals.push(
+      createProposalEntry({
+        source: "executor",
+        cycle: step,
+        kind: blocker.tag,
+        priority: blocker.tag === "priority_shift" ? "low" : "medium",
+        summary: blocker.reason,
+        details: `${blocker.scope}: ${blocker.tag}: ${blocker.reason}`,
+        related_requirement_ids:
+          stepSnapshot.step_audit?.requirement_ids ??
+          stepSnapshot.step_intent?.requirement_ids ??
+          [],
+        related_todo_ids: blocker.scope !== "general" ? [blocker.scope] : [],
+        auto_resolvable: true,
+      }),
+    );
+    stepProposalChanged = true;
+    forceTodoWriterNextStep = true;
+  }
 
   for (const line of execRes.stdout.split(/\r?\n/)) {
     const trimmed = line.trim();
@@ -380,10 +408,24 @@ export async function runExecutorAndAuditorStep(
     const secondSpace = restAfterScope.indexOf(" ");
     if (secondSpace === -1) continue;
     const tag = restAfterScope.slice(0, secondSpace).trim();
-    if (scope === "general" && tag === "need_replan") {
+    if (tag === "need_replan") {
       forceTodoWriterNextStep = true;
+      needReplanProposal = createProposalEntry({
+        source: "executor",
+        cycle: step,
+        kind: "need_replan",
+        priority: "high",
+        summary: restAfterScope.slice(secondSpace + 1).trim(),
+        details: `${scope}: ${tag}: ${restAfterScope.slice(secondSpace + 1).trim()}`,
+        related_requirement_ids:
+          stepSnapshot.step_audit?.requirement_ids ??
+          stepSnapshot.step_intent?.requirement_ids ??
+          [],
+        related_todo_ids: scope !== "general" ? [scope] : [],
+        auto_resolvable: true,
+      });
       console.error(
-        "[opencode-orchestrator] executor から general need_replan の STEP_BLOCKER が出力されたため、次のステップで todo-writer を強制実行します。",
+        `[opencode-orchestrator] executor から ${scope} need_replan の STEP_BLOCKER が出力されたため、次のステップで todo-writer を強制実行します。`,
       );
       break;
     }
@@ -393,7 +435,7 @@ export async function runExecutorAndAuditorStep(
   let auditParseError: string | null = null;
   let lastAuditStatus: string | null = null;
   let lastAuditIds: string | null = null;
-  let verificationGapIssue: ReplanIssue | null = null;
+  let verificationGapProposal: ProposalEntry | null = null;
   for (const line of execRes.stdout.split(/\r?\n/)) {
     const trimmed = line.trim();
     if (!trimmed.startsWith("STEP_AUDIT:")) continue;
@@ -433,26 +475,29 @@ export async function runExecutorAndAuditorStep(
         verificationEvidence.reason === "missing"
           ? "command id・差分確認・no-command 理由のいずれかを明示したい"
           : `verification evidence=${verificationEvidence.reason}`;
-      verificationGapIssue = {
-        source: "executor",
-        summary: `監査準備を宣言したが自己検証の根拠が不足している。STEP_VERIFY に command id・差分確認・no-command 理由を結び付け、必要なら todo を監査証拠単位で再分解したい (${evidenceHint})`,
-        related_todo_ids: [],
-        related_requirement_ids:
-          lastAuditIds && lastAuditIds !== "-"
-            ? lastAuditIds
-                .split(",")
-                .map((s) => s.trim())
-                .filter((s) => s.length > 0)
-            : [],
-      };
       console.error(
         "[opencode-orchestrator] STEP_VERIFY の根拠が不足したまま STEP_AUDIT: ready が出力されたため、このステップでは auditor をスキップします。",
       );
       if (failureBudget.consecutive_verification_gaps >= 2) {
-        status.replan_required = true;
-        status.replan_reason =
-          "general: 監査準備の自己検証が連続で不足しているため、todo の証拠境界を再計画したい";
         forceTodoWriterNextStep = true;
+        verificationGapProposal = createProposalEntry({
+          source: "executor",
+          cycle: step,
+          kind: "verification_gap",
+          priority: "medium",
+          summary:
+            "監査準備の自己検証が連続で不足しているため、todo の証拠境界を再計画したい",
+          details: `監査準備を宣言したが自己検証の根拠が不足している。STEP_VERIFY に command id・差分確認・no-command 理由を結び付け、必要なら todo を監査証拠単位で再分解したい (${evidenceHint})`,
+          related_requirement_ids:
+            lastAuditIds && lastAuditIds !== "-"
+              ? lastAuditIds
+                  .split(",")
+                  .map((s) => s.trim())
+                  .filter((s) => s.length > 0)
+              : [],
+          related_todo_ids: [],
+          auto_resolvable: true,
+        });
       }
     }
   } else {
@@ -472,33 +517,52 @@ export async function runExecutorAndAuditorStep(
     failureBudget.last_failure_kind = "env_blocked";
     failureBudget.last_failure_summary = envBlockedReason;
     if (status.consecutive_env_blocked >= 3) {
-      const proposals: ProposalSnapshot[] = Array.isArray(status.proposals)
-        ? status.proposals.slice()
-        : [];
+      const proposalsPath = path.join(
+        path.dirname(statusPath),
+        "proposals.json",
+      );
+      const proposalsFile = loadProposals(proposalsPath);
       if (envBlockedBlockers.length > 0) {
         for (const blocker of envBlockedBlockers) {
-          proposals.push({
-            id: `p-${Date.now()}-${blocker.tag}`,
-            source: "executor",
-            cycle: step,
-            kind: blocker.tag,
-            summary:
-              "環境依存のエラー (env_blocked) が 3 回連続で発生し、Executor ループを継続できません。必須コマンドや command-policy の前提を見直してほしい。",
-            details: `${blocker.scope}: ${blocker.tag}: ${blocker.reason}`,
-          });
+          proposalsFile.proposals.push(
+            createProposalEntry({
+              source: "executor",
+              cycle: step,
+              kind: "env_blocked",
+              priority: "critical",
+              summary:
+                "環境依存のエラー (env_blocked) が 3 回連続で発生し、Executor ループを継続できません。必須コマンドや command-policy の前提を見直してほしい。",
+              details: `${blocker.scope}: ${blocker.tag}: ${blocker.reason}`,
+              related_requirement_ids:
+                stepSnapshot.step_audit?.requirement_ids ??
+                stepSnapshot.step_intent?.requirement_ids ??
+                [],
+              related_todo_ids:
+                blocker.scope !== "general" ? [blocker.scope] : [],
+              auto_resolvable: false,
+            }),
+          );
         }
       } else {
-        proposals.push({
-          id: `p-${Date.now()}-env_blocked-parse`,
-          source: "auditor",
-          cycle: step,
-          kind: "env_blocked",
-          summary:
-            "監査結果の解析に繰り返し失敗し、環境状態を正しく判定できません。acceptance-index/spec.md と command-policy を見直してほしい。",
-          details: envBlockedReason,
-        });
+        proposalsFile.proposals.push(
+          createProposalEntry({
+            source: "auditor",
+            cycle: step,
+            kind: "env_blocked",
+            priority: "critical",
+            summary:
+              "監査結果の解析に繰り返し失敗し、環境状態を正しく判定できません。acceptance-index/spec.md と command-policy を見直してほしい。",
+            details: envBlockedReason,
+            related_requirement_ids:
+              stepSnapshot.step_audit?.requirement_ids ??
+              stepSnapshot.step_intent?.requirement_ids ??
+              [],
+            related_todo_ids: [],
+            auto_resolvable: false,
+          }),
+        );
       }
-      status.proposals = proposals;
+      saveProposals(proposalsPath, proposalsFile);
     }
   } else {
     status.consecutive_env_blocked = 0;
@@ -583,11 +647,31 @@ export async function runExecutorAndAuditorStep(
       console.error(
         `[opencode-orchestrator] auditor が未達と判定した要件: ${ids}`,
       );
+      const proposalsPath = path.join(
+        path.dirname(statusPath),
+        "proposals.json",
+      );
+      const proposalsFile = loadProposals(proposalsPath);
       for (const f of failed) {
         if (!f.reason) continue;
         const firstLine = String(f.reason).split(/\r?\n/, 1)[0];
         console.error(`[opencode-orchestrator]   - ${f.id}: ${firstLine}`);
+        proposalsFile.proposals.push(
+          createProposalEntry({
+            source: "auditor",
+            cycle: step,
+            kind: "audit_failure",
+            priority: "high",
+            summary: firstLine,
+            details: f.reason,
+            related_requirement_ids: [f.id],
+            related_todo_ids: [],
+            auto_resolvable: true,
+          }),
+        );
       }
+      saveProposals(proposalsPath, proposalsFile);
+      forceTodoWriterNextStep = true;
     }
 
     if (passed.length > 0) {
@@ -626,44 +710,34 @@ export async function runExecutorAndAuditorStep(
     );
   }
 
-  if (status.replan_required === true) {
-    const baseRequest = buildReplanRequest(
-      step,
-      status.last_executor_step,
-      status.last_auditor_report,
-    );
-    const issues = baseRequest?.issues ? baseRequest.issues.slice() : [];
-    if (contractGapIssue) {
-      issues.push(contractGapIssue);
-    }
-    if (verificationGapIssue) {
-      issues.push(verificationGapIssue);
-    }
-    status.replan_request =
-      issues.length > 0
-        ? {
-            requested_at_cycle: step,
-            issues,
-          }
-        : null;
-  } else if (verificationGapIssue || contractGapIssue) {
-    status.replan_request = {
-      requested_at_cycle: step,
-      issues: [contractGapIssue, verificationGapIssue].filter(
-        (issue): issue is ReplanIssue => issue !== null,
-      ),
-    };
-  }
   saveStatusJson(statusPath, status);
 
-  if (Array.isArray(status.proposals) && status.proposals.length > 0) {
+  if (needReplanProposal) {
+    stepProposalFile.proposals.push(needReplanProposal);
+  }
+  if (contractGapProposal) {
+    stepProposalFile.proposals.push(contractGapProposal);
+  }
+  if (verificationGapProposal) {
+    stepProposalFile.proposals.push(verificationGapProposal);
+  }
+  if (needReplanProposal || contractGapProposal || verificationGapProposal) {
+    stepProposalChanged = true;
+  }
+  if (stepProposalChanged) {
+    saveProposals(proposalsPath, stepProposalFile);
+  }
+  const currentProposalsFile = loadProposals(proposalsPath);
+  if (hasOpenNonAutoResolvableProposals(currentProposalsFile)) {
     console.error(
-      "[opencode-orchestrator] status.json に proposal が存在するため、ループを停止します。",
+      "[opencode-orchestrator] proposals.json に未解決の非自動解決 proposal が存在するため、ループを停止します。",
     );
     console.error(
       "[opencode-orchestrator] このループ実行中に記録された proposal:",
     );
-    for (const p of status.proposals) {
+    for (const p of currentProposalsFile.proposals.filter(
+      (proposal) => proposal.status === "open",
+    )) {
       console.error(
         `  - [${p.source}] kind=${p.kind} cycle=${p.cycle} id=${p.id}`,
       );

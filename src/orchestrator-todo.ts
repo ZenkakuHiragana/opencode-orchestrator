@@ -2,7 +2,15 @@ import { tool } from "@opencode-ai/plugin/tool";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-import { getOrchestratorStateDir } from "./orchestrator-paths.js";
+import {
+  getOrchestratorProposalsPath,
+  getOrchestratorStateDir,
+} from "./orchestrator-paths.js";
+import {
+  createProposalEntry,
+  loadProposals,
+  saveProposals,
+} from "./orchestrator-proposals.js";
 
 const z = tool.schema;
 
@@ -30,6 +38,16 @@ export type CanonicalTodo = {
   related_requirement_ids: string[];
   execution_contract?: CanonicalTodoExecutionContract;
   result_artifacts?: ResultArtifact[];
+};
+
+export type ProposalWriteInput = {
+  kind: string;
+  priority: "low" | "medium" | "high" | "critical";
+  summary: string;
+  details?: string;
+  related_requirement_ids: string[];
+  related_todo_ids: string[];
+  auto_resolvable?: boolean;
 };
 
 type CanonicalTodoFile = {
@@ -274,7 +292,8 @@ export const orchTodoWriteTool = tool({
     "Update orchestrator todos for a given task.\n\n" +
     "This tool is used by two orchestrator agents:\n" +
     "- orch-todo-writer (planner) uses planner_* modes to design and evolve the canonical todo set.\n" +
-    "- orch-executor uses executor_update_statuses to reflect execution progress.\n\n" +
+    "- orch-executor uses executor_update_statuses to reflect execution progress.\n" +
+    "- orch-todo-writer may also enqueue replanning proposals directly with planner_add_proposals.\n\n" +
     "Planner modes (orch-todo-writer only):\n" +
     "- mode=planner_replace_canonical: replace the entire canonical todo list for a task. Use this only when the todo structure must be regenerated from requirements/spec.\n" +
     "- mode=planner_add_todos: append new todos without changing any existing todos. Use this to add bridge work or new vertical slices.\n" +
@@ -302,12 +321,14 @@ export const orchTodoWriteTool = tool({
       .enum([
         "planner_replace_canonical",
         "planner_add_todos",
+        "planner_add_proposals",
         "planner_update_todos",
         "executor_update_statuses",
       ])
       .describe(
         "planner_replace_canonical: replace the canonical todo list (planner only). " +
           "planner_add_todos: append new todos with auto-assigned ids (planner only). " +
+          "planner_add_proposals: append new proposals to proposals.json (planner only). " +
           "planner_update_todos: patch existing todos based on filters (planner only). " +
           "executor_update_statuses: update statuses for existing todos (executor only).",
       ),
@@ -415,6 +436,22 @@ export const orchTodoWriteTool = tool({
         "Todos to append when mode=planner_add_todos. Ids are auto-assigned based on the current todo count. " +
           "Newly added todos should normally use status 'pending' unless the work they describe is already known to be " +
           "completed, in progress, or explicitly cancelled.",
+      )
+      .optional(),
+    addProposals: z
+      .array(
+        z.object({
+          kind: z.string(),
+          priority: z.enum(["low", "medium", "high", "critical"]),
+          summary: z.string(),
+          details: z.string().optional(),
+          related_requirement_ids: z.array(z.string()),
+          related_todo_ids: z.array(z.string()),
+          auto_resolvable: z.boolean().optional(),
+        }),
+      )
+      .describe(
+        "Proposals to append when mode=planner_add_proposals. The source is always todo_writer and the current cycle is taken from status.json when available.",
       )
       .optional(),
     statusUpdates: z
@@ -632,6 +669,64 @@ export const orchTodoWriteTool = tool({
       const updated = existing.concat(newTodos);
       saveCanonicalTodos(todoPath, updated);
       return JSON.stringify({ ok: true, addedIds: newTodos.map((t) => t.id) });
+    }
+
+    if (args.mode === "planner_add_proposals") {
+      if (agentName !== "orch-todo-writer") {
+        return JSON.stringify({
+          ok: false,
+          error:
+            "SPEC_ERROR: mode=planner_add_proposals may only be used by orch-todo-writer.",
+        });
+      }
+      if (!args.addProposals || args.addProposals.length === 0) {
+        return JSON.stringify({
+          ok: false,
+          error:
+            "SPEC_ERROR: mode=planner_add_proposals requires non-empty addProposals array.",
+        });
+      }
+
+      const proposalsPath = getOrchestratorProposalsPath(args.task);
+      const proposalsFile = loadProposals(proposalsPath);
+      const statusPath = path.join(
+        getOrchestratorStateDir(args.task),
+        "status.json",
+      );
+      let currentCycle = 0;
+      try {
+        if (fs.existsSync(statusPath)) {
+          const statusRaw = fs.readFileSync(statusPath, "utf8");
+          const statusJson = JSON.parse(statusRaw) as {
+            current_cycle?: unknown;
+          };
+          if (typeof statusJson.current_cycle === "number") {
+            currentCycle = statusJson.current_cycle;
+          }
+        }
+      } catch {
+        currentCycle = 0;
+      }
+
+      const addedIds: string[] = [];
+      for (const item of args.addProposals) {
+        const entry = createProposalEntry({
+          source: "todo_writer",
+          cycle: currentCycle,
+          kind: item.kind,
+          priority: item.priority,
+          summary: item.summary,
+          details: item.details,
+          related_requirement_ids: item.related_requirement_ids,
+          related_todo_ids: item.related_todo_ids,
+          auto_resolvable: item.auto_resolvable ?? true,
+        });
+        proposalsFile.proposals.push(entry);
+        addedIds.push(entry.id);
+      }
+
+      saveProposals(proposalsPath, proposalsFile);
+      return JSON.stringify({ ok: true, addedIds });
     }
 
     if (args.mode === "planner_update_todos") {

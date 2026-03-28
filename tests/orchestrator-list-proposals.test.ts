@@ -33,9 +33,8 @@ describe("runList --task --proposals", () => {
     const stateDir = path.join(baseDir, task, "state");
     fs.mkdirSync(stateDir, { recursive: true });
 
-    const statusPath = path.join(stateDir, "status.json");
     fs.writeFileSync(
-      statusPath,
+      path.join(stateDir, "proposals.json"),
       JSON.stringify(
         {
           version: 1,
@@ -45,8 +44,14 @@ describe("runList --task --proposals", () => {
               source: "executor",
               cycle: 2,
               kind: "env_blocked",
+              priority: "critical",
               summary: "env blocked",
               details: "general: env_blocked: missing tool",
+              related_requirement_ids: ["R8"],
+              related_todo_ids: ["T1"],
+              status: "open",
+              auto_resolvable: false,
+              created_at: "2026-03-29T00:00:00.000Z",
             },
           ],
         },
@@ -66,9 +71,84 @@ describe("runList --task --proposals", () => {
     expect(lines).toContain(
       `[opencode-orchestrator] タスク "${task}" の proposal 一覧:`,
     );
-    expect(lines).toContain("[executor] kind=env_blocked cycle=2 id=p-1");
+    expect(lines).toContain(
+      "[executor] kind=env_blocked cycle=2 priority=critical status=open id=p-1",
+    );
     expect(lines).toContain("summary: env blocked");
     expect(lines).toContain("details: general: env_blocked: missing tool");
+  });
+
+  it("filters to open proposals when --open is set", async () => {
+    const fakeXdg = fs.mkdtempSync(
+      path.join(os.tmpdir(), "orch-list-proposals-open-"),
+    );
+    process.env.XDG_STATE_HOME = fakeXdg;
+
+    const baseDir = path.join(fakeXdg, "opencode", "orchestrator");
+    const task = "my-task-proposals-open";
+    const stateDir = path.join(baseDir, task, "state");
+    fs.mkdirSync(stateDir, { recursive: true });
+
+    fs.writeFileSync(
+      path.join(stateDir, "proposals.json"),
+      JSON.stringify(
+        {
+          version: 1,
+          proposals: [
+            {
+              id: "p-open",
+              source: "executor",
+              cycle: 2,
+              kind: "need_replan",
+              priority: "high",
+              summary: "open proposal",
+              details: "open details",
+              related_requirement_ids: ["R7"],
+              related_todo_ids: ["T7"],
+              status: "open",
+              auto_resolvable: true,
+              created_at: "2026-03-29T00:00:00.000Z",
+            },
+            {
+              id: "p-resolved",
+              source: "auditor",
+              cycle: 2,
+              kind: "audit_failure",
+              priority: "high",
+              summary: "resolved proposal",
+              details: "resolved details",
+              related_requirement_ids: ["R19"],
+              related_todo_ids: [],
+              status: "resolved",
+              auto_resolvable: true,
+              created_at: "2026-03-29T00:00:00.000Z",
+              resolved_at: "2026-03-29T01:00:00.000Z",
+              resolved_by: "auto",
+            },
+          ],
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+
+    await runList({
+      format: "text",
+      task,
+      showProposals: true,
+      openOnly: true,
+    });
+
+    const errMock = console.error as unknown as {
+      mock: { calls: unknown[][] };
+    };
+    const lines = errMock.mock.calls.map((c) => c.join(" ")).join("\n");
+
+    expect(lines).toContain(
+      "[executor] kind=need_replan cycle=2 priority=high status=open id=p-open",
+    );
+    expect(lines).not.toContain("p-resolved");
   });
 
   it("returns proposals as JSON when format=json", async () => {
@@ -82,9 +162,8 @@ describe("runList --task --proposals", () => {
     const stateDir = path.join(baseDir, task, "state");
     fs.mkdirSync(stateDir, { recursive: true });
 
-    const statusPath = path.join(stateDir, "status.json");
     fs.writeFileSync(
-      statusPath,
+      path.join(stateDir, "proposals.json"),
       JSON.stringify(
         {
           version: 1,
@@ -94,8 +173,14 @@ describe("runList --task --proposals", () => {
               source: "auditor",
               cycle: 5,
               kind: "verification_gap",
+              priority: "medium",
               summary: "verification check gap",
               details: "R1: missing verification evidence",
+              related_requirement_ids: ["R1"],
+              related_todo_ids: [],
+              status: "open",
+              auto_resolvable: true,
+              created_at: "2026-03-29T00:00:00.000Z",
             },
           ],
         },
@@ -111,7 +196,13 @@ describe("runList --task --proposals", () => {
     expect(logMock.mock.calls.length).toBeGreaterThan(0);
     const payload = JSON.parse(String(logMock.mock.calls[0][0])) as {
       task: string;
-      proposals: { id: string; kind: string; summary: string }[];
+      version: 1;
+      proposals: {
+        id: string;
+        kind: string;
+        summary: string;
+        priority: string;
+      }[];
     };
 
     expect(payload.task).toBe(task);
@@ -119,5 +210,6 @@ describe("runList --task --proposals", () => {
     expect(payload.proposals[0].id).toBe("p-2");
     expect(payload.proposals[0].kind).toBe("verification_gap");
     expect(payload.proposals[0].summary).toBe("verification check gap");
+    expect(payload.proposals[0].priority).toBe("medium");
   });
 });

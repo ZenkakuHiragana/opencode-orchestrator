@@ -20,6 +20,10 @@ export function getOrchestratorStateDir(task: string): string {
   return path.join(getOrchestratorRoot(task), "state");
 }
 
+export function getOrchestratorProposalsPath(task: string): string {
+  return path.join(getOrchestratorStateDir(task), "proposals.json");
+}
+
 export function getOrchestratorLogsDir(task: string): string {
   return path.join(getOrchestratorRoot(task), "logs");
 }

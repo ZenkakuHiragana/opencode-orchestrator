@@ -1,27 +1,28 @@
 import type { OrchestratorStatus } from "./orchestrator-status.js";
+import type { ProposalEntry } from "./orchestrator-proposals.js";
 
 // For todo-writer/executor/auditor, the true behavior and role instructions live in
 // agents/*.md as system prompts. Here we keep per-step "user" prompts as thin
 // as possible to avoid poisoning the conversation history with redundant role
 // descriptions. Todo-Writer does not need any extra per-step text beyond the
 // attached files and its system prompt, so we return an empty string.
-export function buildTodoWriterPrompt(status?: OrchestratorStatus): string {
+export function buildTodoWriterPrompt(
+  status?: OrchestratorStatus,
+  openProposals?: ProposalEntry[],
+): string {
   const parts: string[] = [];
 
-  if (
-    status?.replan_request?.issues &&
-    status.replan_request.issues.length > 0
-  ) {
-    const issueSummary = status.replan_request.issues
-      .map((issue) => {
-        const reqs = issue.related_requirement_ids.join(",") || "-";
-        const todos = issue.related_todo_ids.join(",") || "-";
-        return `[${issue.source}] req=${reqs} todo=${todos} ${issue.summary}`;
+  if (openProposals && openProposals.length > 0) {
+    const proposalSummary = openProposals
+      .map((proposal) => {
+        const reqs = proposal.related_requirement_ids.join(",") || "-";
+        const todos = proposal.related_todo_ids.join(",") || "-";
+        return `[${proposal.source}] kind=${proposal.kind} req=${reqs} todo=${todos} ${proposal.summary}`;
       })
       .join("; ");
     parts.push(
-      "This planning pass is a replan. Use status.json.replan_request as the primary normalized handoff and sharpen the canonical todos around those issues: " +
-        issueSummary,
+      "This planning pass must re-check unresolved proposals from proposals.json and sharpen the canonical todos around them: " +
+        proposalSummary,
     );
   }
 

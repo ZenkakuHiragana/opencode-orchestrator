@@ -7,7 +7,7 @@ import {
   getOrchestratorStateDir,
 } from "./orchestrator-paths.js";
 import type { ListOptions } from "./cli-args.js";
-import { loadStatusJson } from "./orchestrator-status.js";
+import { getOpenProposals, loadProposals } from "./orchestrator-proposals.js";
 
 interface TaskListEntry {
   task: string;
@@ -55,15 +55,18 @@ function extractSummaryFromSpec(markdown: string): string | undefined {
 export async function runList(opts: ListOptions): Promise<void> {
   if (opts.showProposals && opts.task) {
     const stateDir = getOrchestratorStateDir(opts.task);
-    const statusPath = path.join(stateDir, "status.json");
-    const status = loadStatusJson(statusPath);
-    const proposals = Array.isArray(status.proposals) ? status.proposals : [];
+    const proposalsPath = path.join(stateDir, "proposals.json");
+    const proposalsFile = loadProposals(proposalsPath);
+    const proposals = opts.openOnly
+      ? getOpenProposals(proposalsFile)
+      : proposalsFile.proposals;
 
     if (opts.format === "json") {
       console.log(
         JSON.stringify(
           {
             task: opts.task,
+            ...proposalsFile,
             proposals,
           },
           null,
@@ -85,7 +88,7 @@ export async function runList(opts: ListOptions): Promise<void> {
     );
     for (const p of proposals) {
       console.error(
-        `  - [${p.source}] kind=${p.kind} cycle=${p.cycle} id=${p.id}`,
+        `  - [${p.source}] kind=${p.kind} cycle=${p.cycle} priority=${p.priority} status=${p.status} id=${p.id}`,
       );
       console.error(`    summary: ${p.summary}`);
       if (p.details) {

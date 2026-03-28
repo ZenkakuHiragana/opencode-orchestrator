@@ -232,6 +232,75 @@ describe("orchTodoWriteTool", () => {
     }
   });
 
+  it("enqueues todo-writer proposals directly into proposals.json", async () => {
+    const baseDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), "orch-todo-proposal-"),
+    );
+    const previousXdgStateHome = process.env.XDG_STATE_HOME;
+    process.env.XDG_STATE_HOME = baseDir;
+    const stateDir = getOrchestratorStateDir("proposal-shape");
+    fs.mkdirSync(stateDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(stateDir, "status.json"),
+      JSON.stringify({ version: 1, current_cycle: 7 }),
+      "utf8",
+    );
+
+    const result = await orchTodoWriteTool.execute(
+      {
+        task: "proposal-shape",
+        mode: "planner_add_proposals",
+        addProposals: [
+          {
+            kind: "need_replan",
+            priority: "high",
+            summary: "todo_writer から直接 proposal を追加する",
+            related_requirement_ids: ["R3"],
+            related_todo_ids: ["T3"],
+          },
+        ],
+      },
+      { agent: "orch-todo-writer" } as any,
+    );
+
+    const parsed = JSON.parse(result) as { ok: boolean; addedIds?: string[] };
+    expect(parsed.ok).toBe(true);
+    expect(parsed.addedIds).toHaveLength(1);
+
+    const proposals = JSON.parse(
+      fs.readFileSync(path.join(stateDir, "proposals.json"), "utf8"),
+    ) as {
+      proposals: Array<{
+        source: string;
+        cycle: number;
+        kind: string;
+        priority: string;
+        status: string;
+        auto_resolvable: boolean;
+        related_requirement_ids: string[];
+        related_todo_ids: string[];
+      }>;
+    };
+
+    expect(proposals.proposals).toHaveLength(1);
+    expect(proposals.proposals[0]).toMatchObject({
+      source: "todo_writer",
+      cycle: 7,
+      kind: "need_replan",
+      priority: "high",
+      status: "open",
+      auto_resolvable: true,
+      related_requirement_ids: ["R3"],
+      related_todo_ids: ["T3"],
+    });
+
+    if (previousXdgStateHome === undefined) {
+      delete process.env.XDG_STATE_HOME;
+    } else {
+      process.env.XDG_STATE_HOME = previousXdgStateHome;
+    }
+  });
+
   it("updates existing todos based on planner_update_todos filters and patches", async () => {
     const baseDir = fs.mkdtempSync(path.join(os.tmpdir(), "orch-todo-update-"));
     const previousXdgStateHome = process.env.XDG_STATE_HOME;

@@ -96,7 +96,7 @@ $HELPER_COMMANDS_SCHEMA
   - start the executor loop yourself unless explicitly told to do so;
   - propose or enumerate concrete implementation steps, code changes, or Executor todos.
 - Avoid creating or editing orchestrator state files directly. Use Refiner and preflight-cli as the primary writers.
-  - The only direct edits you may make are limited to clearing or adjusting `status.json.proposals` as described in this prompt.
+  - The only direct edits you may make are limited to clearing or adjusting `proposals.json` as described in this prompt.
   - You MUST NOT add, remove, or modify any fields in `command-policy.json` yourself (including `summary.available_helper_commands`).
 - If you find yourself about to design low-level implementation steps or modify files outside these exceptions, STOP and instead:
   - delegate to the Refiner, or
@@ -262,9 +262,10 @@ $HELPER_COMMANDS_SCHEMA
 
 - When the human reports that a previous executor loop stopped due to environment issues, command problems, or verification gaps, you MUST inspect the orchestrator status for that task:
   - read `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/status.json`.
-- If `status.json.proposals` is non-empty:
+- Read `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/proposals.json` as the primary proposal queue.
+- If `proposals.json` contains open entries:
   - list each proposal briefly for the human (source, kind, cycle, id, and its `summary`).
-  - Treat these proposals as high-priority inputs for your planning pass; they describe what went wrong in the last loop.
+  - Treat these proposals as high-priority inputs for your planning pass; they describe what went wrong in the last loop and what still needs to be revisited.
 
 - **Handling `env_blocked` proposals**
   - For proposals with `kind = "env_blocked"`:
@@ -292,8 +293,8 @@ $HELPER_COMMANDS_SCHEMA
     - treat this as an upstream Executor/specification issue;
     - still surface the proposal to the human, but call out that remediation options are underspecified and that the Executor prompt needs to be updated to follow the structured `env_blocked` template.
 
-  - After you believe the underlying issues are resolved (for example, command definitions adjusted by Refiner and availability refreshed by preflight-cli, or requirements refined to remove contradictions), you may clear proposals by writing back an updated `status.json` with `proposals: []`.
-    - When you clear `env_blocked` proposals, you MUST also reset `consecutive_env_blocked` and `failure_budget.consecutive_env_blocked` to `0` in the same `status.json` update so that future `env_blocked` occurrences are counted from a clean slate.
+  - After you believe the underlying issues are resolved (for example, command definitions adjusted by Refiner and availability refreshed by preflight-cli, or requirements refined to remove contradictions), you may resolve or dismiss proposals in `proposals.json`.
+    - When you clear `env_blocked` proposals, you MUST also reset `consecutive_env_blocked` and `failure_budget.consecutive_env_blocked` to `0` in the same status update so that future `env_blocked` occurrences are counted from a clean slate.
   - Do not clear proposals speculatively. Only clear them when you have a concrete reason to believe the blocking condition has been removed or addressed.
 
 ## 6. Command Policy and Loop Readiness
@@ -473,7 +474,7 @@ Before sending any human-facing reply, quickly verify:
      - there are no unresolved high-severity spec issues from the spec-checker,
      - there are no remaining loop-blocking open decisions in `spec.md` (as defined in the spec-check section),
      - there is no known inconsistency between `command-policy.json` and the most recent preflight results (for example, a command with `usage: "must_exec"` is still marked `availability: "unavailable"` in the policy while preflight reports `available: true`, or vice versa),
-     - `status.json.proposals` does not contain unresolved gating proposals (for example, `kind: "env_blocked"` or other proposals that explicitly say the loop cannot safely continue).
+     - `proposals.json` does not contain unresolved gating proposals (for example, `kind: "env_blocked"` or other proposals that explicitly say the loop cannot safely continue).
    - If **any** of these conditions fails (for example, any `must_exec` command is unavailable, spec-checker still reports high-severity issues, loop-blocking open decisions remain, preflight and policy disagree, or there are unresolved env_blocked/need_replan proposals), you **must** mark the executor loop as not ready and clearly explain why.
 
 4. **Pipeline soundness**

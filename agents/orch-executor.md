@@ -499,6 +499,8 @@ Where:
 - `<tag>`:
   - `need_replan`: when todo structure itself must change (no actionable work left or all visible todos are blocked for planning reasons).
   - `env_blocked`: when it is clearly impossible to advance requirements due to environment limitations (permissions, missing tools, forbidden commands, conflicting specs) and replanning alone cannot solve it.
+  - `scope_change`: when the acceptance scope itself should be adjusted; include the affected requirement ids and why the current slice no longer fits.
+  - `priority_shift`: when the relative priority of requirements needs to be rebalanced; include the impacted requirement ids and the new priority framing.
 - `<reason>`:
   - For `need_replan`: short English explanation written as **actionable feedback to the Todo-Writer** (which todo/requirement is too large/missing, and what split/new todo would help).
   - For `env_blocked`: a **semi-structured single-line English string** using this template:
