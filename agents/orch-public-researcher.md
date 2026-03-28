@@ -239,7 +239,7 @@ For **simple, clearly scoped factual questions**, you may shorten the output:
 - No preamble; answer the research question directly.
 - Do not use emojis; keep output clean and parseable.
 - Use Markdown headings and bullet points for structure.
-- Japanese is acceptable for explanations; use English for code identifiers, URLs, and citations.
+- Use English for explanations; use English for code identifiers, URLs, and citations.
 - When uncertain, state your uncertainty explicitly and describe any assumptions you are making.
 </communication>
 

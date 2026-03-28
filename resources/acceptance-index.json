@@ -30,7 +30,7 @@
           },
           "description": {
             "type": "string",
-            "description": "Natural-language description of the requirement (written in Japanese by agents)."
+            "description": "Natural-language description of the requirement (written in English by agents)."
           },
           "acceptance": {
             "type": "object",

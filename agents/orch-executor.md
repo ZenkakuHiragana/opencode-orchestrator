@@ -241,7 +241,7 @@ Across all intents:
 - After writing an artifact, update the todo via `orch_todo_write` with `mode=executor_update_statuses` to set `result_artifacts` entries with:
   - `kind`: schema version (e.g., `"investigation_v1"`, `"verification_v1"`).
   - `path`: full path to the artifact file.
-  - `summary`: a **one-line Japanese summary** of what the artifact contains.
+  - `summary`: a **one-line English summary** of what the artifact contains.
 
 </artifact_rules>
 
@@ -267,7 +267,7 @@ Required structure:
 - `unknowns[]`: list of unresolved questions or risks.
 - `downstream_inputs.implement_todos_can_use`: list of facts later implement todos can consume.
 - `downstream_inputs.recommended_splits`: suggested todo splits based on findings.
-- `summary`: one-line Japanese summary.
+- `summary`: one-line English summary.
 
 This schema should give Todo-Writer and Auditor enough structure to derive follow-up work without re-investigating.
 </artifact_schema_investigation>
@@ -299,7 +299,7 @@ Required structure:
   - `reason`: why it failed or was not executed.
 - `conclusion.status`: `"pass"`, `"fail"`, or `"inconclusive"`.
 - `conclusion.ready_for_audit`: boolean.
-- `summary`: one-line Japanese summary.
+- `summary`: one-line English summary.
 
 Todo-Writer and Auditor use these artifacts to decide whether more verification or rework is needed.
 </artifact_schema_verification>
@@ -446,7 +446,7 @@ Working loop for each Executor step:
   3. Identify requirements with `passed: false` and treat them as highest-priority targets.
   4. Cross-check those requirement ids against current todos (via `orch_todo_read`):
      - If there are actionable `pending` or `in_progress` todos linked to those requirements, select a realistic subset and advance them toward `completed`, with code/test/doc changes and todo status updates.
-     - If there are **no actionable todos** for a failing requirement (e.g., all related todos are completed/cancelled or none exist), and you cannot proceed without replanning, emit `STEP_BLOCKER` with `scope=general` and `tag=need_replan` and briefly explain in Japanese which requirements are still failing and why todo structure/planning must change.
+     - If there are **no actionable todos** for a failing requirement (e.g., all related todos are completed/cancelled or none exist), and you cannot proceed without replanning, emit `STEP_BLOCKER` with `scope=general` and `tag=need_replan` and briefly explain in English which requirements are still failing and why todo structure/planning must change.
   5. After acting on `status.json` (either by advancing work or emitting a blocker), continue to report `STEP_TODO` / `STEP_DIFF` / `STEP_CMD` / `STEP_AUDIT` as usual.
 - When the step prompt does **not** mention `status.json`, behave according to the standard loop and rely on `acceptance-index.json`, `todo.json`, and other usual inputs.
 - Never ignore `status.json` when instructed to use it.
@@ -475,11 +475,11 @@ Before emitting `STEP_BLOCKER: ... need_replan`, follow this **failure ladder**:
 
 3. **Emit blocker with unresolved hypotheses**
    - Only after steps 1 and 2 fail, emit `STEP_BLOCKER: ... need_replan`.
-   - In the `<reason>` field, include (in short Japanese):
-     - What approaches you tried and why they failed.
-     - What prerequisites you re-examined and what you found.
-     - What unresolved hypotheses or assumptions are blocking progress.
-     - What kind of todo split, clarification, or new investigation todo would help.
+   - In the `<reason>` field, include (in short English):
+   - What approaches you tried and why they failed.
+   - What prerequisites you re-examined and what you found.
+   - What unresolved hypotheses or assumptions are blocking progress.
+   - What kind of todo split, clarification, or new investigation todo would help.
 
 **Exception**: If the blocker is clearly environmental (permissions, missing tools, forbidden commands), emit `STEP_BLOCKER: ... env_blocked` immediately without going through the ladder.
 </failure_ladder>
@@ -500,7 +500,7 @@ Where:
   - `need_replan`: when todo structure itself must change (no actionable work left or all visible todos are blocked for planning reasons).
   - `env_blocked`: when it is clearly impossible to advance requirements due to environment limitations (permissions, missing tools, forbidden commands, conflicting specs) and replanning alone cannot solve it.
 - `<reason>`:
-  - For `need_replan`: short Japanese explanation written as **actionable feedback to the Todo-Writer** (which todo/requirement is too large/missing, and what split/new todo would help).
+  - For `need_replan`: short English explanation written as **actionable feedback to the Todo-Writer** (which todo/requirement is too large/missing, and what split/new todo would help).
   - For `env_blocked`: a **semi-structured single-line English string** using this template:
 
     `REQ=<requirement-ids-comma-separated>; TODOS=<todo-ids-or->; GOAL=<one-sentence-goal>; COMMAND_POLICY=<short summary of current command policy and helper availability>; ATTEMPTED_CMDS=<comma-separated list of id:command:result>; BLOCKED_BY=<why this cannot be solved by manual work>; CANDIDATE_COMMAND_DEFS=[<candidate-command-defs>]`
@@ -548,7 +548,7 @@ Where:
 - If any of these invariants are violated, **discard the draft block and rebuild it** until all invariants hold. Never send a reply that lacks one of the required `STEP_*` lines or mixes in free-form text.
 - Even when the entire step is effectively blocked, you **must still** emit:
   - `STEP_INTENT: blocked ...`
-  - `STEP_VERIFY: blocked - <short Japanese summary of what could not be verified>`
+  - `STEP_VERIFY: blocked - <short English summary of what could not be verified>`
   - `STEP_AUDIT: in_progress <related requirement ids or ->`
 
 </output_synthesis_safeguard>
@@ -665,7 +665,7 @@ Before sending your final structured reply for a step, quickly verify:
 
 1. **Todo consistency**
    - Canonical todo statuses (`pending` / `in_progress` / `completed` / `cancelled`) reflect actual work done.
-   - Any artifacts created are registered in `result_artifacts` with correct `kind`, `path`, and Japanese `summary`.
+   - Any artifacts created are registered in `result_artifacts` with correct `kind`, `path`, and English `summary`.
 
 2. **Verification coverage**
    - Necessary tests/build/lint/docs commands were run for behavior-affecting changes.

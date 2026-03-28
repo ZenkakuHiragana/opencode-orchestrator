@@ -28,7 +28,7 @@
   - ベースパス: `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/`
   - 主なファイル:
     - `acceptance-index.json` … 要件一覧（Refiner オーナー）
-    - `spec.md` … ストーリ仕様（Refiner オーナー／日本語）
+    - `spec.md` … story spec (Refiner-owned / English)
     - `todo.json` … Todo-Writer が生成する canonical todo 一覧
     - `command-policy.json` … Planner が合成するコマンドポリシー
     - `status.json` … `orchestrator-loop` が更新するループ状態
@@ -302,9 +302,9 @@ sequenceDiagram
 
 - (C) 主な出力
   - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/acceptance-index.json`
-    - `version`, `requirements[]` などの構造化された受け入れ条件（説明文は日本語）。
+    - `version`, `requirements[]` などの構造化された受け入れ条件（説明文は英語）。
   - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/spec.md`
-    - タスクのゴール、非ゴール、制約、期待成果物、Done 条件など（日本語）。
+    - タスクのゴール、非ゴール、制約、期待成果物、Done 条件など（英語）。
   - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/command-policy.json`
     - 初期の `commands[]` リストを定義。
 
@@ -345,7 +345,7 @@ sequenceDiagram
   - 構造例（実際の仕様より抜粋）:
     - `status`: `"ok"` / `"needs_revision"`
     - `feasible_for_loop`: orchestrator ループに載せられるかのブール値
-    - `issues[]`: acceptance-index / spec / command-policy に関する問題一覧（`summary`/`suggested_action` は日本語）
+    - `issues[]`: acceptance-index / spec / command-policy に関する問題一覧（`summary`/`suggested_action` は英語）
 
 ## 5. Preflight（preflight-cli ツール）
 
@@ -498,7 +498,7 @@ sequenceDiagram
   - フィールド:
     - `done`: ストーリー全体が完了しているか（ブール）
     - `requirements[]`: `{ id, passed, reason? }` の配列
-      - `reason` は日本語テキスト。
+      - `reason` は英語テキスト。
 
 ## 9. その他の補助エージェント
 
@@ -555,7 +555,7 @@ sequenceDiagram
     - セッションエクスポート JSON（`opencode export` の結果をファイル化）。
 
 - (D) 出力内容
-  - CLI 標準出力としては主にログメッセージ（日本語中心 + 英語補助）。
+  - CLI 標準出力としては主にログメッセージ（英語中心）。
   - 成否としては `runLoop()` の戻り値（boolean）を CLI 層が exit code などに反映。
 
 ## 10. まとめ
@@ -587,7 +587,7 @@ sequenceDiagram
     {
       "id": "R1-some-requirement", // 安定 ID（文字列）
       "title": "...", // 短い名前（任意）
-      "description": "...", // 日本語の受け入れ条件説明
+      "description": "...", // 英語の受け入れ条件説明
       "acceptance": {
         // 受け入れ判定に関する追加情報（任意）
         "files": ["src/..."],
@@ -633,7 +633,7 @@ sequenceDiagram
         "subdir": { "description": "..." }
       },
       "related_requirements": ["R1", "R2-ui"], // 関連要件。なければ []
-      "usage_notes": "...",                    // 日本語メモ。なければ ""
+      "usage_notes": "...",                    // English note. Use "" if none.
       "availability": "available" | "unavailable" // Planner/preflight が付与
     }
   ]
@@ -662,7 +662,7 @@ sequenceDiagram
   "todos": [
     {
       "id": "T1-sample-setup-task",             // 安定 Todo ID
-      "summary": "R1 用の API エンドポイントを作成する", // 自然言語説明（日本語）
+      "summary": "Create the API endpoint for R1", // natural-language description (English)
       "status": "pending" | "in_progress" | "completed" | "cancelled",
       "related_requirement_ids": ["R1", "R2-ui"],
        "execution_contract": {                    // 任意・監査向け証拠境界
@@ -723,7 +723,7 @@ sequenceDiagram
         "command": "npm test",
         "command_id": "cmd-npm-test", // `STEP_CMD` の括弧内 / または null
         "status": "success", // 実際の文字列値（例）
-        "outcome": "テスト成功", // 日本語サマリ
+        "outcome": "Test passed", // 英語サマリ
       },
     ],
     "step_blocker": [
@@ -786,7 +786,7 @@ sequenceDiagram
       "source": "executor", // または "auditor"
       "cycle": 3,
       "kind": "env_blocked", // 例: env_blocked / need_replan など
-      "summary": "...", // 英文 or 日本語短文
+      "summary": "...", // English short text
       "details": "...", // 任意
     },
   ],
@@ -818,8 +818,8 @@ sequenceDiagram
       "id": "I1-missing-requirements",
       "severity": "info" | "warning" | "error",
       "target": "acceptance-index" | "commands" | "command-policy" | "structure" | string,
-      "summary": "...",           // 日本語の短い説明
-      "suggested_action": "..."   // 日本語の改善提案
+      "summary": "...",           // English short description
+      "suggested_action": "..."   // English improvement suggestion
     }
   ]
 }
@@ -840,7 +840,7 @@ sequenceDiagram
       "usage": "must_exec",
       "available": true,
       "exit_code": 0,
-      "stderr_excerpt": ""  // 失敗時は日本語で短く説明
+      "stderr_excerpt": ""  // failure summary in English
     }
   ]
 }
@@ -858,7 +858,7 @@ sequenceDiagram
     {
       "id": "R1-some-requirement",
       "passed": true | false,
-      "reason": "..."   // 任意・日本語説明
+      "reason": "..."   // optional English explanation
     }
   ]
 }

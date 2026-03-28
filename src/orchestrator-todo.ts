@@ -290,7 +290,7 @@ export const orchTodoWriteTool = tool({
     "- Each entry must have an 'id' and 'status'.\n" +
     "- 'result_artifacts' may only be provided when status is 'completed'. If result_artifacts is provided with any other status, SPEC_ERROR is returned.\n" +
     "- result_artifacts is an array; you may record multiple artifacts in a single update.\n" +
-    "- Each artifact requires 'kind' (schema version, e.g. investigation_v1), 'path' (full path under artifacts/), and 'summary' (one-line Japanese description).\n" +
+    "- Each artifact requires 'kind' (schema version, e.g. investigation_v1), 'path' (full path under artifacts/), and 'summary' (one-line English description).\n" +
     "Misuse will return SPEC_ERROR.",
   args: {
     task: z
@@ -360,7 +360,7 @@ export const orchTodoWriteTool = tool({
                 summary: z
                   .string()
                   .describe(
-                    "One-line Japanese summary of the artifact contents.",
+                    "One-line English summary of the artifact contents.",
                   ),
               }),
             )
@@ -436,7 +436,7 @@ export const orchTodoWriteTool = tool({
                 summary: z
                   .string()
                   .describe(
-                    "One-line Japanese summary of the artifact contents.",
+                    "One-line English summary of the artifact contents.",
                   ),
               }),
             )

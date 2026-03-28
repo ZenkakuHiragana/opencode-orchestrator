@@ -99,7 +99,7 @@
           },
           "usage_notes": {
             "type": "string",
-            "description": "Human-readable notes about how this command should be used (typically in Japanese). Use an empty string when there is no note."
+            "description": "Human-readable notes about how this command should be used (typically in English). Use an empty string when there is no note."
           }
         },
         "additionalProperties": true

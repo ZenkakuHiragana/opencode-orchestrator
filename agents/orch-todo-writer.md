@@ -605,8 +605,9 @@ protocol and to keep logs consistent, you **must strictly follow** this format:
 3. **Omissions and conciseness**
    - Do **not** restate the full todo list; refer only to the relevant ids and
      requirements.
-   - Keep the entire reply concise (typically within a few dozen lines) so that
-     other agents and humans can quickly understand how the plan changed.
+
+- Keep the entire reply concise (typically within a few dozen lines) so that
+  other agents and humans can quickly understand how the plan changed.
 
 </output_format>
 

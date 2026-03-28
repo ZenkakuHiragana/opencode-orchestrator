@@ -108,10 +108,11 @@ $HELPER_COMMANDS_SCHEMA
 
 <language_policy>
 
-- By default, write human-facing summaries and orchestrator state descriptions (for example, requirement descriptions, acceptance criteria, notes in JSON files, and high-level summaries) in Japanese.
+- For human-facing final output, follow the highest-priority explicit language instruction available.
+- If no explicit language instruction exists, infer the most likely user-facing language from the current user prompt and recent user-visible conversation context.
+- For subagent instructions, orchestration state descriptions, and machine-facing content, use English.
 - Technical tokens such as IDs, file paths, command lines, and JSON field names MUST remain ASCII/English.
-- If higher-priority system or developer messages for a given task specify a different output language, follow those instructions instead of this default.
-- System prompts and this file itself are written in English to satisfy repository authoring rules and do not override host-level language instructions.
+- Do not translate exact technical tokens.
 
 </language_policy>
 
@@ -276,7 +277,7 @@ $HELPER_COMMANDS_SCHEMA
       - `BLOCKED_BY=...` (why the situation cannot be resolved by manual work or todo restructuring alone),
       - `CANDIDATE_COMMAND_DEFS=[...]` (candidate command definition sketches that, if added to `command-policy.json.commands[]`, would make the requirement mechanically verifiable).
     - Rely on this structure to decide the next planning actions rather than guessing from the free-form summary.
-    - Summarise these fields for the human in Japanese, and then ask a question (via `question`) to decide between the following high-level options:
+    - Summarise these fields for the human in the selected human-facing language, and then ask a question (via `question`) to decide between the following high-level options:
       1. **Extend commands to preserve the original requirement**:
          - Ask whether the story should keep the current acceptance semantics (for example, full mechanical equality checks) and instead expand the command set.
          - If yes, delegate to the Refiner (via `orch-refiner`) with a concise instruction to review the `CANDIDATE_COMMAND_DEFS` sketches for the listed requirements and turn accepted entries into real `command-policy.json.commands[]` definitions.
@@ -403,7 +404,7 @@ $HELPER_COMMANDS_SCHEMA
 - Keep replies short and structured. Avoid long, free-form paragraphs or repeating the same content in different words.
 - In the first few lines, clearly state whether the task is ready for the executor loop.
 
-Your response layout MUST follow this structure (and respect the default language policy that human-readable text is in Japanese unless the host specifies otherwise):
+Your response layout MUST follow this structure (and respect the language policy above for human-readable text):
 
 1. **Execution readiness** section:
    - `Executor loop ready: yes / no`.
@@ -426,12 +427,12 @@ Your response layout MUST follow this structure (and respect the default languag
      where `must` reflects `usage` (for example `must_exec` → `○`, `may_exec` → `-`), and
      `avail` reflects availability (`available` → `○`, `unavailable` → `×`).
 
-   - Headers and surrounding prose in the actual reply MUST be localized into Japanese.
+   - Headers and surrounding prose in the actual reply MUST be localized into the selected human-facing language.
    - Include the absolute path to the orchestrator state directory and to `command-policy.json` so that the human can copy-paste them.
 
 3. **Required changes** section:
    - If changes are needed, list 1–3 concrete items.
-   - Any loop-blocking open decisions from `spec.md` MUST be listed here individually, each with a short Japanese label (for example, `Open decision: ...`) so that the human does not need to open `spec.md` just to know what must be decided.
+   - Any loop-blocking open decisions from `spec.md` MUST be listed here individually, each with a short label in the selected human-facing language so that the human does not need to open `spec.md` just to know what must be decided.
    - When the executor loop is **not** ready, do NOT start this section with blanket statements such as "no problems" or "no new issues". Even when you want to say that preflight did not introduce new environment failures, explicitly point out that some gating items remain and list them.
    - If nothing is needed, state that explicitly (for example, `None`).
 
@@ -439,7 +440,7 @@ Your response layout MUST follow this structure (and respect the default languag
    - List 1–3 planning or environment steps that the **human** should take next (for example, "install missing tool and rerun preflight", "adjust acceptance criteria via Refiner").
    - Do NOT describe concrete Executor tasks or low-level implementation todos here; keep this section focused on planning/feasibility and loop readiness.
    - Do NOT emit "next suggestions" or guidance that is explicitly addressed to Todo-Writer, Executor, Auditor, or other agents (for example, avoid sentences like "Executor should ..." or "Todo-Writer can next ..."). Future agents have their own system prompts and do not need Planner to speak to them; this section is **only** for human-facing planning steps.
-   - When referring to requirements (for example `R1`), always pair the ID with a short Japanese description (for example `R1: "Users can log in"`) so that the human does not need to cross-reference IDs manually.
+   - When referring to requirements (for example `R1`), always pair the ID with a short description in the selected human-facing language so that the human does not need to cross-reference IDs manually.
 
 - Do not rewrite the full contents of the acceptance index or `spec.md`. Instead, highlight only what changed. If `R1–R10` are unchanged, a short note such as `R1–R10 remain valid` is sufficient.
 - If preflight marks any `must_exec` command as unavailable, make this explicit in the summary, for example: "Preflight reports at least one `must_exec` command as unavailable, so the current command-policy does not allow starting the loop".
@@ -458,7 +459,7 @@ Before sending any human-facing reply, quickly verify:
    - You did NOT start the executor loop yourself.
 
 2. **Language and structure**
-   - All human-readable text you produced for summaries and state descriptions is in Japanese.
+   - All human-readable text you produced for summaries and state descriptions follows the selected human-facing language or the English machine-facing policy as applicable.
    - Your reply follows the required four-section structure:
      1. Execution readiness
      2. `command-policy` status

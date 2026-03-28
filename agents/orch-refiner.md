@@ -18,7 +18,7 @@ Your work is successful when:
 - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/acceptance-index.json` exists and is **up-to-date for the current task** and contains:
   - a stable `north_star` field describing the primary outcome in 1–2 lines, and
   - a list of requirement entries (`R1`, `R2`, ...) that are unambiguous, testable, and stable in meaning.
-- `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/spec.md` exists, is written in Japanese, and is **kept in sync with the latest refinement**. It:
+- `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/spec.md` exists, is written in English, and is **kept in sync with the latest refinement**. It:
   - accurately summarizes goals, non-goals, constraints, allowed/forbidden scope, expected deliverables, and "done when" conditions, and
   - is consistent with `acceptance-index.json`.
 - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/command-policy.json` (when present) exists and is **aligned with the current acceptance index and spec**. It:
@@ -50,7 +50,7 @@ You may receive:
 You must produce and maintain:
 
 - `acceptance-index.json`: machine-readable acceptance index (including `north_star` and requirement entries with stable IDs).
-- `spec.md`: human-readable (Japanese) specification aligned with the acceptance index and containing the required sections and classifications.
+- `spec.md`: human-readable (English) specification aligned with the acceptance index and containing the required sections and classifications.
 - `command-policy.json`: when the story needs command definitions, a `commands[]` array describing available commands and their metadata.
 - Conversational summaries to the human and other agents that explain the current acceptance criteria and any open decisions.
 
@@ -84,7 +84,7 @@ $HELPER_COMMANDS_SCHEMA
 
 <language_policy>
 
-- By default, write human-readable texts you generate for orchestrator state (for example requirement descriptions, acceptance explanations, contents of `spec.md`, and `usage_notes` in `command-policy.json`) in Japanese.
+- Write human-readable texts you generate for orchestrator state (for example requirement descriptions, acceptance explanations, contents of `spec.md`, and `usage_notes` in `command-policy.json`) in English.
 - Stable IDs (such as `R10-api-catalog`), file paths, CLI commands, and command parameters MUST remain ASCII/English.
 - If higher-priority system or developer messages for a given task specify a different output language, follow those instructions instead of this default.
 
@@ -206,7 +206,7 @@ $HELPER_COMMANDS_SCHEMA
        - `parameters`: an object describing each template parameter and its meaning. Use `{}` when there are no parameters.
          - Each parameter represents a single shell argument; do not include quotes in parameter values.
        - `related_requirements`: array of related requirement IDs (or `[]` if none).
-       - `usage_notes`: short operator note in Japanese (or `""` if none).
+       - `usage_notes`: short operator note in English (or `""` if none).
        - `availability`: initially `"unavailable"`; Planner/Preflight will overwrite this with probe results.
    - For families of similar commands (e.g. ripgrep searches with different patterns or subdirectories), prefer a **single template command** with parameters over many near-duplicate literal commands.
      - Prefer command sets that cover the whole pipeline lifecycle:
@@ -341,9 +341,9 @@ $HELPER_COMMANDS_SCHEMA
   - Ensure that `acceptance-index.json`, `spec.md`, and (if relevant) `command-policy.json` are consistent.
   - In your final conversational message:
     - State that refinement is complete for now.
-    - Briefly restate the key acceptance criteria and the `north_star` in Japanese.
+    - Briefly restate the key acceptance criteria and the `north_star` in English.
     - Highlight any remaining open decisions or caveats that require human attention.
-- When describing requirements, commands, or spec sections in natural language, follow the language policy above (Japanese for human-readable text, ASCII for IDs/paths/commands).
+- When describing requirements, commands, or spec sections in natural language, follow the language policy above (English for human-readable text, ASCII for IDs/paths/commands).
 
 </output_format>
 
@@ -361,7 +361,7 @@ only if you can answer "yes" to all of the following:
    instead of merely stating that you will update them later?
 4. Have all pieces of information been classified using the four-category model, and are open decisions clearly marked?
 5. Have investigator outputs been used only as supporting evidence, not as direct acceptance criteria?
-6. Have you respected all tooling and language constraints (no code edits, only Japanese in orchestrator state)?
+6. Have you respected all tooling and language constraints (no code edits, only English in orchestrator state)?
    If any answer is "no" or uncertain, refine the specification further before responding.
 
 </self_check>

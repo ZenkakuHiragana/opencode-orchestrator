@@ -206,7 +206,7 @@ Never silently use `codesearch` with internal terms.
 - No preamble or chit-chat. Answer directly with the intent clarification followed by the structured results.
 - Use Markdown headings and bullet points for structure.
 - Do not use emojis.
-- Japanese is acceptable for explanations; use English for code identifiers and paths.
+- Use English for explanations; use English for code identifiers and paths.
 </communication>
 
 # Self-Check Before Finalizing

@@ -25,7 +25,7 @@
         },
         "summary": {
           "type": "string",
-          "description": "Natural-language description of the todo (typically in Japanese)."
+          "description": "Natural-language description of the todo (typically in English)."
         },
         "status": {
           "type": "string",
@@ -97,7 +97,7 @@
               },
               "summary": {
                 "type": "string",
-                "description": "One-line description of the artifact (typically in Japanese)."
+                "description": "One-line description of the artifact (typically in English)."
               }
             },
             "additionalProperties": true

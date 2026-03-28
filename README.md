@@ -327,7 +327,7 @@ Spec-Checker / Preflight-Runner が出した結果を、Planner が集約して�
 - Refiner (`orch-refiner`)
   - 高レベルなゴールをテスト可能な受け入れ条件に分解する Requirements Refiner です。
   - `acceptance-index.json`, `spec.md`, `command-policy.json` を管理し、コマンド定義も含めたメタデータを提案します。
-  - `spec.md` に、タスクのゴール / non-goals / 制約 / 成果物 / 終了条件 / 受け入れ条件の解釈方針などを日本語でまとめた仕様を書き出します。
+  - `spec.md` に、タスクのゴール / non-goals / 制約 / 成果物 / 終了条件 / 受け入れ条件の解釈方針などを英語でまとめた仕様を書き出します。
 - Spec-Checker (`orch-spec-checker`)
   - acceptance-index と spec.md、および command-policy.json を解析し、仕様やコマンド定義の抜け・構造的問題・受け入れ条件との対応関係の不整合を指摘する解析専用サブエージェントです。
   - `issues[]` に acceptance-index / spec / command-policy それぞれに対する指摘を JSON として出力しますが、ファイルの編集・更新は行いません (完全 read-only)。
