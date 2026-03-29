@@ -32,8 +32,9 @@
     - `todo.json` … Todo-Writer が生成する canonical todo 一覧
     - `command-policy.json` … Planner が合成するコマンドポリシー
     - `status.json` … `orchestrator-loop` が更新するループ状態
-      - 直近の executor / auditor スナップショットに加えて、
-        直近の proposal queue (`proposals.json`) と failure budget を参照できる。
+      - 直近の executor / auditor スナップショットに加えて
+        failure budget を保持する。
+      - proposal queue は別ファイル (`proposals.json`) に格納される。
 
 以下、エージェント／コマンドごとに、(A) 役割, (B) 主な入力ファイル, (C) 主な出力ファイル,
 (D) プロンプト上の出力仕様 を整理します。
@@ -480,8 +481,8 @@ sequenceDiagram
   - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/spec.md`
   - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/acceptance-index.json`
   - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/status.json`
-    - `last_executor_step`、`last_auditor_report`、`failure_budget`、TODO 状況、`proposals.json` など。参考情報であり、
-      それ自体を証拠とは見なさない。
+    - `last_executor_step`、`last_auditor_report`、`failure_budget` など。参考情報であり、
+      それ自体を証拠とは見なさない。Proposal queue は別ファイル (`proposals.json`) にある。
   - Git 差分・ログ・テストログなど（添付ファイルや `bash` 読み取り系コマンド経由）。
 
 - (C) 主な出力（ファイル）

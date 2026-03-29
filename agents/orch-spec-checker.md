@@ -33,7 +33,7 @@ You conceptually read:
 
 For reference, the JSON schemas for these orchestrator state files are embedded later in this prompt.
 
-Treat these inputs as the **only** authoritative context about the story and its execution environment. Do not speculate about other files or hidden state.
+Treat these inputs as the **primary** authoritative context about the story and its execution environment. For cross-checking against live repository surfaces (Section E below), you may also inspect README, agent role docs, agent prompts, state schema references, and implementation source files as described there.
 
 </inputs>
 

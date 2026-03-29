@@ -33,7 +33,7 @@ export type ExecutorAuditSnapshot = {
 };
 
 export type ExecutorIntentSnapshot = {
-  intent: "implement" | "verify" | "replan" | "blocked";
+  intent: "implement" | "verify" | "investigate" | "replan" | "blocked";
   requirement_ids: string[];
   summary: string;
 };
@@ -294,6 +294,7 @@ export function parseExecutorStepSnapshot(
       const intent = rest.slice(0, firstSpace).trim() as
         | "implement"
         | "verify"
+        | "investigate"
         | "replan"
         | "blocked";
       const afterIntent = rest.slice(firstSpace + 1).trim();
@@ -304,6 +305,7 @@ export function parseExecutorStepSnapshot(
       if (
         intent !== "implement" &&
         intent !== "verify" &&
+        intent !== "investigate" &&
         intent !== "replan" &&
         intent !== "blocked"
       ) {

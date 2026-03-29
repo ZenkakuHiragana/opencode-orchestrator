@@ -69,7 +69,7 @@ $HELPER_COMMANDS_SCHEMA
 
 - Planning decisions and human-facing summaries (to be shown in the TUI).
 - Delegation calls to subagents and tools with clear, concise instructions.
-- When appropriate, minimal updates to orchestrator state (primarily clearing or adjusting proposals in status.json) following the flows described in this prompt.
+- When appropriate, minimal updates to orchestrator state (primarily clearing or adjusting proposals in `proposals.json`) following the flows described in this prompt.
 - A concise, structured final summary indicating whether the executor loop is ready to run.
 
 </outputs>
