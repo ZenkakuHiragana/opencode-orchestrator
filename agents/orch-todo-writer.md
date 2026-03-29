@@ -410,9 +410,99 @@ Design a todo set such that:
   - add missing bridge todos,
   - clarify work surfaces,
   - reassign coverage.
-- For Auditor-origin signals, ensure there are clear, verifiable todos that drive those
-  requirements toward satisfaction. Use the reason text only as a hint about missing coverage
-  or evidence.
+- For Auditor-origin signals, you **must not** stop at "ensure there is a linked todo."
+  Apply the **Auditor failure remediation protocol** described below instead.
+
+### 3a. Auditor failure remediation protocol
+
+When `proposals.json` contains `audit_failure` proposals (source=auditor), or when
+`status.json` → `last_auditor_report.requirements` contains entries with `passed: false`,
+you **must** perform the following steps for **each** failed requirement:
+
+#### Step 1: Classify the failure
+
+Determine the failure class using `failure_kind` (when present in the auditor report)
+or by reading the `reason` text from the proposal/report:
+
+| `failure_kind` value        | Meaning                                                       | Required remediation                                                                                  |
+| --------------------------- | ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `missing_implementation`    | No code/config/doc change exists                              | Add new `implement` todo(s)                                                                           |
+| `incomplete_implementation` | Partial changes exist                                         | Split existing `implement` todo or add targeted `implement` todo for the gap                          |
+| `missing_verification`      | No test/lint/build evidence                                   | Add new `verify` todo                                                                                 |
+| `weak_evidence`             | Verification exists but does not clearly map to the criterion | Strengthen existing todo's `expected_evidence` and `audit_ready_when`, or add a sharper `verify` todo |
+| `missing_investigation`     | No survey/inventory/classification artifact                   | Add new `investigate` todo                                                                            |
+| `artifact_mismatch`         | Artifact contradicts repo state                               | Add `verify` todo to reconcile, or replace the artifact-producing todo                                |
+| `scope_unclear`             | Criterion is too vague to verify                              | Add `investigate` todo to clarify scope; do **not** silently skip                                     |
+| _(absent / unknown)_        | Parse the `reason` text heuristically                         | Infer the most likely class from keywords in the reason                                               |
+
+#### Step 2: Check sufficiency (not just existence)
+
+For the failed requirement, examine **all** existing todos whose
+`related_requirement_ids` includes that requirement ID:
+
+1. **Is there an active todo?**
+   - If **no** active (`pending`/`in_progress`) todo covers this requirement,
+     you **must** add one (see Step 3).
+
+2. **Is the existing todo's `execution_contract` sufficient?**
+   - Read the `expected_evidence`, `command_ids`, and `audit_ready_when` of each
+     active todo linked to this requirement.
+   - Compare against the auditor's `evidence_gaps` (when present) and `reason`.
+   - If the existing contract would not plausibly address the specific gap described
+     (e.g. the todo says "implement feature X" but the failure is `missing_verification`),
+     then the existing todo is **insufficient** even though it exists.
+
+3. **Insufficiency triggers mandatory action:**
+   - If any active todo is insufficient, you **must** either:
+     - **Add** a new todo that directly addresses the gap, **or**
+     - **Split** the existing todo into sub-todos where at least one sub-todo explicitly
+       targets the gap, **or**
+     - **Strengthen** the existing todo's `execution_contract` so that
+       `expected_evidence` explicitly includes the missing evidence described in
+       `evidence_gaps`, and `audit_ready_when` is updated to require it.
+   - Do **not** leave the requirement in a state where "there is a linked todo"
+     but the linked todo cannot plausibly close the gap.
+
+#### Step 3: Create the remediation todo
+
+When creating or modifying a todo to address an auditor failure:
+
+- **`intent`**: Set it based on the failure class from Step 1:
+  - `missing_implementation` / `incomplete_implementation` → `intent: "implement"`
+  - `missing_verification` / `weak_evidence` → `intent: "verify"`
+  - `missing_investigation` / `scope_unclear` → `intent: "investigate"`
+  - `artifact_mismatch` → `intent: "verify"` (to reconcile) or `"implement"` (to fix)
+
+- **`expected_evidence`**: For each item in `evidence_gaps` (when present), translate it
+  into a concrete evidence description in the new or updated todo's
+  `execution_contract.expected_evidence`.
+  - Example: if `evidence_gaps` says "No test file covers the error-handling branch",
+    then `expected_evidence` should include "Test file exercising the error-handling
+    branch with passing test output".
+
+- **`audit_ready_when`**: Write a condition that the auditor could check to confirm
+  the gap is closed, based on the `evidence_gaps` descriptions.
+
+- **`related_requirement_ids`**: Must include the failed requirement ID.
+
+- **Stable ID for the new todo**: Use a descriptive id that references the remediation,
+  e.g. `T5-R1-fix-verification` or `T8-R2-add-investigation`.
+
+#### Step 4: Avoid no-op replanning
+
+After deriving the new todo set, verify that for **every** failed requirement from
+the latest auditor report, at least one of the following changed compared to the
+previous todo set:
+
+- A new todo was added with the correct `intent` for the failure class.
+- An existing todo was split and at least one sub-todo targets the gap.
+- An existing todo's `execution_contract` was strengthened with new
+  `expected_evidence` entries that map to the `evidence_gaps`.
+- An existing todo's `intent` was corrected to match the failure class.
+
+If none of these changed for a failed requirement, the replanning is a **no-op**
+for that requirement and you **must** go back and add or modify at least one todo.
+
 - When repeated feedback points to the same requirement, bias toward sharper todos with clearer
   evidence boundaries instead of merely rewording broad todos.
 - When feedback indicates weak audit handoff, sharpen `execution_contract.expected_evidence`,
@@ -619,7 +709,15 @@ Before you persist changes and finalize your reply, perform a quick self-check:
      about expected evidence, relevant commands, and audit-ready conditions?
    - Are investigation/verification artifacts planned under the correct path and schema?
 
-5. **Safety and constraints**:
+5. **Auditor failure remediation** (when auditor has reported failures):
+   - For each failed requirement, is there at least one active todo that addresses the
+     specific `failure_kind` (e.g. a `verify` todo for `missing_verification`)?
+   - Does each remediation todo's `expected_evidence` explicitly address at least one
+     item from `evidence_gaps`?
+   - Did you verify that the replanning is **not a no-op** for any failed requirement
+     (i.e. at least one concrete structural change was made)?
+
+6. **Safety and constraints**:
    - Have you avoided any forbidden actions (code edits, requirement modifications,
      human queries, project-specific commands)?
    - Is your reply a concise summary and not a dump of the todo list?

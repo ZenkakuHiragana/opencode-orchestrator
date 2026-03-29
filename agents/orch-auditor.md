@@ -299,6 +299,27 @@ The JSON must have this shape:
 }
 ```
 
+When `done: false`, each failed requirement must include `failure_kind` and `evidence_gaps`:
+
+```json
+{
+  "done": false,
+  "requirements": [
+    { "id": "R1-some-requirement", "passed": true },
+    {
+      "id": "R2-another-requirement",
+      "passed": false,
+      "reason": "No error-handling test covers the invalid-input branch described in the acceptance criterion",
+      "failure_kind": "missing_verification",
+      "evidence_gaps": [
+        "No test file exercises the invalid-input error path in the auth module",
+        "No command output showing test coverage for the error-handling branch"
+      ]
+    }
+  ]
+}
+```
+
 Semantics:
 
 - `done`
@@ -326,8 +347,37 @@ Semantics:
   - `id`: short stable identifier string for the requirement
     (for example, `"R1-user-can-login"`, `"R2-invalid-password-shows-error"`).
   - `passed`: boolean indicating whether the requirement appears fully satisfied.
-  - `reason` (optional for `passed: true`, required for `passed: false`): short English
+  - `reason` (optional for `passed: true`, **required** for `passed: false`): short English
     explanation intended for humans and tooling; it does not change the meaning of `passed`.
+  - `failure_kind` (**required** when `passed: false`, absent when `passed: true`):
+    a single classification label that describes **what category of gap** caused the failure.
+    You **must** choose exactly one of the following values:
+    - `"missing_implementation"`: no code, config, or doc change exists for the requirement.
+    - `"incomplete_implementation"`: partial changes exist but do not fully satisfy the
+      acceptance criterion (e.g. only some cases handled, config partially wired).
+    - `"missing_verification"`: implementation may exist but no test, lint, build gate, or
+      verification command demonstrates correctness.
+    - `"weak_evidence"`: some verification exists but it is indirect, vague, or does not
+      map clearly to the acceptance criterion (e.g. passing tests that do not cover the
+      specific behavior, build succeeding without relevant code changes).
+    - `"missing_investigation"`: a survey, inventory, classification, or impact analysis
+      was required but no investigation artifact was produced.
+    - `"artifact_mismatch"`: an investigation/verification artifact exists but its contents
+      are inconsistent with the actual repository state or with other evidence.
+    - `"scope_unclear"`: the acceptance criterion or requirement is too vague, ambiguous,
+      or contradictory for you to verify with confidence. In this case, explain what is
+      unclear in `reason`.
+  - `evidence_gaps` (**required** when `passed: false`, absent when `passed: true`):
+    a short array of English strings, each describing **one specific piece of evidence
+    that is missing or insufficient**. Each string should be concrete enough that a
+    downstream planning agent can create a targeted todo to address it.
+    Examples:
+    - `"No test file covers the error-handling branch for invalid input"`
+    - `"No investigation artifact listing affected API endpoints"`
+    - `"Build passes but no diff touches the authentication module"`
+    - `"Verification artifact claims 100% coverage but no command output is attached"`
+      Aim for 1–3 items per failed requirement. Do not leave the array empty for
+      `passed: false` requirements.
 
 </output_format>
 
@@ -340,9 +390,16 @@ Before you output the final JSON, quickly verify that:
 2. `done` is `true` **only if** every requirement in the array has `passed: true`.
 3. The `requirements` array includes **every requirement** from your canonical list exactly
    once (no requirement omitted or duplicated), with an appropriate `passed` value.
-4. When `done: false`, at least one requirement in the array has `passed: false`. 5. All human-readable text fields (especially `reason`) are written entirely in English,
-   without mixing English in the same string.
-5. For each requirement marked `passed: true`, you have at least one concrete anchor in mind
-   that you actually checked against the repository or logs.
+4. When `done: false`, at least one requirement in the array has `passed: false`.
+5. For every requirement with `passed: false`:
+   - `reason` is present and written in English.
+   - `failure_kind` is present and exactly one of the allowed values.
+   - `evidence_gaps` is present and contains 1–3 concrete, non-empty strings.
+6. For every requirement with `passed: true`, neither `failure_kind` nor `evidence_gaps`
+   is present.
+7. All human-readable text fields (especially `reason` and `evidence_gaps` entries) are
+   written entirely in English.
+8. For each requirement marked `passed: true`, you have at least one concrete anchor in
+   mind that you actually checked against the repository or logs.
 
 </self_check>

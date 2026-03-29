@@ -1,10 +1,34 @@
+export type AuditFailureKind =
+  | "missing_implementation"
+  | "incomplete_implementation"
+  | "missing_verification"
+  | "weak_evidence"
+  | "missing_investigation"
+  | "artifact_mismatch"
+  | "scope_unclear";
+
 export interface AuditSummary {
   done: boolean;
   requirementsJson: string | null;
-  failed: { id: string; reason?: string }[];
+  failed: {
+    id: string;
+    reason?: string;
+    failure_kind?: AuditFailureKind;
+    evidence_gaps?: string[];
+  }[];
   passed: string[];
   parseError?: string | null;
 }
+
+const VALID_FAILURE_KINDS = new Set<string>([
+  "missing_implementation",
+  "incomplete_implementation",
+  "missing_verification",
+  "weak_evidence",
+  "missing_investigation",
+  "artifact_mismatch",
+  "scope_unclear",
+]);
 
 export function parseAuditResult(stdout: string): AuditSummary {
   let lastText: string | null = null;
@@ -43,7 +67,13 @@ export function parseAuditResult(stdout: string): AuditSummary {
   try {
     const payload = JSON.parse(lastText) as {
       done?: boolean;
-      requirements?: { id?: string; passed?: boolean; reason?: string }[];
+      requirements?: {
+        id?: string;
+        passed?: boolean;
+        reason?: string;
+        failure_kind?: string;
+        evidence_gaps?: unknown;
+      }[];
     };
 
     // Check for the bug: done: false with empty requirements
@@ -65,7 +95,12 @@ export function parseAuditResult(stdout: string): AuditSummary {
     }
 
     let requirementsJson: string | null = null;
-    const failed: { id: string; reason?: string }[] = [];
+    const failed: {
+      id: string;
+      reason?: string;
+      failure_kind?: AuditFailureKind;
+      evidence_gaps?: string[];
+    }[] = [];
     const passed: string[] = [];
 
     if (payload && Array.isArray(payload.requirements)) {
@@ -78,7 +113,19 @@ export function parseAuditResult(stdout: string): AuditSummary {
           passed.push(r.id);
         } else {
           const reason = typeof r.reason === "string" ? r.reason : undefined;
-          failed.push({ id: r.id, reason });
+          const rawKind =
+            typeof r.failure_kind === "string" ? r.failure_kind : undefined;
+          const failure_kind = VALID_FAILURE_KINDS.has(rawKind ?? "")
+            ? (rawKind as AuditFailureKind)
+            : undefined;
+          const rawGaps = Array.isArray(r.evidence_gaps)
+            ? (r.evidence_gaps as unknown[]).filter(
+                (g): g is string => typeof g === "string" && g.length > 0,
+              )
+            : undefined;
+          const evidence_gaps =
+            rawGaps && rawGaps.length > 0 ? rawGaps : undefined;
+          failed.push({ id: r.id, reason, failure_kind, evidence_gaps });
         }
       }
       requirementsJson = JSON.stringify(stripped);

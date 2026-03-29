@@ -32,6 +32,28 @@ export function buildTodoWriterPrompt(
     );
   }
 
+  const failedRequirements =
+    status?.last_auditor_report?.requirements?.filter(
+      (req) => req.passed === false,
+    ) ?? [];
+  if (failedRequirements.length > 0) {
+    const failureDetails = failedRequirements
+      .map((req) => {
+        const kind = req.failure_kind ? ` kind=${req.failure_kind}` : "";
+        const gaps =
+          req.evidence_gaps && req.evidence_gaps.length > 0
+            ? ` gaps=[${req.evidence_gaps.join("; ")}]`
+            : "";
+        return `${req.id}:${kind}${gaps}`;
+      })
+      .join(", ");
+    parts.push(
+      `The auditor reported failed requirements with structured failure information: ${failureDetails}. ` +
+        "Use failure_kind to determine what type of todo to add (investigate, verify, or implement), " +
+        "and use evidence_gaps as concrete requirements for new todo execution_contract.expected_evidence.",
+    );
+  }
+
   return parts.join(" ");
 }
 

@@ -632,6 +632,8 @@ export async function runExecutorAndAuditorStep(
           id: f.id,
           passed: false,
           reason: f.reason,
+          failure_kind: f.failure_kind,
+          evidence_gaps: f.evidence_gaps,
         }))
         .concat(
           passed.map<AuditorRequirementSnapshot>((id) => ({
@@ -656,6 +658,13 @@ export async function runExecutorAndAuditorStep(
         if (!f.reason) continue;
         const firstLine = String(f.reason).split(/\r?\n/, 1)[0];
         console.error(`[opencode-orchestrator]   - ${f.id}: ${firstLine}`);
+        const detailsParts: string[] = [f.reason];
+        if (f.failure_kind) {
+          detailsParts.push(`[failure_kind: ${f.failure_kind}]`);
+        }
+        if (f.evidence_gaps && f.evidence_gaps.length > 0) {
+          detailsParts.push(`Evidence gaps: ${f.evidence_gaps.join("; ")}`);
+        }
         proposalsFile.proposals.push(
           createProposalEntry({
             source: "auditor",
@@ -663,7 +672,7 @@ export async function runExecutorAndAuditorStep(
             kind: "audit_failure",
             priority: "high",
             summary: firstLine,
-            details: f.reason,
+            details: detailsParts.join("\n"),
             related_requirement_ids: [f.id],
             related_todo_ids: [],
             auto_resolvable: true,

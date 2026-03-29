@@ -68,10 +68,21 @@ export type ExecutorStepSnapshot = {
   raw_stdout: string;
 };
 
+export type AuditorFailureKind =
+  | "missing_implementation"
+  | "incomplete_implementation"
+  | "missing_verification"
+  | "weak_evidence"
+  | "missing_investigation"
+  | "artifact_mismatch"
+  | "scope_unclear";
+
 export type AuditorRequirementSnapshot = {
   id: string;
   passed: boolean;
   reason?: string;
+  failure_kind?: AuditorFailureKind;
+  evidence_gaps?: string[];
 };
 
 export type AuditorReportSnapshot = {
