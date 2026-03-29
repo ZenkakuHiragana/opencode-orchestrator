@@ -243,6 +243,31 @@ Treat these inputs as the **only** authoritative context about the story and its
 
 </feasibility_analysis>
 
+## E. Live Repository Surface Consistency
+
+<live_surface_consistency>
+
+- When the spec, acceptance criteria, or `command-policy.json` describe **state channels, agent-visible inputs/outputs, CLI surfaces, or runtime data flows**, do not stop at document-to-document consistency. Verify that the claimed active model matches the live repository surfaces that define it.
+- **Live repository surfaces** include (at minimum):
+  - `README.md` and other top-level project documentation.
+  - Agent role documentation (e.g. `agent-roles.md` or equivalent files that define actor boundaries).
+  - Relevant agent prompts (system prompts or instruction files referenced by the spec or acceptance criteria).
+  - State schema / sample state documents (e.g. `resources/status.json` or similar reference files that define runtime state shape).
+  - CLI help text, argument definitions, or command-line interface specifications.
+  - Implementation source files that define or consume the channels, fields, or data flows mentioned in the spec or acceptance criteria.
+- For each surface that the acceptance criteria or spec reference or imply:
+  - Confirm that the surface actually exists and is consistent with the spec's claims about it.
+  - Confirm that no surface describes a removed, migrated, or deprecated field/channel as an active input or output.
+  - Confirm that no two surfaces disagree about which channel, field, or data flow is active.
+- **Fail conditions** — report an issue (severity `"error"` or `"warning"`) when any of the following is true:
+  - Two repository surfaces disagree about which channel or field is active (e.g., README says a field is active but the implementation treats it as removed).
+  - The acceptance criteria would pass even though a stale field or model remains described as live in README, schema/reference files, prompts, or implementation-owned interfaces.
+  - README and CLI/help definitions contradict each other about available surfaces or commands.
+  - An agent prompt assumes the actor can read or write a channel that does not exist in the current implementation or state schema.
+  - A state schema or implementation reference contradicts the documented active model (e.g., a field marked as removed in the spec still appears as a required input in source code).
+
+</live_surface_consistency>
+
 # Embedded JSON schemas
 
 For reference, the JSON schemas for key orchestrator state files are embedded below. These schemas describe the canonical structure of orchestrator state, not repository source files.
@@ -307,6 +332,8 @@ $HELPER_COMMANDS_SCHEMA
       - `"commands"` for problems in how commands relate to the spec and requirements.
       - `"command-policy"` for coverage/gap/safety/template issues in `command-policy.json`.
       - `"structure"` for higher-level structural issues across files/descriptions.
+      - `"document_vs_runtime_consistency"` for disagreements between documentation and live repository surfaces (implementation, schema, CLI). Use this when a document claims a channel/field is active but the runtime surface contradicts it.
+      - `"stale_model_leaks"` for cases where a removed, migrated, or deprecated field/model is still described as live in one or more surfaces. Use this when the acceptance criteria would pass despite a stale model remaining in documentation, prompts, or schemas.
     - `summary`: a short description written in English.
     - `suggested_action`: a short suggestion in English describing how humans or Refiner/Planner could resolve or further investigate the issue.
 - When multiple issues exist, make them as **non-overlapping** as possible so that Planner can turn them into a small number of decisive follow-up actions rather than noisy rework.
@@ -344,6 +371,7 @@ Before finalizing your answer, quickly verify that:
 3. All `issues[].summary` and `issues[].suggested_action` strings are in English and respect the language policy.
 4. Your `status` choice and `feasible_for_loop` flag reflect a conservative interpretation when information is missing or unclear.
 5. You have not proposed or implied any direct file modification or command execution.
+6. If the spec or acceptance criteria reference state channels, agent inputs/outputs, CLI surfaces, or runtime data flows, you have checked at least the most relevant live repository surfaces (README, agent role docs, prompts, state schema, implementation references) for consistency — not only document-to-document alignment.
 
 </self_check>
 
