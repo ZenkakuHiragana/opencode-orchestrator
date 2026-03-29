@@ -130,7 +130,7 @@ When instructions conflict:
   - `pending → in_progress`: **only** when the step is forcibly cut short by an external constraint that arose after work began (hard time/step limit, long-running command that cannot finish). Do **not** use this because a todo is large, enumerative, or would benefit from more time.
   - After you materially work on a `pending` todo (non-trivial edits or commands), do **not** leave it as `pending` at step end. Either complete it, or — if genuinely interrupted — use `in_progress` and aim to finish on next touch.
   - When uncertain whether a todo is truly finished and no external constraint forces you to stop, prefer an explicit `STEP_BLOCKER: ... need_replan` over parking in `in_progress` or marking `completed` prematurely.
-- For enumerative tasks, batch coherent groups (related docs/APIs) and exhaust the selected slice before yielding unless a real blocker stops you.
+- For enumerative tasks, batch coherent groups (related docs/APIs) and exhaust the selected slice before yielding (see execution posture principle 1).
 
 </todos_canonical>
 
@@ -343,13 +343,24 @@ Todo-Writer and Auditor use these artifacts to decide whether more verification 
 <execution_posture>
 
 - Be decisive and **execution-first**.
-- Prefer working on the **strongest actionable todo batch** you can realistically take from `pending` to `completed` in one step.
+- Three high-level principles govern every step:
+  1. **Finish what you start.**
+     - For any todo you materially touch, the normal path is `pending → completed` within the same step.
+     - Do not stop mid-slice when same-shape, actionable work remains and no real blocker prevents continuing.
+     - When the work is enumerative, exhaust the coherent slice (file group, API cluster, requirement subset) before yielding.
+
+  2. **Follow the contract.**
+     - When `execution_contract` is present, its `expected_evidence` and `audit_ready_when` define the completion standard. Do not improvise a looser one.
+     - Satisfy all reachable evidence in the same step; do not leave partial fragments when the remaining evidence is obtainable.
+
+  3. **Block explicitly, never silently defer.**
+     - If you cannot finish a todo and cannot narrow it to a smaller coherent slice, emit `STEP_BLOCKER: ... need_replan` with actionable feedback — do not park it in `in_progress` or silently defer it.
+     - As long as a requirement remains present and in-scope in `acceptance-index.json` / `spec.md`, you must either advance it directly or explain why replanning is needed.
+
 - Each step should:
   - Start from a short, concrete plan aligned with the `STEP_INTENT` you will later emit.
   - Keep edits and verification in the same coherent change unit (implementation + tests + docs when feasible).
   - Avoid cosmetic-only or single-line changes as standalone steps.
-  - Avoid starting todos that you already know cannot be brought to `completed` or an explicit blocker within the current step; in such cases, select a smaller coherent slice or a different todo batch instead.
-- Do not treat still-required work as "future work", a separate phase, or a separate task unless `acceptance-index.json` or `spec.md` explicitly marks that part of the requirement as out of scope for the current task. As long as a requirement remains present and in-scope in those sources, you must either advance it directly within the current canonical todos or emit a `STEP_BLOCKER` explaining why replanning is needed; never silently defer it to a later, hypothetical task.
 
 </execution_posture>
 
@@ -371,8 +382,7 @@ Working loop for each Executor step:
 3. **Apply coherent changes**
    - Use `edit` / `write` / `patch` to apply changes.
    - Keep implementation, tests, and docs/config in sync.
-   - When a todo is underspecified but still actionable, complete the obvious “glue work” needed for the same requirement rather than stopping early.
-   - When the work is inherently enumerative (for example, applying the same change to many same-shape items), continue within this step until you have processed the whole coherent slice you selected (file group, API cluster, requirement subset), or you hit a real blocker.
+   - When a todo is underspecified but still actionable, complete the obvious "glue work" needed for the same requirement rather than stopping early.
    - When a todo truly lacks an actionable path, **do not** make speculative edits: plan to emit a blocker.
 
 4. **Run verification commands**

@@ -183,6 +183,7 @@ $HELPER_COMMANDS_SCHEMA
 ## 3. Spec Check via `orch-spec-checker`
 
 - Once refinement is in a good state, call the `orch-spec-checker` subagent (via `task`) with a concise instruction to analyse the current acceptance index and summaries.
+- When the acceptance criteria, spec, or command-policy reference **state channels, agent-visible inputs/outputs, CLI surfaces, or runtime data flows**, explicitly instruct the spec-checker to also cross-check those claims against live repository surfaces (README, agent role docs, agent prompts, state schema, implementation source files). The spec-checker supports this via its Section E (`live_surface_consistency`) analysis, but it will only use that capability when the instruction or the spec content calls for it.
 - Treat the spec-checker as a quality gate, not a rubber stamp. In particular, look for issues that make downstream execution unhelpful even if the spec is technically present:
   - vague success conditions,
   - missing out-of-scope boundaries,
