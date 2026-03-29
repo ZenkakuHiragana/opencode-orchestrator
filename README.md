@@ -189,11 +189,11 @@ npx opencode-orchestrator loop --task my-task-key
     >   --bind "$XDG_SHARE_HOME/opencode" "$XDG_SHARE_HOME/opencode" \
     >   --bind "$XDG_STATE_HOME/opencode" "$XDG_STATE_HOME/opencode" \
     >   --bind "$HOME/.opencode" "$HOME/.opencode" \
-    >   --bind "$PWD" /workspace \
+    >   --bind "$PWD" "$PWD" \
     >   --dev /dev \
     >   --proc /proc \
     >   --tmpfs /tmp \
-    >   --chdir /workspace \
+    >   --chdir "$PWD" \
     >   --unshare-pid \
     >   --die-with-parent \
     >   --new-session \

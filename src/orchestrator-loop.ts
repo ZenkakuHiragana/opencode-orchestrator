@@ -150,9 +150,9 @@ export async function runLoop(opts: LoopOptions): Promise<boolean> {
         defaultArgs.push("--proc", "/proc");
         // /tmp は各 Executor サンドボックス専用の tmpfs にする。
         defaultArgs.push("--tmpfs", "/tmp");
-        defaultArgs.push("--bind", repoDir, "/workspace");
+        defaultArgs.push("--bind", repoDir, repoDir);
         defaultArgs.push("--bind", stateDir, stateDir);
-        defaultArgs.push("--chdir", "/workspace");
+        defaultArgs.push("--chdir", repoDir);
         defaultArgs.push("--unshare-pid");
         // ネットワークはデフォルトでは隔離しない。models.dev などの
         // LLM エンドポイントへのアクセスが必要なケースが多いため、
