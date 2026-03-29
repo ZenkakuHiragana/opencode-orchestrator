@@ -94,6 +94,11 @@ export type AuditorReportSnapshot = {
 export type FailureBudgetSnapshot = {
   todo_writer_safety_restarts: number;
   executor_safety_restarts: number;
+  // Number of consecutive executor safety trips observed **within the same
+  // opencode session**. This lets the loop try to continue inside a "poisoned"
+  // session a few times before giving up and calling restartSession.
+  executor_safety_consecutive_in_session?: number;
+  executor_safety_last_session_id?: string;
   consecutive_env_blocked: number;
   consecutive_audit_failures: number;
   consecutive_verification_gaps: number;

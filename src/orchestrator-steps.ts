@@ -279,6 +279,18 @@ export async function runExecutorAndAuditorStep(
   );
   if (safetyTripped) {
     failureBudget.executor_safety_restarts += 1;
+    // Track consecutive safety trips within the same session so that we can
+    // decide when to give up on a "poisoned" session and restart it. The
+    // user has observed that explicitly telling the same session to
+    // "continue" sometimes clears a false-positive safety trigger, so we
+    // allow a few retries before restarting.
+    if (failureBudget.executor_safety_last_session_id === sessionId) {
+      failureBudget.executor_safety_consecutive_in_session =
+        (failureBudget.executor_safety_consecutive_in_session ?? 0) + 1;
+    } else {
+      failureBudget.executor_safety_last_session_id = sessionId;
+      failureBudget.executor_safety_consecutive_in_session = 1;
+    }
     failureBudget.last_failure_kind = "executor_safety";
     failureBudget.last_failure_summary =
       "executor が safety trip を起こしたためセッションを再開した";
@@ -286,6 +298,7 @@ export async function runExecutorAndAuditorStep(
     console.error(
       "[opencode-orchestrator] executor の出力で safety trip を検出しました。",
     );
+    // First, enforce the overall MAX_RESTARTS guardrail.
     if (restartCount >= opts.maxRestarts) {
       console.error(
         `[opencode-orchestrator] MAX_RESTARTS=${opts.maxRestarts} に到達したため、ループを中断します。`,
@@ -301,16 +314,37 @@ export async function runExecutorAndAuditorStep(
     }
 
     const newRestartCount = restartCount + 1;
-    const newSessionId = await restartFromSafety(
-      "executor",
-      opts,
-      logDir,
-      fileArgs,
-      sessionId,
-      status,
-      statusPath,
-      newRestartCount,
-    );
+
+    // If the same opencode session has tripped the safety filter multiple
+    // times in a row, assume this session is effectively poisoned and restart
+    // from a fresh todo-writer session. Otherwise, keep the current session
+    // and let the next executor step try to continue within it.
+    const consecutiveInSession =
+      failureBudget.executor_safety_consecutive_in_session ?? 1;
+
+    const shouldRestartSession = consecutiveInSession >= 3;
+    const newSessionId = shouldRestartSession
+      ? await restartFromSafety(
+          "executor",
+          opts,
+          logDir,
+          fileArgs,
+          sessionId,
+          status,
+          statusPath,
+          newRestartCount,
+        )
+      : sessionId;
+
+    if (shouldRestartSession) {
+      console.error(
+        `[opencode-orchestrator] executor の safety trip が同一セッション内で ${consecutiveInSession} 回連続したため、新しいセッションを開始します。`,
+      );
+      // 次のセッションではカウンタをリセットする。
+      failureBudget.executor_safety_consecutive_in_session = 0;
+      failureBudget.executor_safety_last_session_id = newSessionId;
+      saveStatusJson(statusPath, status);
+    }
 
     return {
       sessionId: newSessionId,
@@ -783,6 +817,8 @@ function ensureFailureBudget(
     status.failure_budget = {
       todo_writer_safety_restarts: 0,
       executor_safety_restarts: 0,
+      executor_safety_consecutive_in_session: 0,
+      executor_safety_last_session_id: status.last_session_id,
       consecutive_env_blocked: status.consecutive_env_blocked ?? 0,
       consecutive_audit_failures: 0,
       consecutive_verification_gaps: 0,

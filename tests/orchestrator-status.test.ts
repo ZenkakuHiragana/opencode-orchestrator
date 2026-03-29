@@ -218,6 +218,8 @@ describe("loadStatusJson / saveStatusJson", () => {
       failure_budget: {
         todo_writer_safety_restarts: 0,
         executor_safety_restarts: 1,
+        executor_safety_consecutive_in_session: 2,
+        executor_safety_last_session_id: "sess-test",
         consecutive_env_blocked: 1,
         consecutive_audit_failures: 2,
         consecutive_verification_gaps: 1,
@@ -237,6 +239,8 @@ describe("loadStatusJson / saveStatusJson", () => {
     expect(loaded.failure_budget).toEqual({
       todo_writer_safety_restarts: 0,
       executor_safety_restarts: 1,
+      executor_safety_consecutive_in_session: 2,
+      executor_safety_last_session_id: "sess-test",
       consecutive_env_blocked: 1,
       consecutive_audit_failures: 2,
       consecutive_verification_gaps: 1,
