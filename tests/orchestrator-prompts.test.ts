@@ -17,7 +17,7 @@ describe("buildExecutorPrompt", () => {
     });
 
     expect(prompt).toContain(
-      "Prioritize the still-failing auditor requirements first: R6",
+      "The main open work items are those linked to auditor requirements R6",
     );
   });
 

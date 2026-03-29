@@ -75,7 +75,7 @@ export function buildExecutorPrompt(
       .map((req) => req.id) ?? [];
   if (failedRequirements.length > 0) {
     parts.push(
-      `Prioritize the still-failing auditor requirements first: ${failedRequirements.join(", ")}.`,
+      `The main open work items are those linked to auditor requirements ${failedRequirements.join(", ")}. When choosing the next tasks, focus on Todos that contribute to satisfying these requirements.`,
     );
   }
 
