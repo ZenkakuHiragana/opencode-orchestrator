@@ -253,6 +253,26 @@
         },
         "reason": {
           "type": "string"
+        },
+        "failure_kind": {
+          "type": "string",
+          "enum": [
+            "missing_implementation",
+            "incomplete_implementation",
+            "missing_verification",
+            "weak_evidence",
+            "missing_investigation",
+            "artifact_mismatch",
+            "scope_unclear"
+          ],
+          "description": "Required when passed is false. Classifies what category of gap caused the failure."
+        },
+        "evidence_gaps": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Required when passed is false. 1-3 concrete strings describing specific missing or insufficient evidence."
         }
       },
       "additionalProperties": true

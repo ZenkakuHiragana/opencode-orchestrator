@@ -163,7 +163,7 @@ sequenceDiagram
             AUCommand-->>AUAgent: orch-auditor サブエージェントとして起動
             AUAgent->>StateDir: spec.md と acceptance-index.json と status.json を参照
             Note over AUAgent: git status / git diff / ログを調査
-            AUAgent-->>CLI: JSON: { done, requirements\[{ id, passed }\] }
+            AUAgent-->>CLI: JSON: { done, requirements\[{ id, passed, reason?, failure_kind?, evidence_gaps? }\] }
             CLI->>StateDir: status.json.last_auditor_report を更新
             alt done === true
                 Note over CLI: done = true を返却
@@ -209,7 +209,7 @@ sequenceDiagram
 | フィールド            | 内容                                                                                                               |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------ |
 | `last_executor_step`  | `step_todo` / `step_diff` / `step_cmd` / `step_intent` / `step_verify` / `step_audit` / `requirement_traceability` |
-| `last_auditor_report` | `{ done, requirements[{id, passed, reason}] }`                                                                     |
+| `last_auditor_report` | `{ done, requirements[{id, passed, reason?, failure_kind?, evidence_gaps?}] }`                                     |
 | `proposals.json`      | Executor / Auditor / Todo-Writer からの再計画・ブロック提案の永続キュー                                            |
 | `failure_budget`      | verification_gap・audit_failed 等の連続カウント                                                                    |
 | `current_cycle`       | ステップ番号（1 始まり）                                                                                           |
@@ -494,8 +494,13 @@ sequenceDiagram
   - 1 行の JSON オブジェクトのみ（`agents/orch-auditor.md`）。
   - フィールド:
     - `done`: ストーリー全体が完了しているか（ブール）
-    - `requirements[]`: `{ id, passed, reason? }` の配列
-      - `reason` は英語テキスト。
+    - `requirements[]`: `{ id, passed, reason?, failure_kind?, evidence_gaps? }` の配列
+      - `reason` は英語テキスト。`passed: false` の場合は必須。
+      - `failure_kind` は `passed: false` の場合に必須で、`missing_implementation` /
+        `incomplete_implementation` / `missing_verification` / `weak_evidence` /
+        `missing_investigation` / `artifact_mismatch` / `scope_unclear` のいずれか。
+      - `evidence_gaps` は `passed: false` の場合に必須で、不足している証拠を具体的に
+        記述する 1-3 個の英語文字列配列。
 
 ## 9. その他の補助エージェント
 
@@ -747,7 +752,17 @@ migration context として読むものです。現時点で CLI が書き込ん
   "last_auditor_report": {
     "cycle": 3,
     "done": false,
-    "requirements": [{ "id": "R1", "passed": false, "reason": "..." }],
+    "requirements": [
+      {
+        "id": "R1",
+        "passed": false,
+        "reason": "No test file covers the error-handling branch",
+        "failure_kind": "missing_verification",
+        "evidence_gaps": [
+          "No test file exercises the error-handling branch in the auth module",
+        ],
+      },
+    ],
   },
   "consecutive_env_blocked": 0,
   "failure_budget": {
@@ -861,7 +876,12 @@ migration context として読むものです。現時点で CLI が書き込ん
     {
       "id": "R1-some-requirement",
       "passed": true | false,
-      "reason": "..."   // optional English explanation
+      "reason": "...",           // optional English explanation
+      "failure_kind": "...",     // required when passed=false: one of
+                                 // missing_implementation | incomplete_implementation |
+                                 // missing_verification | weak_evidence |
+                                 // missing_investigation | artifact_mismatch | scope_unclear
+      "evidence_gaps": ["..."]   // required when passed=false: 1-3 concrete strings
     }
   ]
 }
