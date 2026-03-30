@@ -191,6 +191,29 @@ export async function maybeRunTodoWriterStep(
     };
   }
 
+  const coverageCheck = validateTodoCoverage(
+    acceptanceIndexPath,
+    status,
+    todoPath,
+  );
+  if (!coverageCheck.ok) {
+    failureBudget.last_failure_kind = "todo_writer_coverage_invariant_failed";
+    failureBudget.last_failure_summary =
+      "todo-writer が coverage invariants を満たさない todo.json を生成したため再計画状態を維持する: " +
+      coverageCheck.reason;
+    saveStatusJson(statusPath, status);
+    console.error(
+      `[opencode-orchestrator] todo-writer が生成した todo.json が coverage invariants に違反しています: ${coverageCheck.reason}`,
+    );
+    return {
+      sessionId,
+      restartCount,
+      forceTodoWriterNextStep: true,
+      restartedSession: false,
+      abortLoop: false,
+    };
+  }
+
   console.error(
     `[opencode-orchestrator] todo-writer todos: total=${todoSummary.total} ` +
       `pending=${todoSummary.pending} in_progress=${todoSummary.inProgress} ` +
@@ -874,6 +897,119 @@ function readTodoSummary(todoPath: string): TodoSummary {
         (t) => t && (t as { status?: string }).status === "cancelled",
       ).length,
     };
+  } catch {
+    return { ok: false, reason: "todo.json parse failed" };
+  }
+}
+
+type CoverageCheckResult =
+  | { ok: true }
+  | {
+      ok: false;
+      reason: string;
+    };
+
+function validateTodoCoverage(
+  acceptanceIndexPath: string,
+  status: OrchestratorStatus,
+  todoPath: string,
+): CoverageCheckResult {
+  if (!fs.existsSync(acceptanceIndexPath)) {
+    // When there is no acceptance index yet, we cannot enforce coverage.
+    return { ok: true };
+  }
+
+  if (!fs.existsSync(todoPath)) {
+    return { ok: false, reason: "todo.json missing" };
+  }
+
+  // Load requirement ids from acceptance-index.json.
+  let requirementIds: string[] = [];
+  try {
+    const raw = fs.readFileSync(acceptanceIndexPath, "utf8");
+    const parsed = JSON.parse(raw) as {
+      requirements?: { id?: unknown }[];
+    };
+    if (Array.isArray(parsed.requirements)) {
+      requirementIds = parsed.requirements
+        .map((req) =>
+          req && typeof req.id === "string" ? (req.id as string) : null,
+        )
+        .filter((id): id is string => id !== null);
+    }
+  } catch {
+    // If the acceptance index is unreadable, skip strict coverage enforcement.
+    return { ok: true };
+  }
+
+  if (requirementIds.length === 0) {
+    return { ok: true };
+  }
+
+  // Determine which requirements are still unsatisfied.
+  const report = status.last_auditor_report;
+  let unsatisfiedIds: string[];
+  if (!report || !Array.isArray(report.requirements)) {
+    unsatisfiedIds = requirementIds;
+  } else {
+    const passedMap = new Map<string, boolean>();
+    for (const r of report.requirements) {
+      if (r && typeof r.id === "string") {
+        passedMap.set(r.id, !!r.passed);
+      }
+    }
+    unsatisfiedIds = requirementIds.filter((id) => passedMap.get(id) !== true);
+  }
+
+  if (unsatisfiedIds.length === 0) {
+    return { ok: true };
+  }
+
+  // Load todos and check for active coverage over unsatisfied requirements.
+  try {
+    const todoRaw = fs.readFileSync(todoPath, "utf8");
+    const parsed = JSON.parse(todoRaw) as { todos?: unknown } | unknown[];
+    const todosUnknown = Array.isArray(parsed)
+      ? parsed
+      : Array.isArray((parsed as { todos?: unknown }).todos)
+        ? (parsed as { todos: unknown[] }).todos
+        : null;
+
+    if (!todosUnknown || !todosUnknown.every(isCanonicalTodoLike)) {
+      return { ok: false, reason: "todo.json has invalid shape" };
+    }
+
+    type TodoLike = {
+      status: string;
+      related_requirement_ids: string[];
+    };
+
+    const todos = todosUnknown as TodoLike[];
+    const activeStatuses = new Set<string>(["pending", "in_progress"]);
+    const missingActive: string[] = [];
+
+    for (const reqId of unsatisfiedIds) {
+      const hasActive = todos.some(
+        (t) =>
+          activeStatuses.has(t.status) &&
+          Array.isArray(t.related_requirement_ids) &&
+          t.related_requirement_ids.includes(reqId),
+      );
+      if (!hasActive) {
+        missingActive.push(reqId);
+      }
+    }
+
+    if (missingActive.length > 0) {
+      return {
+        ok: false,
+        reason:
+          "coverage invariant violated for requirements without active todos: " +
+          missingActive.join(", "),
+      };
+    }
+
+    return { ok: true };
   } catch {
     return { ok: false, reason: "todo.json parse failed" };
   }

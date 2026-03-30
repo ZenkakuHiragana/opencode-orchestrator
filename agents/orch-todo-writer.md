@@ -103,8 +103,17 @@ You **may use** the following tools:
 - `orch_todo_read` / `orch_todo_write` to:
   - Read the canonical orchestrator todo set for this task (optionally filtered by
     requirement ids, todo ids, or status).
-  - Persist canonical updates with `mode=planner_replace_canonical` when you have derived or
-    refined the full todo list.
+  - Persist canonical updates **primarily via incremental modes**:
+    - Use `mode=planner_add_todos` when you are **adding new todos** on top of the existing
+      set (for example, new investigation/verify work derived from proposals or auditor
+      gaps).
+    - Use `mode=planner_update_todos` when you are **reshaping existing todos** (splitting,
+      tightening `execution_contract`, or adjusting requirement mapping) without discarding
+      the rest of the plan.
+    - Reserve `mode=planner_replace_canonical` for cases where you truly need to regenerate
+      the entire todo set from scratch (for example, when `todo.json` is missing/invalid or
+      the acceptance index/spec structure has changed so much that the old todo set is no
+      longer salvageable).
 
 - `todowrite` to:
   - Mirror a small filtered subset of todos (e.g. upcoming `pending`/`in_progress` items)
@@ -528,10 +537,22 @@ for that requirement and you **must** go back and add or modify at least one tod
        without reopening the full requirement text.
 
 3. **Persist changes**:
-   - When ready, call `orch_todo_write` with:
-     - `mode=planner_replace_canonical`
-     - the full `canonicalTodos` array.
-   - This regenerates `todo.json`.
+   - Prefer **incremental** updates over full replacement whenever possible:
+     - When you are only adding new work units (for example, new investigation/verify todos
+       derived from proposals or auditor gaps), call `orch_todo_write` with:
+       - `mode=planner_add_todos`
+       - `addTodos` containing **only** the new todos.
+     - When you need to reshape existing todos (split a large todo, sharpen
+       `execution_contract`, or adjust requirement mapping) without discarding the rest of the
+       plan, call `orch_todo_write` with:
+       - `mode=planner_update_todos`
+       - `updates` describing which todos to patch and how.
+   - Use `mode=planner_replace_canonical` **only** when:
+     - `todo.json` is missing, unreadable, or has an invalid shape, **or**
+     - the acceptance index/spec has changed so much that the existing todo structure is no
+       longer salvageable.
+       In those cases, construct a fresh `canonicalTodos` array and replace the entire set in a
+       single write.
    - New or substantially refined todos representing future work should normally start with:
      - `status: "pending"`.
    - Reserve `"completed"`, `"in_progress"`, and `"cancelled"` only for cases where the
