@@ -114,3 +114,14 @@ export function buildCommitPrompt(): string {
     "If no commit is needed, explain why."
   );
 }
+
+export function withTaskKeyHint(base: string, taskName: string): string {
+  const hint = `TASK KEY: ${taskName}`;
+  if (!base || base.trim().length === 0) {
+    return hint;
+  }
+  if (base.includes(hint)) {
+    return base;
+  }
+  return `${base}\n\n${hint}`;
+}

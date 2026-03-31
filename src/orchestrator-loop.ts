@@ -14,7 +14,7 @@ import {
 } from "./orchestrator-proposals.js";
 import type { LoopOptions } from "./cli-args.js";
 import { runOpencode } from "./orchestrator-process.js";
-import { buildCommitPrompt } from "./orchestrator-prompts.js";
+import { buildCommitPrompt, withTaskKeyHint } from "./orchestrator-prompts.js";
 import {
   loadStatusJson,
   OrchestratorStatus,
@@ -375,7 +375,8 @@ export async function runLoop(opts: LoopOptions): Promise<boolean> {
     console.error(
       "[opencode-orchestrator] COMMIT_ON_DONE が有効です。Executor にコミット作成を依頼します。",
     );
-    const commitPrompt = buildCommitPrompt();
+    const commitPromptBase = buildCommitPrompt();
+    const commitPrompt = withTaskKeyHint(commitPromptBase, opts.task);
     const gitCheck = spawnSync("git", ["rev-parse", "--is-inside-work-tree"], {
       stdio: "ignore",
     });

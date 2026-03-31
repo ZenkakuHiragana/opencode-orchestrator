@@ -7,6 +7,7 @@ import {
   buildAuditPrompt,
   buildExecutorPrompt,
   buildTodoWriterPrompt,
+  withTaskKeyHint,
 } from "./orchestrator-prompts.js";
 import { parseAuditResult } from "./orchestrator-audit.js";
 import type {
@@ -82,7 +83,8 @@ export async function maybeRunTodoWriterStep(
   }
 
   const todowriterLog = path.join(logDir, `todowriter_step_${stepId}.txt`);
-  const todowriterPrompt = buildTodoWriterPrompt(status, openProposals);
+  const todowriterPromptBase = buildTodoWriterPrompt(status, openProposals);
+  const todowriterPrompt = withTaskKeyHint(todowriterPromptBase, opts.task);
   // Todo-Writer 用の opencode run 子プロセスにも、危険モード時は
   // command-policy スキップ用のフラグのみを渡す。bwrap サンドボックスは
   // Executor 専用とし、Todo-Writer 側では使用しない。
@@ -269,7 +271,8 @@ export async function runExecutorAndAuditorStep(
     return appendFileArg(fileArgs, statusPath);
   })();
 
-  const execPrompt = buildExecutorPrompt(isNextAfterAudit, status);
+  const execPromptBase = buildExecutorPrompt(isNextAfterAudit, status);
+  const execPrompt = withTaskKeyHint(execPromptBase, opts.task);
   // Executor 用の opencode run 子プロセスにのみ、サンドボックス関連の
   // フラグを環境変数として渡す。ループ本体の process.env は変更しない。
   const execEnv: NodeJS.ProcessEnv | undefined = (() => {
@@ -630,7 +633,8 @@ export async function runExecutorAndAuditorStep(
 
   let stepDone = false;
   if (shouldAudit) {
-    const auditPrompt = buildAuditPrompt(opts.prompt, opts.task);
+    const auditPromptBase = buildAuditPrompt(opts.prompt, opts.task);
+    const auditPrompt = withTaskKeyHint(auditPromptBase, opts.task);
     const auditTitle = `orchestrator-audit ${opts.task} step=${step} ${new Date().toISOString()}`;
     // Auditor must run in its own short-lived session so that its context
     // does not get混在しないように、専用タイトルでセッションを作る。

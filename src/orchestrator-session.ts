@@ -3,6 +3,7 @@ import * as path from "node:path";
 
 import type { LoopOptions } from "./cli-args.js";
 import { runOpencode } from "./orchestrator-process.js";
+import { withTaskKeyHint } from "./orchestrator-prompts.js";
 
 export async function createInitialSession(
   opts: LoopOptions,
@@ -16,6 +17,8 @@ export async function createInitialSession(
     "[opencode-orchestrator] 初回の todo-writer セッションを開始します...",
   );
 
+  const userPrompt = withTaskKeyHint(opts.prompt, opts.task);
+
   const res = await runOpencode(
     [
       "run",
@@ -25,7 +28,7 @@ export async function createInitialSession(
       title,
       ...fileArgs,
       "--",
-      opts.prompt,
+      userPrompt,
     ],
     firstLog,
   );
@@ -54,13 +57,15 @@ export async function restartSession(
   const restartTitle = `orchestrator-loop ${opts.task} ${new Date().toISOString()} [restart]`;
   const firstLog = path.join(logDir, "orch_step_00.txt");
 
-  const restartPrompt =
+  const restartPromptBase =
     opts.prompt +
     "\n\n----\n\n" +
     "Note: A previous orchestrator session for this goal was interrupted due to a safety trigger. " +
     "The current git working tree already contains all changes made so far. " +
     "Please continue the story from the current repository state. You do not need to reapply past diffs; " +
     "just move the story forward from here.";
+
+  const restartPrompt = withTaskKeyHint(restartPromptBase, opts.task);
 
   console.error(
     `[opencode-orchestrator] restart 用の新しい todo-writer セッションを開始します: ${restartTitle}`,
