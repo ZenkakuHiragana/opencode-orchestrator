@@ -160,16 +160,16 @@ describe("getExecutorVerificationEvidence", () => {
     });
   });
 
-  it("accepts explicit no-command reasons when no command ids are present", () => {
+  it("treats ready verification without commands or diffs as missing evidence", () => {
     const snapshot = parseExecutorStepSnapshot(
-      "STEP_VERIFY: ready - no-command prompt-only wording was re-checked locally",
+      "STEP_VERIFY: ready - prompt-only wording was re-checked locally",
       "sess-no-command",
       8,
     );
 
     expect(getExecutorVerificationEvidence(snapshot)).toEqual({
-      hasEvidence: true,
-      reason: "no_command_reason",
+      hasEvidence: false,
+      reason: "missing",
     });
   });
 });

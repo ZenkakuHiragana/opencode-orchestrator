@@ -670,6 +670,77 @@ describe("runExecutorAndAuditorStep", () => {
     expect(r2).toMatchObject({ id: "R1", passed: true });
   });
 
+  it("invokes auditor when STEP_AUDIT ready using persisted artifacts even without new commands or diffs", async () => {
+    const status = createStatus();
+    const tmpState = fs.mkdtempSync(
+      path.join(os.tmpdir(), "orch-steps-state-persisted-evidence-"),
+    );
+    const statusPath = path.join(tmpState, "status.json");
+
+    // Prepare a todo.json with one completed todo that has result_artifacts.
+    const todoPath = path.join(tmpState, "todo.json");
+    const todoFile = {
+      todos: [
+        {
+          id: "T-verify-R1",
+          summary: "verification for R1",
+          status: "completed",
+          related_requirement_ids: ["R1"],
+          result_artifacts: [
+            {
+              kind: "verification_v1",
+              path: ".opencode/orchestrator/task/artifacts/T-verify-R1.json",
+              summary: "Verification for R1",
+            },
+          ],
+        },
+      ],
+    };
+    fs.writeFileSync(todoPath, JSON.stringify(todoFile), "utf8");
+
+    const execStdout = [
+      "STEP_INTENT: verify R1 persisted evidence self-check",
+      "STEP_VERIFY: ready - persisted evidence only",
+      "STEP_AUDIT: ready R1",
+    ].join("\n");
+
+    const auditPayload = {
+      done: true,
+      requirements: [{ id: "R1", passed: true }],
+    };
+    const auditStdout = JSON.stringify({
+      part: {
+        type: "text",
+        text: JSON.stringify(auditPayload),
+      },
+    });
+
+    mockRunOpencode
+      .mockResolvedValueOnce({ code: 0, stdout: execStdout } as any)
+      .mockResolvedValueOnce({ code: 0, stdout: auditStdout } as any)
+      // findSessionIdByTitle (session list)
+      .mockResolvedValueOnce({ code: 0, stdout: "[]" } as any);
+
+    const res = await runExecutorAndAuditorStep(
+      baseOpts,
+      4,
+      "sess-1",
+      [],
+      "/tmp/logs/orch_step_004.txt",
+      "/tmp/logs/audit_step_004.jsonl",
+      status,
+      statusPath,
+      0,
+      false,
+      "/tmp/logs",
+    );
+
+    expect(res.done).toBe(true);
+    expect(res.abortLoop).toBe(false);
+    expect(res.skipAuditorThisStep).toBe(false);
+    expect(mockRunOpencode).toHaveBeenCalledTimes(3);
+  });
+
   it("merges auditor failures into proposals.json when replanning is already required", async () => {
     const status = createStatus();
     const execStdout = [

@@ -508,9 +508,11 @@ export async function runExecutorAndAuditorStep(
 
   if (lastAuditStatus === "ready") {
     const verificationEvidence = getExecutorVerificationEvidence(stepSnapshot);
+    const stateDir = path.dirname(statusPath);
+    const hasPersistedEvidence = hasPersistedVerificationEvidence(stateDir);
     if (
       stepSnapshot.step_verify?.status === "ready" &&
-      verificationEvidence.hasEvidence
+      (verificationEvidence.hasEvidence || hasPersistedEvidence)
     ) {
       failureBudget.consecutive_verification_gaps = 0;
       shouldAudit = true;
@@ -1013,6 +1015,65 @@ function validateTodoCoverage(
   } catch {
     return { ok: false, reason: "todo.json parse failed" };
   }
+}
+
+function hasPersistedVerificationEvidence(stateDir: string): boolean {
+  const todoPath = path.join(stateDir, "todo.json");
+  if (!fs.existsSync(todoPath)) {
+    return false;
+  }
+
+  try {
+    const raw = fs.readFileSync(todoPath, "utf8");
+    const parsed = JSON.parse(raw) as { todos?: unknown } | unknown[];
+    const todosUnknown = Array.isArray(parsed)
+      ? parsed
+      : Array.isArray((parsed as { todos?: unknown }).todos)
+        ? (parsed as { todos: unknown[] }).todos
+        : null;
+
+    if (!todosUnknown) {
+      return false;
+    }
+
+    for (const value of todosUnknown) {
+      if (!value || typeof value !== "object") continue;
+      const todo = value as {
+        status?: unknown;
+        result_artifacts?: unknown;
+      };
+
+      if (todo.status !== "completed") {
+        continue;
+      }
+
+      if (!Array.isArray(todo.result_artifacts)) {
+        continue;
+      }
+
+      const hasValidArtifact = todo.result_artifacts.some((artifact) => {
+        if (!artifact || typeof artifact !== "object") return false;
+        const obj = artifact as {
+          kind?: unknown;
+          path?: unknown;
+          summary?: unknown;
+        };
+        return (
+          typeof obj.kind === "string" &&
+          typeof obj.path === "string" &&
+          typeof obj.summary === "string"
+        );
+      });
+
+      if (hasValidArtifact) {
+        return true;
+      }
+    }
+  } catch {
+    return false;
+  }
+
+  return false;
 }
 
 function isCanonicalTodoLike(value: unknown): boolean {

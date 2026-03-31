@@ -46,7 +46,7 @@ export type ExecutorVerificationSnapshot = {
 
 export type ExecutorVerificationEvidence = {
   hasEvidence: boolean;
-  reason: "command_ids" | "diffs" | "no_command_reason" | "missing";
+  reason: "command_ids" | "diffs" | "missing";
 };
 
 export type RequirementDiffTrace = {
@@ -411,11 +411,6 @@ export function getExecutorVerificationEvidence(
   if (step.step_diff.length > 0) {
     return { hasEvidence: true, reason: "diffs" };
   }
-
-  if (/(^|\W)no-command(\W|$)/i.test(verify.summary)) {
-    return { hasEvidence: true, reason: "no_command_reason" };
-  }
-
   return { hasEvidence: false, reason: "missing" };
 }
 
