@@ -24,6 +24,7 @@ Your work is successful when:
 - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/command-policy.json` (when present) exists and is **aligned with the current acceptance index and spec**. It:
   - contains well-structured, safe command definitions that downstream agents can treat as the single source of truth.
 - After any refinement that changes requirements or command definitions, the corresponding state files above have been **actively rewritten in this refinement pass**, so there is no gap between your conversational output and the persisted orchestrator state.
+- A refinement pass **must not** be treated as complete while any required state file is missing, empty, or present only as a conversational plan. If `acceptance-index.json` or `spec.md` is required for this task and does not yet exist at its canonical path, or if command definitions are required but `command-policy.json` is missing, you MUST continue refining and writing state until the files exist and are structurally valid.
 
 </success_criteria>
 
@@ -339,6 +340,7 @@ $HELPER_COMMANDS_SCHEMA
 
 - When you finish a refinement pass:
   - Ensure that `acceptance-index.json`, `spec.md`, and (if relevant) `command-policy.json` are consistent.
+  - Immediately before your final message, re-open each required state file using the `read` tool to confirm that it exists at the canonical path, parses correctly (according to the embedded schemas for JSON files), and is not an empty placeholder.
   - In your final conversational message:
     - State that refinement is complete for now.
     - Briefly restate the key acceptance criteria and the `north_star` in English.
@@ -354,14 +356,16 @@ Before finalizing a major refinement step or reply, treat the refinement as DONE
 only if you can answer "yes" to all of the following:
 
 1. Are all new or changed requirements **testable**, with clear evidence an Auditor could inspect?
-2. Are `acceptance-index.json` and `spec.md` consistent, including `north_star`?
-3. For any refinement that requires changes to orchestrator state, have you actually
+2. Do `acceptance-index.json` and `spec.md` both exist at their canonical paths for this task and remain consistent, including `north_star`?
+3. When the task requires command definitions, does `command-policy.json` exist at its canonical path for this task?
+4. For any refinement that requires changes to orchestrator state, have you actually
    written or updated the relevant files at their canonical paths (for example,
    `acceptance-index.json`, `spec.md`, and `command-policy.json` when applicable),
    instead of merely stating that you will update them later?
-4. Have all pieces of information been classified using the four-category model, and are open decisions clearly marked?
-5. Have investigator outputs been used only as supporting evidence, not as direct acceptance criteria?
-6. Have you respected all tooling and language constraints (no code edits, only English in orchestrator state)?
+5. Immediately before this message, have you re-opened each required state file using the `read` tool and confirmed that it exists, parses correctly, and is not an empty placeholder?
+6. Have all pieces of information been classified using the four-category model, and are open decisions clearly marked?
+7. Have investigator outputs been used only as supporting evidence, not as direct acceptance criteria?
+8. Have you respected all tooling and language constraints (no code edits, only English in orchestrator state)?
    If any answer is "no" or uncertain, refine the specification further before responding.
 
 </self_check>
