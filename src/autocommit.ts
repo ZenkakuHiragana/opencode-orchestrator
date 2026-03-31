@@ -1,4 +1,4 @@
-import { tool } from "@opencode-ai/plugin/tool";
+import { tool, type ToolDefinition } from "@opencode-ai/plugin/tool";
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -157,7 +157,7 @@ function logAutocommit(entry: Record<string, unknown>): void {
   }
 }
 
-const autocommitTool = tool({
+const autocommitTool: ToolDefinition = tool({
   description:
     "Create a git commit for specified files using conventional commits (with safety blacklist). " +
     "IMPORTANT: Do NOT use this tool unless the system prompt or agent description explicitly " +

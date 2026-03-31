@@ -1,4 +1,4 @@
-import { tool } from "@opencode-ai/plugin/tool";
+import { tool, type ToolDefinition } from "@opencode-ai/plugin/tool";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
@@ -199,7 +199,7 @@ function slugifyTodoPart(input: string): string {
     .slice(0, 32);
 }
 
-export const orchTodoReadTool = tool({
+export const orchTodoReadTool: ToolDefinition = tool({
   description:
     "Read orchestrator todos for a given task with optional filtering. " +
     "This tool is intended for orch-todo-writer and orch-executor agents; other agents should avoid calling it.",
@@ -287,7 +287,7 @@ export const orchTodoReadTool = tool({
   },
 });
 
-export const orchTodoWriteTool = tool({
+export const orchTodoWriteTool: ToolDefinition = tool({
   description:
     "Update orchestrator todos for a given task.\n\n" +
     "This tool is used by two orchestrator agents:\n" +

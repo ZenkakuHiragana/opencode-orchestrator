@@ -1,4 +1,4 @@
-import { tool } from "@opencode-ai/plugin/tool";
+import { tool, type ToolDefinition } from "@opencode-ai/plugin/tool";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import helperCommandsData from "../resources/helper-commands.json" with { type: "json" };
@@ -245,7 +245,7 @@ function emitPreflightMetadata(
   }
 }
 
-const preflightCliTool = tool({
+const preflightCliTool: ToolDefinition = tool({
   description:
     "Helper tool EXCLUSIVE FOR orch-planner agent: evaluate command availability using OpenCode's permission settings and return a per-command JSON result. Do not call this tool from other agents; misuse will return SPEC_ERROR.",
   args: {
