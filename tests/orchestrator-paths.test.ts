@@ -13,6 +13,8 @@ import {
 } from "../src/orchestrator-paths.js";
 
 describe("orchestrator-paths", () => {
+  const norm = (p: string): string => p.replace(/\\/g, "/");
+
   it("uses XDG_STATE_HOME when set", () => {
     const original = process.env.XDG_STATE_HOME;
     try {
@@ -63,12 +65,16 @@ describe("orchestrator-paths", () => {
     ].join("\n");
 
     const rewritten = rewritePromptPaths(body);
-    expect(rewritten).toContain(`Use ${path.join(base, "foo", "state")}.`);
     expect(rewritten).toContain(
-      `Task path: ${path.join(base, "<task-name>", "state", "command-policy.json")}.`,
+      `Use ${norm(path.join(base, "foo", "state"))}.`,
     );
     expect(rewritten).toContain(
-      `Legacy ${path.join(base, "bar", "state")} path.`,
+      `Task path: ${norm(
+        path.join(base, "<task-name>", "state", "command-policy.json"),
+      )}.`,
+    );
+    expect(rewritten).toContain(
+      `Legacy ${norm(path.join(base, "bar", "state"))} path.`,
     );
   });
 
@@ -83,10 +89,10 @@ describe("orchestrator-paths", () => {
     };
 
     const out = rewriteAgentConfigPaths(cfg) as any;
-    expect(out.external_directory).toBe(path.join(base, "**"));
+    expect(out.external_directory).toBe(norm(path.join(base, "**")));
     const keys = Object.keys(out.write);
     expect(keys[0]).toBe(
-      path.join(base, "*", "state", "acceptance-index.json"),
+      norm(path.join(base, "*", "state", "acceptance-index.json")),
     );
   });
 });

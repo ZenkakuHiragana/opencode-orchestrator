@@ -43,6 +43,13 @@ export type TodoWriterStepResult = {
   forceTodoWriterNextStep: boolean;
   restartedSession: boolean;
   abortLoop: boolean;
+  // When true, the executor/auditor phase for this step MUST be skipped
+  // entirely and the loop should continue to the next step. This is used
+  // for cases where todo-writer produced an unusable or coverage-breaking
+  // todo.json (for example invalid shape or coverage invariant violations),
+  // so that we never run the Executor against a known-bad canonical todo
+  // cache.
+  skipExecutorThisStep: boolean;
 };
 
 export type ExecutorAuditorStepResult = {
@@ -71,6 +78,9 @@ export async function maybeRunTodoWriterStep(
   const failureBudget = ensureFailureBudget(status);
   const proposalsPath = path.join(path.dirname(statusPath), "proposals.json");
   const openProposals = getOpenProposals(loadProposals(proposalsPath));
+  const todoPath = path.join(stateDir, "todo.json");
+  const prevTodoNormalized = normalizeTodoFile(todoPath);
+  const prevTodosMinimal = loadMinimalTodos(todoPath);
   const needReplan = forceTodoWriterNextStep || openProposals.length > 0;
   if (!fs.existsSync(acceptanceIndexPath) || (step !== 1 && !needReplan)) {
     return {
@@ -79,6 +89,7 @@ export async function maybeRunTodoWriterStep(
       forceTodoWriterNextStep,
       restartedSession: false,
       abortLoop: false,
+      skipExecutorThisStep: false,
     };
   }
 
@@ -133,6 +144,7 @@ export async function maybeRunTodoWriterStep(
         forceTodoWriterNextStep,
         restartedSession: false,
         abortLoop: true,
+        skipExecutorThisStep: true,
       };
     }
 
@@ -154,6 +166,7 @@ export async function maybeRunTodoWriterStep(
       forceTodoWriterNextStep: false,
       restartedSession: true,
       abortLoop: false,
+      skipExecutorThisStep: true,
     };
   }
 
@@ -171,10 +184,10 @@ export async function maybeRunTodoWriterStep(
       forceTodoWriterNextStep: true,
       restartedSession: false,
       abortLoop: false,
+      skipExecutorThisStep: true,
     };
   }
 
-  const todoPath = path.join(stateDir, "todo.json");
   const todoSummary = readTodoSummary(todoPath);
   if (!todoSummary.ok) {
     failureBudget.last_failure_kind = "todo_writer_invalid_todo_cache";
@@ -190,6 +203,7 @@ export async function maybeRunTodoWriterStep(
       forceTodoWriterNextStep: true,
       restartedSession: false,
       abortLoop: false,
+      skipExecutorThisStep: true,
     };
   }
 
@@ -213,8 +227,13 @@ export async function maybeRunTodoWriterStep(
       forceTodoWriterNextStep: true,
       restartedSession: false,
       abortLoop: false,
+      skipExecutorThisStep: true,
     };
   }
+
+  const nextTodoNormalized = normalizeTodoFile(todoPath);
+  const todoChanged = prevTodoNormalized !== nextTodoNormalized;
+  const nextTodosMinimal = loadMinimalTodos(todoPath);
 
   console.error(
     `[opencode-orchestrator] todo-writer todos: total=${todoSummary.total} ` +
@@ -223,12 +242,71 @@ export async function maybeRunTodoWriterStep(
   );
 
   const proposalsFile = loadProposals(proposalsPath);
-  const resolved = resolveAutoResolvableProposals(
-    proposalsFile,
-    "auto",
-    new Date().toISOString(),
+  const hasOpenAutoResolvable = proposalsFile.proposals.some(
+    (proposal) => proposal.status === "open" && proposal.auto_resolvable,
   );
-  saveProposals(proposalsPath, resolved);
+
+  if (hasOpenAutoResolvable && !todoChanged) {
+    failureBudget.last_failure_kind = "todo_writer_noop_replan";
+    failureBudget.last_failure_summary =
+      "todo-writer が open な auto_resolvable proposals を抱えたまま再実行されましたが、todo.json に有意な変更がありません。";
+    saveStatusJson(statusPath, status);
+    console.error(
+      "[opencode-orchestrator] todo-writer 再計画が no-op でした。open な auto_resolvable proposals を残したまま Executor をスキップし、次のステップでも再計画を継続します。",
+    );
+    return {
+      sessionId,
+      restartCount,
+      forceTodoWriterNextStep: true,
+      restartedSession: false,
+      abortLoop: false,
+      skipExecutorThisStep: true,
+    };
+  }
+
+  const now = new Date().toISOString();
+  const updatedProposals = {
+    version: proposalsFile.version,
+    proposals: proposalsFile.proposals.map((proposal) => {
+      if (proposal.status !== "open" || !proposal.auto_resolvable) {
+        return proposal;
+      }
+
+      let shouldResolve = false;
+
+      if (proposal.kind === "audit_failure") {
+        // For audit_failure proposals, require a meaningful change to todos
+        // linked to the failed requirements before auto-resolving.
+        if (nextTodosMinimal) {
+          shouldResolve = proposal.related_requirement_ids.some((reqId) =>
+            hasMeaningfulTodoChangeForRequirement(
+              reqId,
+              prevTodosMinimal,
+              nextTodosMinimal,
+            ),
+          );
+        }
+      } else {
+        // For other auto-resolvable proposals (need_replan, verification_gap,
+        // contract_gap, etc.), we still require that todo.json has changed
+        // structurally in this pass.
+        shouldResolve = todoChanged;
+      }
+
+      if (!shouldResolve) {
+        return proposal;
+      }
+
+      return {
+        ...proposal,
+        status: "resolved" as const,
+        resolved_at: now,
+        resolved_by: "auto" as const,
+      };
+    }),
+  };
+
+  saveProposals(proposalsPath, updatedProposals);
   failureBudget.consecutive_contract_gaps = 0;
   failureBudget.consecutive_verification_gaps = 0;
   saveStatusJson(statusPath, status);
@@ -239,6 +317,7 @@ export async function maybeRunTodoWriterStep(
     forceTodoWriterNextStep: false,
     restartedSession: false,
     abortLoop: false,
+    skipExecutorThisStep: false,
   };
 }
 
@@ -1019,6 +1098,139 @@ function validateTodoCoverage(
   } catch {
     return { ok: false, reason: "todo.json parse failed" };
   }
+}
+
+function normalizeTodoFile(todoPath: string): string | null {
+  if (!fs.existsSync(todoPath)) {
+    return null;
+  }
+
+  try {
+    const raw = fs.readFileSync(todoPath, "utf8");
+    const parsed = JSON.parse(raw) as { todos?: unknown } | unknown[];
+    const todos = Array.isArray(parsed)
+      ? parsed
+      : Array.isArray((parsed as { todos?: unknown }).todos)
+        ? (parsed as { todos: unknown[] }).todos
+        : null;
+    if (!todos) {
+      return null;
+    }
+    return JSON.stringify(todos);
+  } catch {
+    return null;
+  }
+}
+
+type MinimalTodo = {
+  id: string;
+  status: string;
+  related_requirement_ids: string[];
+  intent?: string;
+  expected_evidence?: string[];
+  audit_ready_when?: string[];
+};
+
+function loadMinimalTodos(todoPath: string): MinimalTodo[] | null {
+  if (!fs.existsSync(todoPath)) {
+    return null;
+  }
+
+  try {
+    const raw = fs.readFileSync(todoPath, "utf8");
+    const parsed = JSON.parse(raw) as { todos?: unknown } | unknown[];
+    const todosUnknown = Array.isArray(parsed)
+      ? parsed
+      : Array.isArray((parsed as { todos?: unknown }).todos)
+        ? (parsed as { todos: unknown[] }).todos
+        : null;
+    if (!todosUnknown || !todosUnknown.every(isCanonicalTodoLike)) {
+      return null;
+    }
+
+    type TodoLike = {
+      id: string;
+      status: string;
+      related_requirement_ids: string[];
+      execution_contract?: {
+        intent?: string;
+        expected_evidence?: string[];
+        audit_ready_when?: string[];
+      };
+    };
+
+    const todos = todosUnknown as TodoLike[];
+    return todos.map<MinimalTodo>((t) => ({
+      id: t.id,
+      status: t.status,
+      related_requirement_ids: Array.isArray(t.related_requirement_ids)
+        ? t.related_requirement_ids
+        : [],
+      intent: t.execution_contract?.intent,
+      expected_evidence: t.execution_contract?.expected_evidence,
+      audit_ready_when: t.execution_contract?.audit_ready_when,
+    }));
+  } catch {
+    return null;
+  }
+}
+
+function hasMeaningfulTodoChangeForRequirement(
+  requirementId: string,
+  prevTodos: MinimalTodo[] | null,
+  nextTodos: MinimalTodo[] | null,
+): boolean {
+  const prev = prevTodos ?? [];
+  const next = nextTodos ?? [];
+
+  const prevForReq = prev.filter((t) =>
+    Array.isArray(t.related_requirement_ids)
+      ? t.related_requirement_ids.includes(requirementId)
+      : false,
+  );
+  const nextForReq = next.filter((t) =>
+    Array.isArray(t.related_requirement_ids)
+      ? t.related_requirement_ids.includes(requirementId)
+      : false,
+  );
+
+  if (nextForReq.length === 0) {
+    // No active coverage for this requirement in the new todo set.
+    return false;
+  }
+
+  const prevIds = new Set(prevForReq.map((t) => t.id));
+  const hasNewTodo = nextForReq.some((t) => !prevIds.has(t.id));
+  if (hasNewTodo) {
+    return true;
+  }
+
+  // Compare per-todo contract-level changes.
+  for (const nextTodo of nextForReq) {
+    const prevTodo = prevForReq.find((t) => t.id === nextTodo.id);
+    if (!prevTodo) {
+      continue;
+    }
+
+    // Intent change.
+    if (prevTodo.intent !== nextTodo.intent) {
+      return true;
+    }
+
+    const prevEE = prevTodo.expected_evidence ?? [];
+    const nextEE = nextTodo.expected_evidence ?? [];
+    if (nextEE.length > prevEE.length) {
+      return true;
+    }
+
+    const prevARW = prevTodo.audit_ready_when ?? [];
+    const nextARW = nextTodo.audit_ready_when ?? [];
+    if (nextARW.length > prevARW.length) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function hasPersistedVerificationEvidence(stateDir: string): boolean {

@@ -38,6 +38,12 @@ export function getOrchestratorWorkspaceArtifactsDir(task: string): string {
 }
 
 // Internal helper: replace XDG/state placeholders in a single string.
+//
+// NOTE: Permission path patterns inside agent configs are interpreted by the
+// OpenCode core, which today treats POSIX-style path separators ("/") as the
+// canonical form even on Windows. To keep behaviour consistent across
+// platforms, we normalize all rewritten paths to use forward slashes after
+// joining, while still computing the base directory via Node's path utilities.
 function replaceStatePlaceholders(text: string): string {
   const baseDir = getOrchestratorBaseDir();
   const placeholderPattern =
@@ -45,7 +51,13 @@ function replaceStatePlaceholders(text: string): string {
 
   return text.replace(placeholderPattern, (_match, _prefix, suffix: string) => {
     const segments = suffix.split("/").filter(Boolean);
-    return segments.length > 0 ? path.join(baseDir, ...segments) : baseDir;
+    const joined =
+      segments.length > 0 ? path.join(baseDir, ...segments) : baseDir;
+    // Normalize Windows-style path separators to POSIX-style so that
+    // permission patterns remain stable and match OpenCode's cross-platform
+    // path handling. Node.js accepts both "\" and "/" on Windows for
+    // filesystem operations.
+    return joined.replace(/\\/g, "/");
   });
 }
 

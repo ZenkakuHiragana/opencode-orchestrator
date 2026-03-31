@@ -32,6 +32,18 @@ export function buildTodoWriterPrompt(
     );
   }
 
+  if (
+    status?.failure_budget?.last_failure_kind ===
+    "todo_writer_coverage_invariant_failed"
+  ) {
+    const summary = status.failure_budget.last_failure_summary ?? "";
+    parts.push(
+      "The last Todo-Writer pass produced a todo.json that violated dynamic coverage invariants. " +
+        "You MUST ensure that every unsatisfied requirement from acceptance-index.json has at least one active todo (`pending` or `in_progress`) whose related_requirement_ids includes that requirement id. " +
+        (summary ? `Last failure summary from status.json: ${summary}` : ""),
+    );
+  }
+
   const failedRequirements =
     status?.last_auditor_report?.requirements?.filter(
       (req) => req.passed === false,

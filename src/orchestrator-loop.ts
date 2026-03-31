@@ -263,27 +263,28 @@ export async function runLoop(opts: LoopOptions): Promise<boolean> {
 
     status.current_cycle = step;
 
+    let todoWriterResult: TodoWriterStepResult | null = null;
+
     const needReplan =
       forceTodoWriterNextStep ||
       loadProposals(proposalsPath).proposals.some(
         (proposal) => proposal.status === "open" && proposal.auto_resolvable,
       );
     if (fs.existsSync(acceptanceIndexPath) && (step === 1 || needReplan)) {
-      const todoWriterResult: TodoWriterStepResult =
-        await maybeRunTodoWriterStep(
-          opts,
-          step,
-          stepId,
-          stateDir,
-          logDir,
-          acceptanceIndexPath,
-          sessionId!,
-          fileArgs,
-          status,
-          statusPath,
-          restartCount,
-          forceTodoWriterNextStep,
-        );
+      todoWriterResult = await maybeRunTodoWriterStep(
+        opts,
+        step,
+        stepId,
+        stateDir,
+        logDir,
+        acceptanceIndexPath,
+        sessionId!,
+        fileArgs,
+        status,
+        statusPath,
+        restartCount,
+        forceTodoWriterNextStep,
+      );
 
       sessionId = todoWriterResult.sessionId;
       restartCount = todoWriterResult.restartCount;
@@ -296,6 +297,14 @@ export async function runLoop(opts: LoopOptions): Promise<boolean> {
       if (todoWriterResult.restartedSession) {
         continue;
       }
+    }
+
+    if (todoWriterResult && todoWriterResult.skipExecutorThisStep) {
+      // Skip executor/auditor for this step when todo-writer produced an
+      // unusable or coverage-breaking todo.json. The failure details are
+      // already recorded in status.json and logs; the next loop iteration
+      // will either re-enter todo-writer or stop based on those signals.
+      continue;
     }
 
     const execAuditResult: ExecutorAuditorStepResult =

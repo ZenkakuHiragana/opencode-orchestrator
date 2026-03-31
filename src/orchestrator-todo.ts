@@ -202,6 +202,8 @@ function slugifyTodoPart(input: string): string {
 export const orchTodoReadTool: ToolDefinition = tool({
   description:
     "Read orchestrator todos for a given task with optional filtering. " +
+    "When no filter is provided, all canonical todos for the task are returned. " +
+    "Wildcard values such as '*' are not supported in any filter field; values must match exactly. " +
     "This tool is intended for orch-todo-writer and orch-executor agents; other agents should avoid calling it.",
   args: {
     task: z
@@ -216,7 +218,8 @@ export const orchTodoReadTool: ToolDefinition = tool({
           .min(1)
           .describe(
             "Limit results to todos whose related_requirement_ids intersect this list. " +
-            "When omitted, no filtering by related_requirement_ids is applied.",
+              "When omitted, no filtering by related_requirement_ids is applied. " +
+              "Wildcard values such as '*' are not treated specially; to read todos for all requirements, omit this field instead of passing ['*'].",
           )
           .optional(),
         status: z
@@ -224,7 +227,7 @@ export const orchTodoReadTool: ToolDefinition = tool({
           .min(1)
           .describe(
             "Limit results to todos with these statuses. " +
-            "When omitted, todos with any status are included.",
+              "When omitted, todos with any status are included.",
           )
           .optional(),
         ids: z
@@ -232,7 +235,8 @@ export const orchTodoReadTool: ToolDefinition = tool({
           .min(1)
           .describe(
             "Limit results to todos whose id is in this list. " +
-            "When omitted, no filtering by id is applied.",
+              "When omitted, no filtering by id is applied. " +
+              "Wildcard values such as '*' are not treated specially; to read all todos regardless of id, omit this field instead of passing ['*'].",
           )
           .optional(),
         limit: z
@@ -241,13 +245,14 @@ export const orchTodoReadTool: ToolDefinition = tool({
           .positive()
           .describe(
             "Optional maximum number of todos to return after filtering. " +
-            "When omitted, all todos matching other filters are returned.",
+              "When omitted, all todos matching other filters are returned.",
           )
           .optional(),
       })
       .describe(
         "Optional filter to limit returned todos by ids, related_requirement_ids, and/or status. " +
-        "When no filter is provided at all, all canonical todos for the task are returned.",
+          "When no filter is provided at all, all canonical todos for the task are returned. " +
+          "Wildcard values such as '*' are not supported; values must match exactly.",
       )
       .optional(),
   },
@@ -270,6 +275,23 @@ export const orchTodoReadTool: ToolDefinition = tool({
     }
 
     const filter = args.filter ?? {};
+    const hasWildcardInIds =
+      Array.isArray(filter.ids) &&
+      filter.ids.some((id) => typeof id === "string" && id.includes("*"));
+    const hasWildcardInRequirementIds =
+      Array.isArray(filter.requirementIds) &&
+      filter.requirementIds.some(
+        (rid) => typeof rid === "string" && rid.includes("*"),
+      );
+
+    if (hasWildcardInIds || hasWildcardInRequirementIds) {
+      return JSON.stringify({
+        ok: false,
+        error:
+          "SPEC_ERROR: wildcard values such as '*' are not supported in ids/requirementIds; omit these fields to read all todos.",
+      });
+    }
+
     let filtered = todos;
 
     if (filter.ids && filter.ids.length > 0) {
@@ -339,10 +361,10 @@ export const orchTodoWriteTool: ToolDefinition = tool({
       ])
       .describe(
         "planner_replace_canonical: replace the canonical todo list (planner only). " +
-        "planner_add_todos: append new todos with auto-assigned ids (planner only). " +
-        "planner_add_proposals: append new proposals to proposals.json (planner only). " +
-        "planner_update_todos: patch existing todos based on filters (planner only). " +
-        "executor_update_statuses: update statuses for existing todos (executor only).",
+          "planner_add_todos: append new todos with auto-assigned ids (planner only). " +
+          "planner_add_proposals: append new proposals to proposals.json (planner only). " +
+          "planner_update_todos: patch existing todos based on filters (planner only). " +
+          "executor_update_statuses: update statuses for existing todos (executor only).",
       ),
     canonicalTodos: z
       .array(
@@ -405,8 +427,8 @@ export const orchTodoWriteTool: ToolDefinition = tool({
       )
       .describe(
         "Full canonical todo list to write when mode=planner_replace_canonical. This must include all todos for the task. " +
-        "When introducing new todos or substantially changing existing ones, they should normally use status 'pending' " +
-        "unless the underlying work is already known to be completed, in progress, or explicitly cancelled.",
+          "When introducing new todos or substantially changing existing ones, they should normally use status 'pending' " +
+          "unless the underlying work is already known to be completed, in progress, or explicitly cancelled.",
       )
       .optional(),
     addTodos: z
@@ -446,8 +468,8 @@ export const orchTodoWriteTool: ToolDefinition = tool({
       )
       .describe(
         "Todos to append when mode=planner_add_todos. Ids are auto-assigned based on the current todo count. " +
-        "Newly added todos should normally use status 'pending' unless the work they describe is already known to be " +
-        "completed, in progress, or explicitly cancelled.",
+          "Newly added todos should normally use status 'pending' unless the work they describe is already known to be " +
+          "completed, in progress, or explicitly cancelled.",
       )
       .optional(),
     addProposals: z
@@ -655,7 +677,7 @@ export const orchTodoWriteTool: ToolDefinition = tool({
 
       for (const t of args.addTodos) {
         let id: string;
-        for (; ;) {
+        for (;;) {
           counter += 1;
           const candidate = buildGeneratedTodoId(
             counter,
@@ -815,7 +837,7 @@ export const orchTodoWriteTool: ToolDefinition = tool({
             : undefined;
         const filterReqSet =
           filter.related_requirement_ids &&
-            filter.related_requirement_ids.length > 0
+          filter.related_requirement_ids.length > 0
             ? new Set(filter.related_requirement_ids)
             : undefined;
 

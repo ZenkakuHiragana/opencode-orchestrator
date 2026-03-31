@@ -85,4 +85,25 @@ describe("buildTodoWriterPrompt", () => {
     expect(prompt).toBe("");
     expect(prompt).not.toContain("replan_request");
   });
+
+  it("surfaces coverage invariant failures from failure_budget to todo-writer", () => {
+    const prompt = buildTodoWriterPrompt({
+      version: 1,
+      failure_budget: {
+        todo_writer_safety_restarts: 0,
+        executor_safety_restarts: 0,
+        consecutive_env_blocked: 0,
+        consecutive_audit_failures: 0,
+        consecutive_verification_gaps: 0,
+        consecutive_contract_gaps: 0,
+        last_failure_kind: "todo_writer_coverage_invariant_failed",
+        last_failure_summary:
+          "todo-writer が coverage invariants を満たさない todo.json を生成したため再計画状態を維持する: coverage invariant violated for requirements without active todos: R1",
+      },
+    } as any);
+
+    expect(prompt).toContain("coverage invariants");
+    expect(prompt).toContain("Last failure summary from status.json");
+    expect(prompt).toContain("R1");
+  });
 });

@@ -165,7 +165,30 @@ describe("maybeRunTodoWriterStep", () => {
       },
     ]);
 
-    mockRunOpencode.mockResolvedValueOnce({ code: 0, stdout: "" } as any);
+    mockRunOpencode.mockImplementationOnce(async () => {
+      // Simulate Todo-Writer writing a new todo.json so that the replan is
+      // considered meaningful (non no-op) by the orchestrator. This ensures
+      // auto-resolvable proposals are eligible to be resolved.
+      fs.writeFileSync(
+        todoPath,
+        JSON.stringify(
+          {
+            todos: [
+              {
+                id: "T1",
+                summary: "replanned",
+                status: "pending",
+                related_requirement_ids: [],
+              },
+            ],
+          },
+          null,
+          2,
+        ) + "\n",
+        "utf8",
+      );
+      return { code: 0, stdout: "" } as any;
+    });
 
     const res = await maybeRunTodoWriterStep(
       baseOpts,
@@ -231,9 +254,30 @@ describe("maybeRunTodoWriterStep", () => {
       },
     ]);
 
-    mockRunOpencode.mockResolvedValueOnce({ code: 0, stdout: "" } as any);
+    mockRunOpencode.mockImplementationOnce(async () => {
+      // Simulate a meaningful todo.json update.
+      fs.writeFileSync(
+        todoPath,
+        JSON.stringify(
+          {
+            todos: [
+              {
+                id: "T1",
+                summary: "replanned",
+                status: "pending",
+                related_requirement_ids: [],
+              },
+            ],
+          },
+          null,
+          2,
+        ) + "\n",
+        "utf8",
+      );
+      return { code: 0, stdout: "" } as any;
+    });
 
-    await maybeRunTodoWriterStep(
+    const res = await maybeRunTodoWriterStep(
       baseOpts,
       2,
       "002",
@@ -410,7 +454,14 @@ describe("maybeRunTodoWriterStep", () => {
     );
     const acceptancePath = path.join(tmpState, "acceptance-index.json");
     const statusPath = path.join(tmpState, "status.json");
+    const todoPath = path.join(tmpState, "todo.json");
     fs.writeFileSync(acceptancePath, "{}", "utf8");
+    // Initial todo.json before replan.
+    fs.writeFileSync(
+      todoPath,
+      JSON.stringify({ todos: [] }, null, 2) + "\n",
+      "utf8",
+    );
     writeProposalsJson(tmpState, [
       {
         id: "p-3",
@@ -427,9 +478,31 @@ describe("maybeRunTodoWriterStep", () => {
       },
     ]);
 
-    mockRunOpencode.mockResolvedValueOnce({ code: 0, stdout: "" } as any);
+    mockRunOpencode.mockImplementationOnce(async () => {
+      // Simulate Todo-Writer updating todo.json in a meaningful way so that
+      // the orchestrator does not treat this as a no-op replan.
+      fs.writeFileSync(
+        todoPath,
+        JSON.stringify(
+          {
+            todos: [
+              {
+                id: "T1",
+                summary: "replanned",
+                status: "pending",
+                related_requirement_ids: [],
+              },
+            ],
+          },
+          null,
+          2,
+        ) + "\n",
+        "utf8",
+      );
+      return { code: 0, stdout: "" } as any;
+    });
 
-    await maybeRunTodoWriterStep(
+    const res = await maybeRunTodoWriterStep(
       baseOpts,
       2,
       "002",
@@ -458,6 +531,9 @@ describe("maybeRunTodoWriterStep", () => {
       "--",
     ]);
     expect(todoWriterArgs[10]).toContain("proposals.json");
+
+    // Successful todo-writer runs should not request skipping the executor.
+    expect(res.skipExecutorThisStep).toBe(false);
   });
 
   it("keeps replanning active when todo-writer leaves no valid todo.json", async () => {
@@ -506,6 +582,8 @@ describe("maybeRunTodoWriterStep", () => {
 
     expect(res.abortLoop).toBe(false);
     expect(res.forceTodoWriterNextStep).toBe(true);
+    expect(res.skipExecutorThisStep).toBe(true);
+    expect(res.skipExecutorThisStep).toBe(true);
 
     const saved = JSON.parse(
       fs.readFileSync(statusPath, "utf8"),
