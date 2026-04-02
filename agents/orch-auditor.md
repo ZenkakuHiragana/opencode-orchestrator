@@ -174,23 +174,12 @@ Follow this high-level protocol on every run:
      return `done: false`.
 
 8. **Construct the `requirements` array**
-   - `requirements` is a list of requirement objects. Each object represents an acceptance
-     criterion, testable behavior, or necessary task derived from `spec.md` and
-     `acceptance-index.json`.
-   - Each requirement object must have:
-     - `id`: a short stable identifier string (for example, `"R1-user-can-login"`). This must
-       match the ID from `acceptance-index.json`.
-     - `passed`: a boolean, `true` only if that requirement appears to be fully satisfied in
-       the current repository state.
-     - `reason` (optional for passed requirements, **required** for failed requirements): a
-       short English explanation of why the requirement is considered passed or failed.
    - For **every requirement** in your canonical list (derived from `acceptance-index.json` and
-     `spec.md`), you **must** include exactly one corresponding object in the `requirements`
-     array with the same `id` and an appropriate `passed` value. Do **not** omit any
-     requirement, regardless of whether it passed or failed.
-   - When `done: false`, the `requirements` array **MUST NOT** be empty and it **MUST** include
-     every requirement you judged as failing, each with `passed: false` and an English
-     `reason` explaining why that specific requirement failed or could not be verified.
+     `spec.md`), create exactly one object in the `requirements` array with the same `id` and
+     a `passed` value based on your assessment.
+   - When `passed: false`, you **must** include `reason`, `failure_kind`, and `evidence_gaps`
+     for that requirement as described in **Output Format**.
+   - When `done: false`, the `requirements` array **MUST NOT** be empty.
 
 </protocol>
 

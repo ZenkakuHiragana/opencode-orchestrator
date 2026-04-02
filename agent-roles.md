@@ -61,7 +61,7 @@ sequenceDiagram
     participant StateDir as state/<task-name>/
 
     rect rgba(200, 220, 240, 0.15)
-        Note over Human,StateDir: 計画フェーズ：Refiner → Spec-Checker → Preflight を繰り返す
+        Note over Human,StateDir: 計画フェーズ：Refiner → Preflight → Spec-Checker を繰り返す
     end
 
     Human->>Planner: 高レベルゴールを提示
@@ -109,7 +109,7 @@ sequenceDiagram
 
 - Planner（LLM）は主に **orch-refine / orch-spec-check** の**カスタムコマンド**でサブエージェントを起動する。
 - Preflight の可否判定は `preflight-cli` **ツール**が担当し、Refiner が定義したコマンドと helper コマンドに対して permission.bash ルールをローカル評価する。
-- Refiner / Spec-Checker のサイクルは、`status === "ok"` かつ `feasible_for_loop === true` になるまで何度でも回る。
+- Refiner / Preflight / Spec-Checker のサイクルは、`status === "ok"` かつ `feasible_for_loop === true` になるまで何度でも回る。
 - `command-policy.json` を更新できるのは、Planner が担当するこのフェーズだけである。
 
 ---
@@ -564,7 +564,7 @@ sequenceDiagram
 
 ## 10. まとめ
 
-- Refiner / Spec-Checker / Preflight-Runner / Planner が「仕様とコマンドポリシー」を整備し、
+- Refiner / Preflight-Runner / Spec-Checker / Planner が「仕様とコマンドポリシー」を整備し、
   Todo-Writer が「実行可能な Todo 構造」を生成し、Executor が「実装と検証」を行い、
   Auditor が「最終完了判定」を行う、という明確な責務分担になっている。
 - Orchestrator ループ (`orchestrator-loop.ts`) はこれらのエージェントとコマンドを束ね、

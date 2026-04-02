@@ -323,8 +323,8 @@ const preflightCliTool: ToolDefinition = tool({
     };
 
     // Guardrail: preflight-cli MUST only be used when a proper orchestrator
-    // state directory for this task already exists (i.e. after Refiner and
-    // Spec-Checker have created acceptance-index/spec.md/command-policy). If the
+    // state directory for this task already exists (i.e. after Refiner has
+    // created acceptance-index/spec.md/command-policy). If the
     // state directory or core files are missing, treat this as a spec/flow
     // error and do not spawn any `orch-preflight` sessions.
     const stateDir = getOrchestratorStateDir(args.task);

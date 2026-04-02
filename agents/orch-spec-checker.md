@@ -189,6 +189,8 @@ Treat these inputs as the **primary** authoritative context about the story and 
     - Commands exist but do not provide realistic paths for exploration, implementation validation, or acceptance verification implied by the spec.
   - **Planner confirmation gaps**
     - Policy or planning guidance does not make clear when humans must reconfirm changed preflight command sets versus when an unchanged list may be re-probed automatically.
+- - **Permission / availability gaps**
+  - For commands that are clearly needed to implement or verify major acceptance criteria, if their `availability` (or equivalent field) indicates they cannot run under current permission rules (for example after Preflight has updated the policy), treat this as a high-severity issue and a feasibility risk.
 - For each such finding, create one or more `issues[]` entries with:
   - An appropriate `target` (e.g., `"commands"` or `"command-policy"`).
   - An English `summary` explaining the problem.
