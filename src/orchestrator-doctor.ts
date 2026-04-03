@@ -14,7 +14,10 @@ interface ToolCheckResult {
 }
 
 function checkTool(name: string, args: string[]): ToolCheckResult {
-  const result = spawnSync(name, args, { stdio: "ignore" });
+  const result = spawnSync(name, args, {
+    stdio: "ignore",
+    shell: process.platform === "win32",
+  });
   return { name, ok: result.status === 0 };
 }
 

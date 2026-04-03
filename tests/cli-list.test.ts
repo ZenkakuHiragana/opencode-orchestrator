@@ -57,10 +57,16 @@ describe("parseListArgs", () => {
 describe("runList", () => {
   const originalConsoleError = console.error;
   const originalConsoleLog = console.log;
+  let prevLC_ALL: string | undefined;
+  let prevLANG: string | undefined;
 
   beforeEach(() => {
     console.error = vi.fn();
     console.log = vi.fn();
+    prevLC_ALL = process.env.LC_ALL;
+    prevLANG = process.env.LANG;
+    process.env.LC_ALL = "ja_JP.UTF-8";
+    process.env.LANG = "ja_JP.UTF-8";
   });
 
   it("prints a friendly message when proposals are requested but none exist", async () => {
@@ -94,6 +100,16 @@ describe("runList", () => {
   afterEach(() => {
     console.error = originalConsoleError;
     console.log = originalConsoleLog;
+    if (prevLC_ALL === undefined) {
+      delete process.env.LC_ALL;
+    } else {
+      process.env.LC_ALL = prevLC_ALL;
+    }
+    if (prevLANG === undefined) {
+      delete process.env.LANG;
+    } else {
+      process.env.LANG = prevLANG;
+    }
     vi.resetModules();
     vi.restoreAllMocks();
   });
@@ -129,15 +145,31 @@ describe("runList", () => {
 describe("runList integration", () => {
   const originalConsoleLog = console.log;
   const originalConsoleError = console.error;
+  let prevLC_ALL: string | undefined;
+  let prevLANG: string | undefined;
 
   beforeEach(() => {
     console.log = vi.fn();
     console.error = vi.fn();
+    prevLC_ALL = process.env.LC_ALL;
+    prevLANG = process.env.LANG;
+    process.env.LC_ALL = "ja_JP.UTF-8";
+    process.env.LANG = "ja_JP.UTF-8";
   });
 
   afterEach(() => {
     console.log = originalConsoleLog;
     console.error = originalConsoleError;
+    if (prevLC_ALL === undefined) {
+      delete process.env.LC_ALL;
+    } else {
+      process.env.LC_ALL = prevLC_ALL;
+    }
+    if (prevLANG === undefined) {
+      delete process.env.LANG;
+    } else {
+      process.env.LANG = prevLANG;
+    }
     vi.resetModules();
     vi.restoreAllMocks();
   });

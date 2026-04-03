@@ -132,4 +132,36 @@ describe("detectCliLanguageFromEnv (Windows)", () => {
     expect(result.source).toBe("windows_default");
     expect(result.rawLocale).toBeNull();
   });
+
+  it("prefers LC_ALL over Windows PowerShell detectors", () => {
+    const detector = (kind: "ui-override" | "ui-culture" | "system-locale") => {
+      if (kind === "ui-override") return "ja-JP";
+      return "ja-JP";
+    };
+
+    const result = detectCliLanguageFromEnv(
+      { LC_ALL: "en_US.UTF-8" } as ProcessEnv,
+      "win32",
+      detector,
+    );
+    expect(result.language).toBe("en");
+    expect(result.source).toBe("LC_ALL");
+    expect(result.rawLocale).toBe("en_US.UTF-8");
+  });
+
+  it("prefers LANG over Windows PowerShell detectors when LC_ALL is not set", () => {
+    const detector = (kind: "ui-override" | "ui-culture" | "system-locale") => {
+      if (kind === "ui-override") return "ja-JP";
+      return "ja-JP";
+    };
+
+    const result = detectCliLanguageFromEnv(
+      { LANG: "en_US.UTF-8" } as ProcessEnv,
+      "win32",
+      detector,
+    );
+    expect(result.language).toBe("en");
+    expect(result.source).toBe("LANG");
+    expect(result.rawLocale).toBe("en_US.UTF-8");
+  });
 });

@@ -16,9 +16,37 @@ function getCatalog(language: SupportedLanguage): Record<MessageKey, string> {
   return messagesEn as Record<MessageKey, string>;
 }
 
+let cachedLanguage: SupportedLanguage | null = null;
+let cachedLcAll: string | undefined | null = null;
+let cachedLang: string | undefined | null = null;
+
 export function getActiveLanguage(): SupportedLanguage {
+  const currentLcAll = process.env.LC_ALL;
+  const currentLang = process.env.LANG;
+
+  if (
+    cachedLanguage !== null &&
+    cachedLcAll === currentLcAll &&
+    cachedLang === currentLang
+  ) {
+    return cachedLanguage;
+  }
+
   const { language } = detectCliLanguageFromEnv();
+  cachedLanguage = language;
+  cachedLcAll = currentLcAll;
+  cachedLang = currentLang;
   return language;
+}
+
+/**
+ * Reset the cached locale. Useful in tests when process.env is modified
+ * between assertions.
+ */
+export function resetLocaleCache(): void {
+  cachedLanguage = null;
+  cachedLcAll = null;
+  cachedLang = null;
 }
 
 export function t(key: MessageKey, params?: MessageParams): string {

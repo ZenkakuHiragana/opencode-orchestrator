@@ -97,6 +97,28 @@ export function detectCliLanguageFromEnv(
   platform: NodeJS.Platform = process.platform,
   windowsDetector?: WindowsLocaleDetector,
 ): LocaleSelectionResult {
+  // LC_ALL and LANG are respected on all platforms when explicitly set.
+  // This ensures consistent behavior in tests and scripts that set these
+  // environment variables regardless of the host OS.
+  const lcAll = normalizeLocaleTag(env.LC_ALL as string | undefined);
+  if (lcAll) {
+    return {
+      language: isJapaneseLocaleTag(lcAll) ? "ja" : "en",
+      source: "LC_ALL",
+      rawLocale: lcAll,
+    };
+  }
+
+  const lang = normalizeLocaleTag(env.LANG as string | undefined);
+  if (lang) {
+    return {
+      language: isJapaneseLocaleTag(lang) ? "ja" : "en",
+      source: "LANG",
+      rawLocale: lang,
+    };
+  }
+
+  // When no env var is set, fall back to platform-specific detection.
   if (platform === "win32") {
     const detector = windowsDetector ?? createDefaultWindowsLocaleDetector();
 
@@ -128,24 +150,6 @@ export function detectCliLanguageFromEnv(
     }
 
     return { language: "en", source: "windows_default", rawLocale: null };
-  }
-
-  const lcAll = normalizeLocaleTag(env.LC_ALL as string | undefined);
-  if (lcAll) {
-    return {
-      language: isJapaneseLocaleTag(lcAll) ? "ja" : "en",
-      source: "LC_ALL",
-      rawLocale: lcAll,
-    };
-  }
-
-  const lang = normalizeLocaleTag(env.LANG as string | undefined);
-  if (lang) {
-    return {
-      language: isJapaneseLocaleTag(lang) ? "ja" : "en",
-      source: "LANG",
-      rawLocale: lang,
-    };
   }
 
   return {

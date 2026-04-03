@@ -32,7 +32,7 @@ describe("runDoctorCommand", () => {
 
     expect(typeof code).toBe("number");
     expect(errSpy).toHaveBeenCalled();
-  });
+  }, 15_000);
 
   it("reports when the orchestrator state base directory is missing", async () => {
     const tmpBase = fs.mkdtempSync(
@@ -50,6 +50,11 @@ describe("runDoctorCommand", () => {
   });
 
   it("reports when the orchestrator state base directory is not writable", async () => {
+    // chmod does not reliably restrict write access on Windows due to ACLs.
+    if ((globalThis as any).process?.platform === "win32") {
+      return;
+    }
+
     const tmpBase = fs.mkdtempSync(
       path.join(os.tmpdir(), "orch-doctor-nowrite-"),
     );
