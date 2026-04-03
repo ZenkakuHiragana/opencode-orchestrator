@@ -215,9 +215,13 @@ export async function findSessionIdByTitle(
           )
         ? (data as { sessions: { id: string; title?: string }[] }).sessions
         : [];
-    const found = list.find(
-      (sess) => typeof sess.title === "string" && sess.title.includes(title),
-    );
+    const found = list.find((sess) => {
+      if (typeof sess.title !== "string") return false;
+      const sessTitle = sess.title;
+      // タイトルは opencode 側の実装によって一部が省略される可能性があるため、
+      // 完全一致ではなく「どちらか一方がもう一方を含む」形でマッチさせる。
+      return sessTitle.includes(title) || title.includes(sessTitle);
+    });
     return found ? found.id : null;
   } catch {
     return null;

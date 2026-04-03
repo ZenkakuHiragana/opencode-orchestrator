@@ -9,7 +9,7 @@ import {
   buildTodoWriterPrompt,
   withTaskKeyHint,
 } from "./orchestrator-prompts.js";
-import { parseAuditResult } from "./orchestrator-audit.js";
+import { parseAuditResult, type AuditSummary } from "./orchestrator-audit.js";
 import type {
   AuditorRequirementSnapshot,
   FailureBudgetSnapshot,
@@ -715,40 +715,114 @@ export async function runExecutorAndAuditorStep(
     const auditPromptBase = buildAuditPrompt(opts.prompt, opts.task);
     const auditPrompt = withTaskKeyHint(auditPromptBase, opts.task);
     const auditTitle = `orchestrator-audit ${opts.task} step=${step} ${new Date().toISOString()}`;
-    // Auditor must run in its own short-lived session so that its context
-    // does not get混在しないように、専用タイトルでセッションを作る。
-    const auditRes = await runOpencode(
-      [
-        "run",
-        "--command",
-        "orch-audit",
-        "--title",
-        auditTitle,
-        "--format",
-        "json",
-        ...fileArgs,
-        "--",
-        auditPrompt,
-      ],
-      auditRaw,
-      false,
-    );
+    // Auditor は毎回専用タイトルで短命セッションとして起動する。
+    //
+    // すでに Todo-Writer / Executor については "I'm sorry, but I cannot
+    // assist with that request." を検出してセッション再起動を行う
+    // safety 機構があるが、Auditor でも「契約どおりの出力が返らなかった」
+    // 場合に限定して同様に 1 回だけ再試行する。
+    //
+    // 再試行条件:
+    // - "I'm sorry, but I cannot assist with that request." を含む
+    // - もしくは parseAuditResult が parseError を返した
+    // 上記のいずれかで、かつこのステップでまだ再試行していない場合。
 
-    const auditSafety = auditRes.stdout.includes(
-      "I'm sorry, but I cannot assist with that request.",
-    );
-    if (auditSafety) {
+    // Auditor の再試行回数は loop オプションの --max-restarts と揃える。
+    //
+    // - maxRestarts は Todo-Writer / Executor のセッション再起動回数の上限だが、
+    //   ここでは「Auditor を同一ステップ内で何回まで再実行してよいか」の上限
+    //   としても流用する。
+    // - 少なくとも 1 回は必ず実行されるように、0 や負の値は 1 として扱う。
+    const maxAuditAttempts = Math.max(1, opts.maxRestarts);
+    let auditSafety = false;
+    let auditDone = false;
+    let failed: AuditSummary["failed"] = [];
+    let passed: string[] = [];
+    let parseErrorFromAudit: string | null | undefined = null;
+    let auditorSessionId: string | null = null;
+    let attemptsInCurrentSession = 0;
+
+    for (let attempt = 1; attempt <= maxAuditAttempts; attempt++) {
+      const canReuseSession =
+        auditorSessionId !== null &&
+        attemptsInCurrentSession > 0 &&
+        attemptsInCurrentSession < 3;
+
+      const useExistingSession = canReuseSession;
+
+      const args: string[] = useExistingSession
+        ? [
+            "run",
+            "--session",
+            auditorSessionId as string,
+            ...fileArgs,
+            "--",
+            auditPrompt,
+          ]
+        : [
+            "run",
+            "--command",
+            "orch-audit",
+            "--title",
+            auditTitle,
+            "--format",
+            "json",
+            ...fileArgs,
+            "--",
+            auditPrompt,
+          ];
+
+      const auditRes = await runOpencode(args, auditRaw, false);
+
+      auditSafety = auditRes.stdout.includes(
+        "I'm sorry, but I cannot assist with that request.",
+      );
+
+      const summary = parseAuditResult(auditRes.stdout);
+      auditDone = summary.done;
+      failed = summary.failed;
+      passed = summary.passed;
+      parseErrorFromAudit = summary.parseError ?? null;
+
+      // セッション単位の試行カウンタを更新する。
+      if (useExistingSession) {
+        attemptsInCurrentSession += 1;
+      } else {
+        attemptsInCurrentSession = 1;
+      }
+
+      const hasContractOutput = !parseErrorFromAudit;
+      const shouldRetry =
+        attempt < maxAuditAttempts && (auditSafety || !hasContractOutput);
+
+      if (shouldRetry && !useExistingSession) {
+        // 新しい Auditor セッションで契約外出力だった場合に、タイトル
+        // からセッション ID を特定する。次回は run --session で continue
+        // を試みる。
+        try {
+          auditorSessionId = await findSessionIdByTitle(auditTitle);
+        } catch {
+          auditorSessionId = null;
+        }
+      }
+
+      if (!shouldRetry) {
+        // 最終試行として扱う。
+        if (auditSafety) {
+          console.error(
+            "[opencode-orchestrator] auditor の出力で safety trip を検出しました。このステップは done=false として扱い、ループを継続します。",
+          );
+        }
+        break;
+      }
+
+      // 契約どおりの出力が得られなかったため、このステップ内で
+      // もう 1 度だけ auditor を再試行する。
       console.error(
-        "[opencode-orchestrator] auditor の出力で safety trip を検出しました。このステップは done=false として扱い、ループを継続します。",
+        `[opencode-orchestrator] auditor の出力が契約どおりではありませんでした (attempt=${attempt}/${maxAuditAttempts - 1})。このステップ内で再試行します。`,
       );
     }
 
-    const {
-      done: auditDone,
-      failed,
-      passed,
-      parseError: parseErrorFromAudit,
-    } = parseAuditResult(auditRes.stdout);
     auditParseError = parseErrorFromAudit ?? null;
     stepDone = auditDone;
     if (parseErrorFromAudit) {
@@ -832,18 +906,21 @@ export async function runExecutorAndAuditorStep(
     }
 
     // Best-effort cleanup: locate the dedicated auditor session by title and
-    // delete it so that it does not linger in the session list.
+    // delete it so that it does not linger in the session list。
     try {
-      const auditorSessionId = await findSessionIdByTitle(auditTitle);
-      if (auditorSessionId) {
+      let cleanupSessionId = auditorSessionId;
+      if (!cleanupSessionId) {
+        cleanupSessionId = await findSessionIdByTitle(auditTitle);
+      }
+      if (cleanupSessionId) {
         await runOpencode(
-          ["session", "delete", auditorSessionId],
+          ["session", "delete", cleanupSessionId],
           undefined,
           false,
         );
       }
     } catch {
-      // Cleanup failure is non-fatal; continue without aborting the loop.
+      // Cleanup failureは非致命的。ループの継続を優先する。
     }
   } else if (lastAuditStatus === "ready") {
     // ready だが shouldAudit=false ということは、STEP_VERIFY 側の

@@ -1,6 +1,14 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
+import { t } from "./i18n/messages.js";
+import { getOrchestratorStateDir } from "./orchestrator-paths.js";
+import { listKnownTasks, suggestTasks } from "./task-resolution.js";
+
+export interface StatusCommandOptions {
+  argv: string[];
+}
+
 export type ExecutorTodoSnapshot = {
   id: string;
   requirements: string[];
@@ -116,6 +124,208 @@ export type OrchestratorStatus = {
   consecutive_env_blocked?: number;
   failure_budget?: FailureBudgetSnapshot;
 };
+
+export async function runStatusCommand(
+  opts: StatusCommandOptions,
+): Promise<number> {
+  const args = [...opts.argv];
+
+  let explicitTask: string | undefined;
+  for (let i = 0; i < args.length; i += 1) {
+    if (args[i] === "--task") {
+      explicitTask = args[i + 1];
+      break;
+    }
+  }
+
+  const knownInfos = listKnownTasks();
+  const knownTasks = knownInfos.map((info) => info.task);
+
+  let task: string;
+
+  if (!explicitTask) {
+    if (knownTasks.length === 0) {
+      console.error(t("cli.status.error.no_tasks_found"));
+      return 1;
+    }
+    if (knownTasks.length > 1) {
+      console.error(
+        t("cli.status.error.multiple_tasks", {
+          tasks: knownTasks.join(", "),
+        }),
+      );
+      return 1;
+    }
+    task = knownTasks[0];
+  } else {
+    if (knownTasks.length === 0) {
+      console.error(
+        t("cli.status.error.unknown_task_no_suggestions", {
+          input: explicitTask,
+        }),
+      );
+      return 1;
+    }
+
+    if (!knownTasks.includes(explicitTask)) {
+      const suggestions = suggestTasks(explicitTask, knownTasks);
+      if (suggestions.length > 0) {
+        const names = suggestions.map((s) => s.task).join(", ");
+        console.error(
+          t("cli.status.error.unknown_task_with_suggestions", {
+            input: explicitTask,
+            candidates: names,
+          }),
+        );
+        return 1;
+      }
+
+      console.error(
+        t("cli.status.error.unknown_task_no_suggestions", {
+          input: explicitTask,
+        }),
+      );
+      return 1;
+    }
+
+    task = explicitTask;
+  }
+  const exitCode = printStatusSummary(task);
+  return exitCode;
+}
+
+function derivePhase(
+  loopStatus: string | null,
+  status: OrchestratorStatus,
+): "planning" | "execution_ready" | "env_blocked" | "completed" | "unknown" {
+  if (loopStatus === "needs_refinement") return "planning";
+  if (loopStatus === "blocked_by_environment") return "env_blocked";
+  if (loopStatus === "ready_for_loop") return "execution_ready";
+
+  const report = status.last_auditor_report;
+  if (
+    report &&
+    report.done &&
+    Array.isArray(report.requirements) &&
+    report.requirements.length > 0 &&
+    report.requirements.every((r) => r.passed)
+  ) {
+    return "completed";
+  }
+
+  return "unknown";
+}
+
+function countOpenProposals(proposalsPath: string): number {
+  if (!fs.existsSync(proposalsPath)) return 0;
+  try {
+    const raw = fs.readFileSync(proposalsPath, "utf8");
+    const json = JSON.parse(raw) as {
+      proposals?: { status?: string }[];
+    };
+    if (!json.proposals || !Array.isArray(json.proposals)) return 0;
+    return json.proposals.filter((p) => p.status === "open").length;
+  } catch {
+    return 0;
+  }
+}
+
+function readLoopStatus(policyPath: string): string | null {
+  try {
+    const raw = fs.readFileSync(policyPath, "utf8");
+    const json = JSON.parse(raw) as {
+      summary?: { loop_status?: string };
+    };
+    const s = json.summary?.loop_status;
+    return typeof s === "string" ? s : null;
+  } catch {
+    return null;
+  }
+}
+
+function printStatusSummary(task: string): number {
+  const stateDir = getOrchestratorStateDir(task);
+  if (!fs.existsSync(stateDir) || !fs.statSync(stateDir).isDirectory()) {
+    console.error(t("cli.status.error.state_missing", { task }));
+    return 1;
+  }
+
+  const statusPath = path.join(stateDir, "status.json");
+  const policyPath = path.join(stateDir, "command-policy.json");
+  const proposalsPath = path.join(stateDir, "proposals.json");
+
+  const status = loadStatusJson(statusPath);
+  const loopStatus = readLoopStatus(policyPath);
+  const phase = derivePhase(loopStatus, status);
+  const openCount = countOpenProposals(proposalsPath);
+  const lastFailureSummary =
+    status.failure_budget?.last_failure_summary?.trim() || "";
+
+  console.error(t("cli.status.summary.header", { task }));
+
+  switch (phase) {
+    case "planning":
+      console.error(t("cli.status.summary.phase.planning"));
+      break;
+    case "execution_ready":
+      console.error(t("cli.status.summary.phase.execution_ready"));
+      break;
+    case "env_blocked":
+      console.error(t("cli.status.summary.phase.env_blocked"));
+      break;
+    case "completed":
+      console.error(t("cli.status.summary.phase.completed"));
+      break;
+    default:
+      console.error(t("cli.status.summary.phase.unknown"));
+      break;
+  }
+
+  if (lastFailureSummary.length > 0) {
+    console.error(
+      t("cli.status.summary.last_failure", {
+        summary: lastFailureSummary,
+      }),
+    );
+  }
+
+  if (openCount === 0) {
+    console.error(t("cli.status.summary.open_proposals.none"));
+  } else {
+    console.error(
+      t("cli.status.summary.open_proposals.some", {
+        count: String(openCount),
+      }),
+    );
+  }
+
+  let nextActionKey: string;
+  switch (phase) {
+    case "planning":
+      nextActionKey = "cli.status.summary.next_action.planning";
+      break;
+    case "env_blocked":
+      nextActionKey = "cli.status.summary.next_action.env_blocked";
+      break;
+    case "execution_ready":
+      nextActionKey = "cli.status.summary.next_action.execution_ready";
+      break;
+    case "completed":
+      nextActionKey = "cli.status.summary.next_action.completed";
+      break;
+    default:
+      nextActionKey = "cli.status.summary.next_action.unknown";
+      break;
+  }
+
+  console.error(
+    t(nextActionKey as any, {
+      task,
+    }),
+  );
+
+  return 0;
+}
 
 export function loadStatusJson(statusPath: string): OrchestratorStatus {
   if (!fs.existsSync(statusPath)) {

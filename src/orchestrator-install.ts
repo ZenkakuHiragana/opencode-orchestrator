@@ -2,6 +2,8 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import os from "node:os";
 
+import { t } from "./i18n/messages.js";
+
 export type InstallScope = "local" | "global";
 
 export interface InstallOptions {
@@ -11,15 +13,7 @@ export interface InstallOptions {
 const PLUGIN_NAME = "@zenorg/opencode-orchestrator";
 
 export function printInstallUsage(): void {
-  console.error(
-    "使い方: opencode-orchestrator install [options]\n" +
-      "\n" +
-      "OpenCode の設定ファイル (opencode.json) にこのプラグインを追加します。\n" +
-      "\n" +
-      "オプション:\n" +
-      "  (指定なし)      カレントディレクトリの ./opencode.json を作成/更新\n" +
-      "  -g, --global    XDG_CONFIG_HOME/opencode/opencode.json または ~/.config/opencode/opencode.json を作成/更新",
-  );
+  console.error(t("cli.install.usage"));
 }
 
 export function parseInstallArgs(argv: string[]): InstallOptions {
@@ -160,11 +154,11 @@ function readConfigFile(filePath: string): any | undefined {
     return parsed;
   } catch (err) {
     console.error(
-      `[opencode-orchestrator] ERROR: 設定ファイルを JSON として読み取れませんでした: ${filePath}`,
+      t("cli.install.error.invalid_config", {
+        path: filePath,
+      }),
     );
-    console.error(
-      "[opencode-orchestrator] 元のファイルを変更せずに終了します。JSON として有効な形式に修正してから再度実行してください。",
-    );
+    console.error(t("cli.install.error.invalid_config_hint"));
     throw err;
   }
 }
@@ -269,8 +263,9 @@ export async function runInstall(opts: InstallOptions): Promise<void> {
     fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   } catch (err) {
     console.error(
-      `[opencode-orchestrator] ERROR: 設定ディレクトリの作成に失敗しました: ${dir}`,
-      (err as Error).message || err,
+      t("cli.install.error.config_dir", {
+        dir,
+      }),
     );
     throw err;
   }
@@ -295,7 +290,10 @@ export async function runInstall(opts: InstallOptions): Promise<void> {
 
   if (!changed) {
     console.error(
-      `[opencode-orchestrator] すでに "${PLUGIN_NAME}" が有効化されています: ${filePath}`,
+      t("cli.install.info.already_enabled", {
+        plugin: PLUGIN_NAME,
+        path: filePath,
+      }),
     );
     return;
   }
@@ -303,11 +301,15 @@ export async function runInstall(opts: InstallOptions): Promise<void> {
   fs.writeFileSync(filePath, JSON.stringify(config, null, 2), "utf8");
   if (isNewFile) {
     console.error(
-      `[opencode-orchestrator] 新しい OpenCode 設定ファイルを作成しました: ${filePath}`,
+      t("cli.install.info.created", {
+        path: filePath,
+      }),
     );
   } else {
     console.error(
-      `[opencode-orchestrator] 設定ファイルを更新しました: ${filePath}`,
+      t("cli.install.info.updated", {
+        path: filePath,
+      }),
     );
   }
 }

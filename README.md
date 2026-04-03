@@ -100,7 +100,10 @@ npx @zenorg/opencode-orchestrator install
 
 ```bash
 npm install -g @zenorg/opencode-orchestrator
-# npx opencode-orchestrator --help
+# メインのエントリポイント (短いエイリアス)
+ococ --help
+# 互換エイリアス (長い名前の CLI)
+opencode-orchestrator --help
 ```
 
 3. **OpenCode から Orchestrator を有効化**
@@ -136,26 +139,111 @@ OpenCode を再起動すると有効化されます。Tab でエージェント�
 | `"allow"`                      | `Build` など他のエージェントから見える                 |
 | `"deny"`, `"ask"`              | 実行フェーズで呼び出される内部エージェントのみ利用する |
 
-## CLI: `opencode-orchestrator`
+## CLI: `ococ` / `opencode-orchestrator`
 
-現在の CLI には次のサブコマンドがあります。
+実行フェーズ用の CLI には、短い名前の `ococ` (OpenCode Orchestrator CLI) と、
+互換エイリアスである `opencode-orchestrator` の 2 つがあります。
+日常的な利用では `ococ` を使う前提で設計されています。
+
+```sh
+# 代表的な使い方 (短いエイリアス)
+ococ --help
+ococ run --task my-task-key
+ococ status --task my-task-key
+ococ doctor
+ococ fix --task my-task-key
+ococ completion bash
+```
+
+長い名前の CLI (`opencode-orchestrator`) も、既存スクリプトや
+ドキュメントとの互換性のために引き続き利用できますが、この README
+では `ococ` を前提に説明します。
+
+### 高レベルサブコマンド (推奨)
+
+日常的な運用では、次の高レベルサブコマンドを使うことを想定しています。
+
+- `run`: 受け入れ条件や command-policy が整ったタスクの実行を開始します。
+  - 例: `ococ run --task cli-ux-i18n-and-completion`
+- `resume`: 直近で作業していたタスクやセッションを再開します。
+  - 例: `ococ resume`
+- `status`: 特定タスクの現在の状況と、次に何をすればよいかを要約して表示します。
+  - 例: `ococ status --task cli-ux-i18n-and-completion`
+- `doctor`: Node/npm/opencode/state ディレクトリ/ネットワークなど、環境全体の診断を実行します。
+  - 例: `ococ doctor`
+- `fix`: 特定タスクがなぜ進まないのかを読み取り、次に実行すべきコマンド (status/doctor/fix/run など) を説明します。
+  - 例: `ococ fix --task cli-ux-i18n-and-completion`
+- `completion`: bash / PowerShell 用の補完設定を生成します。
+  - 例: `ococ completion bash`
+
+これらのコマンドは、`loop` サブコマンドのような低レベル API を直接
+叩かなくても、実行ループの開始/再開や状況確認・診断が行えるようにする
+ためのフロントドアです。
+
+### シェル補完 (bash / PowerShell)
+
+タブ補完を有効にすると、サブコマンド名や `--task` オプション、既知タスク名
+などを補完できるようになります。`ococ completion <shell>` は、補完用の
+スクリプトを標準出力に書き出します。
+
+#### bash の場合
+
+現在のシェルで一時的に有効化する:
+
+```bash
+eval "$(ococ completion bash)"
+```
+
+毎回自動で読み込む場合は、`~/.bashrc` などに追記します:
+
+```bash
+echo 'eval "$(ococ completion bash)"' >> ~/.bashrc
+```
+
+この設定を有効にしたあと、`ococ` や `opencode-orchestrator` を入力してから
+`Tab` キーを押すと、サブコマンドや `--task` オプション、既知タスク名などが
+候補として表示されます。
+
+#### PowerShell の場合
+
+現在のセッションで一時的に有効化する:
+
+```powershell
+ococ completion powershell | Out-String | Invoke-Expression
+```
+
+毎回自動で読み込む場合は、PowerShell プロファイルに追記します:
+
+```powershell
+'ococ completion powershell | Out-String | Invoke-Expression' |
+  Out-File -FilePath $PROFILE -Encoding UTF8 -Append
+```
+
+設定後は、PowerShell でも `ococ` や `opencode-orchestrator` に対して
+サブコマンド・オプション・タスク名の補完が利用できるようになります。
+
+### 低レベルサブコマンド (上級者向け)
+
+高レベルサブコマンドの裏側では、従来どおりの低レベルサブコマンドも利用
+されています。必要に応じて直接呼び出すこともできますが、通常は
+`ococ run` / `ococ status` / `ococ doctor` / `ococ fix` を使うことを推奨します。
 
 - `list`: 利用可能なタスク一覧を表示
 - `loop`: 指定したタスクの実行ループを開始
 - `clear`: 内部状態のクリア
-  - `--proposals`: `proposals.json` の open な提案をまとめて `resolved` にする
-  - `--resolve <proposal-id>`: 指定した提案 1 件を `resolved` にする
-  - `--dismiss <proposal-id>`: 指定した提案 1 件を `dismissed` にする
-  - いずれも `proposals.json` を更新し、必要に応じてバックアップを作成する
+  - `--proposals`: すべての open な提案を一括で解消する
+  - `--resolve <proposal-id>`: 指定した提案 1 件を解消する
+  - `--dismiss <proposal-id>`: 指定した提案 1 件を却下する
 - `install`: OpenCode の設定ファイルを編集し、このプラグインを登録する
   - `-g`: ホームディレクトリのグローバル設定に登録する
 
-### `loop`: 実行ループの開始
+### `loop`: 実行ループの開始 (低レベル API)
 
-長いストーリーを自動で回すエントリポイントが `loop` サブコマンドです。
+高レベルコマンドよりも細かく挙動を制御したい場合は、
+`loop` を直接呼び出すこともできます。
 
 ```sh
-npx opencode-orchestrator loop --task my-task-key
+npx ococ loop --task my-task-key
 ```
 
 主なオプション:
@@ -223,19 +311,19 @@ npx opencode-orchestrator list
 典型的な出力例 (テキストモード):
 
 ```text
-my-task         loop_status=ready_for_loop    summary=API エンドポイント追加
-large-refactor  loop_status=needs_refinement  summary=大きめのリファクタリング
+my-task         実行可能                  API エンドポイント追加
+large-refactor  計画の見直しが必要        大きめのリファクタリング
 ```
 
 主なオプション:
 
 - `--json`: タスク一覧を JSON 配列で出力
-- `--proposals`: `--task` で指定したタスクの実行フェーズで発生している問題を解決するための提案の一覧。
-  - `proposals.json` から読み出され、`status` / `priority` / `kind` / `source` を含む一覧として表示されます。
+  -- `--proposals`: `--task` で指定したタスクの実行フェーズで発生している問題を解決するための提案の一覧。
+  - 提案ごとの `status` / `priority` / `kind` / `source` などがテキストまたは JSON で表示されます。
   - `--open` を付けると open な提案だけに絞れます。
   - Orch-Planner はこの記録を自律的に読み取ることができます。人間がこの出力をコピーする必要はありません。
 
-JSON 出力例:
+JSON 出力例 (開発者向け):
 
 ```json
 [
@@ -272,7 +360,7 @@ npm install
 npm run build   # dist/cli.js, dist/index.js を生成
 ```
 
-`package.json` で `bin` として `opencode-orchestrator` が公開されます。
+`package.json` で `bin` として `opencode-orchestrator`, `ococ` が公開されます。
 
 ### command-policy ゲート
 
@@ -318,7 +406,7 @@ Spec-Checker / Preflight-Runner が出した結果を、Planner が集約して�
 
 ## エージェント構成
 
-詳細な実装は `agent-roles.md` に詳細がありますが、概要だけまとめます。
+詳細な実装は `agent-roles.md` にありますが、概要だけまとめます。
 
 - Orch-Planner (`orch-planner`)
   - モード: `primary`

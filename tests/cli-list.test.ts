@@ -238,7 +238,7 @@ describe("runList integration", () => {
     );
   });
 
-  it("aligns columns in text format when multiple tasks have different statuses", async () => {
+  it("aligns status column in text format when multiple tasks have different statuses", async () => {
     const originalXdg = process.env.XDG_STATE_HOME;
     const fakeXdg = path.join(
       os.tmpdir(),
@@ -304,16 +304,14 @@ describe("runList integration", () => {
     const alphaLine = colsLines[0];
     const longLine = colsLines[1];
 
-    // Both lines should have "loop_status=" at the same column position
-    const alphaStatusPos = alphaLine.indexOf("loop_status=");
-    const longStatusPos = longLine.indexOf("loop_status=");
+    // Both lines should have status text at the same column position
+    const alphaStatusPos = alphaLine.indexOf("実行可能");
+    const longStatusPos = longLine.indexOf("計画の見直しが必要");
     expect(alphaStatusPos).toBe(longStatusPos);
 
-    // Verify the alpha line has padding between task name and status
-    expect(alphaLine).toMatch(/^alpha\s+loop_status=ready_for_loop\s*$/);
-    expect(longLine).toMatch(
-      /^long-task-name\s+loop_status=needs_refinement\s*$/,
-    );
+    // Verify the alpha line has padding between task name and status text
+    expect(alphaLine).toMatch(/^alpha\s+実行可能\s*$/);
+    expect(longLine).toMatch(/^long-task-name\s+計画の見直しが必要\s*$/);
   });
 
   it("omits loop_status column when no task has it", async () => {
@@ -405,11 +403,13 @@ describe("runList integration", () => {
     const lines = logMock.mock.calls.map((c: unknown[]) => String(c[0]));
 
     expect(lines.length).toBe(2);
-    expect(lines[0]).toContain("summary=Alpha summary from north star.");
-    expect(lines[1]).toContain("summary=Beta summary from spec goal section.");
+    expect(lines[0]).toContain("Alpha summary from north star.");
+    expect(lines[1]).toContain("Beta summary from spec goal section.");
 
-    const alphaSummaryPos = lines[0].indexOf("summary=");
-    const betaSummaryPos = lines[1].indexOf("summary=");
+    const alphaSummaryPos = lines[0].indexOf("Alpha summary from north star.");
+    const betaSummaryPos = lines[1].indexOf(
+      "Beta summary from spec goal section.",
+    );
     expect(alphaSummaryPos).toBe(betaSummaryPos);
   });
 });

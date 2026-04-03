@@ -41,7 +41,8 @@
     "node": ">=18"
   },
   "bin": {
-    "opencode-orchestrator": "dist/cli.js"
+    "opencode-orchestrator": "dist/cli.js",
+    "ococ": "dist/cli.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",

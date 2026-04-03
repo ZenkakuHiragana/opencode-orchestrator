@@ -3,6 +3,7 @@ import * as path from "node:path";
 
 import { getOrchestratorStateDir } from "./orchestrator-paths.js";
 import { loadProposals, saveProposals } from "./orchestrator-proposals.js";
+import { t } from "./i18n/messages.js";
 
 export interface ClearOptions {
   task: string;
@@ -13,18 +14,7 @@ export interface ClearOptions {
 }
 
 export function printClearUsage(): void {
-  console.error(
-    "使い方: opencode-orchestrator clear --task <task-name> [--proposals | --resolve <id> | --dismiss <id>] [-y]\n" +
-      "\n" +
-      "指定したタスクの proposals.json を更新します。\n" +
-      "\n" +
-      "オプション:\n" +
-      "  --task <name>   対象となるタスクキー (例: 'my-task')\n" +
-      "  --proposals     すべての open proposal を resolved にする\n" +
-      "  --resolve <id>  指定した proposal を resolved にする\n" +
-      "  --dismiss <id>  指定した proposal を dismissed にする\n" +
-      "  -y              確認なしで削除を実行する",
-  );
+  console.error(t("cli.clear.usage"));
 }
 
 export function parseClearArgs(argv: string[]): ClearOptions {
@@ -39,7 +29,7 @@ export function parseClearArgs(argv: string[]): ClearOptions {
     if (arg === "--task") {
       const next = argv[++i];
       if (!next) {
-        throw new Error("--task requires a task name");
+        throw new Error(t("cli.clear.error.missing_task_name"));
       }
       task = next;
     } else if (arg === "--proposals") {
@@ -47,31 +37,37 @@ export function parseClearArgs(argv: string[]): ClearOptions {
     } else if (arg === "--resolve") {
       const next = argv[++i];
       if (!next) {
-        throw new Error("--resolve requires a proposal id");
+        throw new Error(t("cli.clear.error.missing_resolve_id"));
       }
       resolveId = next;
     } else if (arg === "--dismiss") {
       const next = argv[++i];
       if (!next) {
-        throw new Error("--dismiss requires a proposal id");
+        throw new Error(t("cli.clear.error.missing_dismiss_id"));
       }
       dismissId = next;
     } else if (arg === "-y") {
       yes = true;
     } else if (arg.startsWith("-")) {
-      throw new Error(`unknown option for clear: ${arg}`);
+      throw new Error(
+        t("cli.clear.error.unknown_option", {
+          option: arg,
+        }),
+      );
     } else {
-      throw new Error(`unexpected argument for clear: ${arg}`);
+      throw new Error(
+        t("cli.clear.error.unexpected_arg", {
+          arg,
+        }),
+      );
     }
   }
 
   if (!task) {
-    throw new Error("--task は clear サブコマンドで必須です");
+    throw new Error(t("cli.clear.error.missing_task"));
   }
   if (!clearProposals && !resolveId && !dismissId) {
-    throw new Error(
-      "clear には --proposals, --resolve, --dismiss のいずれかが必要です",
-    );
+    throw new Error(t("cli.clear.error.no_target"));
   }
 
   return { task, clearProposals, yes, resolveId, dismissId };
@@ -84,26 +80,27 @@ export async function runClear(opts: ClearOptions): Promise<void> {
   const proposals = proposalsFile.proposals;
 
   if (!opts.clearProposals && !opts.resolveId && !opts.dismissId) {
-    console.error(
-      "[opencode-orchestrator] clear: 実行対象が指定されていません (--proposals が必要です)",
-    );
+    console.error(t("cli.clear.error.no_target"));
     return;
   }
 
   if (proposals.length === 0) {
     console.error(
-      `[opencode-orchestrator] タスク "${opts.task}" には削除対象の proposal はありません。`,
+      t("cli.clear.info.no_proposals", {
+        task: opts.task,
+      }),
     );
     return;
   }
 
   if (!opts.yes) {
     console.error(
-      `[opencode-orchestrator] タスク "${opts.task}" から ${proposals.length} 件の proposal を削除しようとしています。`,
+      t("cli.clear.info.confirm", {
+        task: opts.task,
+        count: String(proposals.length),
+      }),
     );
-    console.error(
-      "[opencode-orchestrator] 本当に削除してよい場合は -y を付けてもう一度実行してください。",
-    );
+    console.error(t("cli.clear.info.confirm_hint"));
     return;
   }
 
@@ -126,12 +123,12 @@ export async function runClear(opts: ClearOptions): Promise<void> {
         "utf8",
       );
       console.error(
-        `[opencode-orchestrator] 既存の proposal をバックアップしました: ${backupPath}`,
+        t("cli.clear.info.backup_created", {
+          path: backupPath,
+        }),
       );
     } catch {
-      console.error(
-        "[opencode-orchestrator] WARN: proposal のバックアップに失敗しました。バックアップなしで削除を続行します。",
-      );
+      console.error(t("cli.clear.warn.backup_failed"));
     }
   }
 
@@ -166,6 +163,8 @@ export async function runClear(opts: ClearOptions): Promise<void> {
 
   saveProposals(proposalsPath, proposalsFile);
   console.error(
-    `[opencode-orchestrator] タスク "${opts.task}" の proposal を更新しました。`,
+    t("cli.clear.info.updated", {
+      task: opts.task,
+    }),
   );
 }

@@ -8,6 +8,7 @@ import {
 } from "./orchestrator-paths.js";
 import type { ListOptions } from "./cli-args.js";
 import { getOpenProposals, loadProposals } from "./orchestrator-proposals.js";
+import { t } from "./i18n/messages.js";
 
 interface TaskListEntry {
   task: string;
@@ -78,13 +79,17 @@ export async function runList(opts: ListOptions): Promise<void> {
 
     if (proposals.length === 0) {
       console.error(
-        `[opencode-orchestrator] タスク "${opts.task}" に proposal はありません。`,
+        t("cli.list.proposals.none", {
+          task: opts.task,
+        }),
       );
       return;
     }
 
     console.error(
-      `[opencode-orchestrator] タスク "${opts.task}" の proposal 一覧:`,
+      t("cli.list.proposals.header", {
+        task: opts.task,
+      }),
     );
     for (const p of proposals) {
       console.error(
@@ -108,13 +113,17 @@ export async function runList(opts: ListOptions): Promise<void> {
     const anyErr = err as NodeJS.ErrnoException;
     if (anyErr && anyErr.code === "ENOENT") {
       console.error(
-        `[opencode-orchestrator] orchestrator タスク用のベースディレクトリが存在しません: ${baseDir}`,
+        t("cli.list.error.base_missing", {
+          baseDir,
+        }),
       );
       return;
     }
     console.error(
-      "[opencode-orchestrator] orchestrator ベースディレクトリの読み取りに失敗しました:",
-      anyErr && anyErr.message ? anyErr.message : String(err),
+      t("cli.list.error.base_read_failed", {
+        baseDir,
+        message: anyErr && anyErr.message ? anyErr.message : String(err),
+      }),
     );
     process.exit(1);
   }
@@ -185,7 +194,9 @@ export async function runList(opts: ListOptions): Promise<void> {
 
   if (tasks.length === 0) {
     console.error(
-      `[opencode-orchestrator] ベースディレクトリ配下に orchestrator タスクが見つかりませんでした: ${baseDir}`,
+      t("cli.list.info.no_tasks", {
+        baseDir,
+      }),
     );
     return;
   }
@@ -213,27 +224,39 @@ export async function runList(opts: ListOptions): Promise<void> {
   const taskWidth = Math.max(...tasks.map((t) => t.task.length));
   const statusWidth = hasAnyLoopStatus
     ? Math.max(
-        ...tasks.map((t) =>
-          t.loopStatus ? `loop_status=${t.loopStatus}`.length : 0,
-        ),
+        ...tasks.map((t) => {
+          if (!t.loopStatus) return 0;
+          return describeLoopStatus(t.loopStatus).length;
+        }),
       )
     : 0;
   const summaryWidth = hasAnySummary
-    ? Math.max(
-        ...tasks.map((t) => (t.summary ? `summary=${t.summary}`.length : 0)),
-      )
+    ? Math.max(...tasks.map((t) => (t.summary ? t.summary.length : 0)))
     : 0;
 
   for (const t of tasks) {
     const cols: string[] = [t.task.padEnd(taskWidth)];
     if (hasAnyLoopStatus) {
-      const s = t.loopStatus ? `loop_status=${t.loopStatus}` : "";
+      const s = t.loopStatus ? describeLoopStatus(t.loopStatus) : "";
       cols.push(s.padEnd(statusWidth));
     }
     if (hasAnySummary) {
-      const s = t.summary ? `summary=${t.summary}` : "";
+      const s = t.summary ?? "";
       cols.push(s.padEnd(summaryWidth));
     }
     console.log(cols.join("  "));
+  }
+}
+
+function describeLoopStatus(loopStatus: string): string {
+  switch (loopStatus) {
+    case "ready_for_loop":
+      return t("cli.list.status.ready_for_loop");
+    case "needs_refinement":
+      return t("cli.list.status.needs_refinement");
+    case "blocked_by_environment":
+      return t("cli.list.status.blocked_by_environment");
+    default:
+      return "";
   }
 }

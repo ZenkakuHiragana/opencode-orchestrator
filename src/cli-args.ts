@@ -1,5 +1,6 @@
 import path from "node:path";
 import { getOrchestratorStateDir } from "./orchestrator-paths.js";
+import { t } from "./i18n/messages.js";
 
 export interface LoopOptions {
   task: string;
@@ -49,34 +50,11 @@ export interface ExecOptions {
 }
 
 export function printListUsage() {
-  console.error(
-    "使い方: opencode-orchestrator list [--json] [--task <task-name> --proposals]\n" +
-      "\n" +
-      "orchestrator の状態ディレクトリに存在するタスク一覧を表示します。\n" +
-      "\n" +
-      "オプション:\n" +
-      "  --json                タスク一覧を JSON 形式で出力する\n" +
-      "  --task <name>         対象タスクを 1 つに絞り込む (--proposals と併用)\n" +
-      "  --proposals           タスク一覧の代わりに指定タスクの proposal 一覧を表示する\n" +
-      "  --open                proposal 一覧では status='open' のものだけ表示する",
-  );
+  console.error(t("cli.list.usage"));
 }
 
 export function printExecUsage() {
-  console.error(
-    "使い方: opencode-orchestrator exec [options] [helper-source]\n" +
-      "\n" +
-      "制限付き helper スクリプトを実行します。helper-source を省略した場合は --file または stdin を使います。\n" +
-      "\n" +
-      "オプション:\n" +
-      "  --allow-fs-read <path>   読み取りを許可する作業ディレクトリ基準の相対パス/グロブ (複数可)\n" +
-      "  --allow-fs-write <path>  書き込みを許可する作業ディレクトリ基準の相対パス/グロブ (複数可)\n" +
-      "  --timeout <ms>           実行タイムアウト (デフォルト: 30000)\n" +
-      "  --max-output <bytes>     stdout/stderr 合計の最大収集量 (デフォルト: 65536)\n" +
-      "  --file <path>            helper ソースファイルを指定する\n" +
-      "  --arg <value>            helper 内で argv として見せる値 (複数可)\n" +
-      "  --help, -h               このヘルプを表示する",
-  );
+  console.error(t("cli.exec.usage"));
 }
 
 function validateRelativePathSpec(spec: string, flag: string): void {
@@ -95,33 +73,7 @@ function validateRelativePathSpec(spec: string, flag: string): void {
 }
 
 export function printLoopUsage() {
-  console.error(
-    "使い方: opencode-orchestrator loop --task <task-name> [options] [prompt]\n" +
-      "\n" +
-      "指定したタスクの Executor/Auditor ループを実行します。\n" +
-      "\n" +
-      "必須:\n" +
-      "  --task <name>        実行するタスクキー (例: 'my-task')\n" +
-      "\n" +
-      "オプション:\n" +
-      "  --session <id>      既存セッション ID を指定して継続する\n" +
-      "  --continue           status.json.last_session_id から継続する\n" +
-      "  --commit             ループ完了時に autocommit を依頼する\n" +
-      "  --max-loop <n>      最大ステップ数 (デフォルト: 100)\n" +
-      "  --max-restarts <n>  safety 関連の再起動上限 (デフォルト: 20)\n" +
-      "  --dangerously-skip-command-policy\n" +
-      "    計画フェーズで決めたコマンド定義を無視して自由なコマンド実行を許可する。\n" +
-      "    OpenCode の permission.bash 権限設定は引き続き適用される。\n" +
-      "  --bwrap-skip-command-policy (Windows では利用不可)\n" +
-      "    計画フェーズで決めたコマンド定義を無視して自由なコマンド実行を許可する。\n" +
-      "    ただし、Executor 用の opencode run プロセス全体を Bubblewrap サンドボックス内で実行する。\n" +
-      "    OpenCode の permission.bash 権限設定はサンドボックス内でもそのまま適用される。\n" +
-      "  --bwrap-arg <arg>    bwrap に渡す追加引数 (複数指定可)\n" +
-      "  --file, -f <path>   各ステップの opencode run に添付するファイル\n" +
-      "  --help, -h          このヘルプを表示する\n" +
-      "\n" +
-      "末尾の prompt 引数は省略可能です。省略時は spec.md / acceptance-index.json を元にした既定プロンプトを使用します。",
-  );
+  console.error(t("cli.loop.usage"));
 }
 
 export function parseLoopArgs(argv: string[]): LoopOptions {

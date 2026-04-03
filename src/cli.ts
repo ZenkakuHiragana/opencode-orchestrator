@@ -29,6 +29,16 @@ import {
   runInstall,
 } from "./orchestrator-install.js";
 import { parseAuditResult } from "./orchestrator-audit.js";
+import { t } from "./i18n/messages.js";
+import { runRunCommand } from "./orchestrator-run.js";
+import { runResumeCommand } from "./orchestrator-resume.js";
+import { runStatusCommand } from "./orchestrator-status.js";
+import { runDoctorCommand } from "./orchestrator-doctor.js";
+import { runFixCommand } from "./orchestrator-fix.js";
+import {
+  runCompletionCommand,
+  runCompleteCommand,
+} from "./orchestrator-completion.js";
 
 export { parseLoopArgs, parseListArgs, parseExecArgs } from "./cli-args.js";
 export { printLoopUsage, printListUsage, printExecUsage } from "./cli-args.js";
@@ -153,28 +163,52 @@ export async function runCli(argv: string[]): Promise<number> {
     return 0;
   }
 
+  if (actualSubcommand === "run") {
+    const exitCode = await runRunCommand({ argv: args });
+    return exitCode;
+  }
+
+  if (actualSubcommand === "resume") {
+    const exitCode = await runResumeCommand({ argv: args });
+    return exitCode;
+  }
+
+  if (actualSubcommand === "status") {
+    const exitCode = await runStatusCommand({ argv: args });
+    return exitCode;
+  }
+
+  if (actualSubcommand === "doctor") {
+    const exitCode = await runDoctorCommand({ argv: args });
+    return exitCode;
+  }
+
+  if (actualSubcommand === "fix") {
+    const exitCode = await runFixCommand({ argv: args });
+    return exitCode;
+  }
+
+  if (actualSubcommand === "completion") {
+    const exitCode = await runCompletionCommand({ argv: args });
+    return exitCode;
+  }
+
+  if (actualSubcommand === "__complete") {
+    const exitCode = await runCompleteCommand({ argv: args });
+    return exitCode;
+  }
+
   console.error(
-    `[opencode-orchestrator] unknown subcommand: ${actualSubcommand}`,
+    t("cli.root.unknown_subcommand", {
+      subcommand: String(actualSubcommand ?? ""),
+    }),
   );
   printUsage();
   return 1;
 }
 
 function printUsage() {
-  console.error(
-    "使い方: opencode-orchestrator <subcommand> [options]\n" +
-      "\n" +
-      "サブコマンド:\n" +
-      '  loop  --task <task-name> [--session <ses_...> | --continue] [--commit] [--max-loop N] [--max-restarts M] [--file <path>] "prompt..."\n' +
-      "  list  [--json]   orchestrator タスク一覧または proposal 一覧を表示\n" +
-      '  exec  [--allow-fs-read <path>] [--allow-fs-write <path>] [--file <path>] ["helper-source"]\n' +
-      "  clear --task <task-name> --proposals [-y]   指定タスクの proposal を削除\n" +
-      "  install [-g|--global]   OpenCode 設定ファイルにプラグインを追加\n" +
-      "\n" +
-      "共通オプション:\n" +
-      "  -h, --help       このヘルプを表示\n" +
-      "  -v, --version    バージョン番号を表示\n",
-  );
+  console.error(t("cli.root.usage"));
 }
 
 function isDirectCliInvocation(): boolean {
@@ -194,9 +228,14 @@ if (isDirectCliInvocation()) {
       process.exit(code);
     })
     .catch((err) => {
+      const message =
+        err && typeof err === "object" && "message" in err
+          ? String((err as Error).message)
+          : String(err);
       console.error(
-        "[opencode-orchestrator] fatal error:",
-        err?.message ?? err,
+        t("cli.root.fatal_error", {
+          message,
+        }),
       );
       process.exit(1);
     });

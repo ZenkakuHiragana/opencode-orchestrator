@@ -873,6 +873,89 @@ describe("runExecutorAndAuditorStep", () => {
     );
   });
 
+  it("retries auditor once when output does not contain valid JSON", async () => {
+    const status = createStatus();
+
+    const execStdout = [
+      "STEP_INTENT: verify R1 棚卸し",
+      "STEP_VERIFY: ready cmd-test R1 の検証は完了",
+      "STEP_AUDIT: ready R1",
+    ].join("\n");
+
+    // 1 回目の auditor 実行では契約どおりの JSON が含まれない想定
+    const brokenAuditStdout = "not json at all";
+
+    const auditPayload = {
+      done: true,
+      requirements: [{ id: "R1", passed: true }],
+    };
+    const validAuditStdout = JSON.stringify({
+      part: {
+        type: "text",
+        text: JSON.stringify(auditPayload),
+      },
+    });
+
+    const sessionListStdout = JSON.stringify([
+      { id: "aud-sess-1", title: "orchestrator-audit test-task step=8" },
+    ]);
+
+    // 実行順:
+    //   1. executor
+    //   2. auditor (1 回目: 契約外出力)
+    //   3. session list → auditor セッション ID を取得
+    //   4. auditor (2 回目: 同じセッションに対して run --session)
+    //   5. session delete
+    mockRunOpencode
+      .mockResolvedValueOnce({ code: 0, stdout: execStdout } as any)
+      .mockResolvedValueOnce({ code: 0, stdout: brokenAuditStdout } as any)
+      .mockResolvedValueOnce({ code: 0, stdout: sessionListStdout } as any)
+      .mockResolvedValueOnce({ code: 0, stdout: validAuditStdout } as any)
+      .mockResolvedValueOnce({ code: 0, stdout: "" } as any);
+
+    const res = await runExecutorAndAuditorStep(
+      baseOpts,
+      8,
+      "sess-1",
+      [],
+      "/tmp/logs/orch_step_008.txt",
+      "/tmp/logs/audit_step_008.jsonl",
+      status,
+      "/tmp/state/status.json",
+      0,
+      false,
+      "/tmp/logs",
+    );
+
+    expect(res.done).toBe(true);
+    expect(res.abortLoop).toBe(false);
+    expect(res.skipAuditorThisStep).toBe(false);
+
+    // executor 1 回 + auditor 2 回 + session list 1 回 + session delete 1 回
+    expect(mockRunOpencode).toHaveBeenCalledTimes(5);
+    const auditFirstCallArgs = mockRunOpencode.mock.calls[1][0] as string[];
+    const auditSecondCallArgs = mockRunOpencode.mock.calls[3][0] as string[];
+
+    // 1 回目は新規 orch-audit セッション、2 回目は run --session で同一
+    // セッションに対する continue になっていることを確認する。
+    expect(auditFirstCallArgs).toContain("--command");
+    expect(auditFirstCallArgs).toContain("orch-audit");
+    expect(auditFirstCallArgs).toContain("--title");
+    expect(auditFirstCallArgs).not.toContain("--session");
+
+    expect(auditSecondCallArgs).toContain("--session");
+    expect(auditSecondCallArgs).not.toContain("--command");
+
+    expect(status.last_auditor_report).toBeDefined();
+    expect(status.last_auditor_report?.cycle).toBe(8);
+    expect(status.last_auditor_report?.done).toBe(true);
+    expect(status.last_auditor_report?.requirements).toHaveLength(1);
+    expect(status.last_auditor_report?.requirements[0]).toMatchObject({
+      id: "R1",
+      passed: true,
+    });
+  });
+
   it("creates scope_change and priority_shift proposals from executor blockers", async () => {
     const status = createStatus();
     const tmpState = fs.mkdtempSync(
