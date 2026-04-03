@@ -2,7 +2,11 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 import { t } from "./i18n/messages.js";
-import { listKnownTasks, suggestTasks } from "./task-resolution.js";
+import {
+  listKnownTasks,
+  sortTasksByRecency,
+  suggestRecentTasks,
+} from "./task-resolution.js";
 import { getOrchestratorStateDir } from "./orchestrator-paths.js";
 
 export interface FixCommandOptions {
@@ -71,11 +75,19 @@ export async function runFixCommand(opts: FixCommandOptions): Promise<number> {
       return 1;
     }
     if (knownTasks.length > 1) {
+      const recentInfos = sortTasksByRecency(knownInfos);
+      const recentTasks = recentInfos.map((info) => info.task);
+
       console.error(
         t("cli.fix.error.multiple_tasks", {
-          tasks: knownTasks.join(", "),
+          tasks: recentTasks.join(", "),
         }),
       );
+
+      if (knownInfos.length > recentInfos.length) {
+        console.error(t("cli.fix.info.multiple_tasks_hint_use_list"));
+      }
+
       return 1;
     }
 
@@ -96,15 +108,18 @@ export async function runFixCommand(opts: FixCommandOptions): Promise<number> {
     return diagnosePlanningForTask(explicitTask);
   }
 
-  const suggestions = suggestTasks(explicitTask, knownTasks);
+  const suggestions = suggestRecentTasks(explicitTask, knownInfos, 5);
   if (suggestions.length > 0) {
-    const names = suggestions.map((s) => s.task).join(", ");
+    const names = suggestions.join(", ");
     console.error(
       t("cli.fix.error.unknown_task_with_suggestions", {
         input: explicitTask,
         candidates: names,
       }),
     );
+    if (knownInfos.length > suggestions.length) {
+      console.error(t("cli.fix.info.unknown_task_hint_use_list"));
+    }
     return 1;
   }
 

@@ -81,6 +81,89 @@ describe("runRunCommand i18n messages and task resolution", () => {
 
     expect(code).toBe(1);
   });
+
+  it("prints a recency-based unknown-task hint for run in Japanese when many tasks exist", async () => {
+    const tmpBase = fs.mkdtempSync(path.join(os.tmpdir(), "orch-run-unk-ja-"));
+    process.env.XDG_STATE_HOME = tmpBase;
+
+    const baseDir = path.join(tmpBase, "opencode", "orchestrator");
+    const now = Date.now();
+
+    for (let i = 1; i <= 6; i += 1) {
+      const task = `demo-task-${i}`;
+      const stateDir = path.join(baseDir, task, "state");
+      fs.mkdirSync(stateDir, { recursive: true });
+      const time = new Date(now + i * 1000);
+      fs.utimesSync(stateDir, time, time);
+    }
+
+    const opts: RunCommandOptions = { argv: ["--task", "demo-tak"] };
+    const code = await runRunCommand(opts);
+
+    expect(code).toBe(1);
+    const errMock = console.error as unknown as {
+      mock: { calls: unknown[][] };
+    };
+    const lines = errMock.mock.calls.map((c) => String(c[0]));
+    const text = lines.join("\n");
+    expect(text).toContain("もしかして");
+    // Ensure suggestion list is at most 5 items and ordered by recency (task-6, task-5 ...).
+    const suggestLine = lines.find((l) => l.includes("もしかして"));
+    expect(suggestLine).toBeDefined();
+    if (!suggestLine) return;
+    const afterMarker = suggestLine.split("もしかして:")[1];
+    expect(afterMarker).toBeDefined();
+    const tasksText = afterMarker.split("?")[0].trim();
+    const taskNames = tasksText.split(",").map((s) => s.trim());
+    expect(taskNames.length).toBeLessThanOrEqual(5);
+    expect(taskNames[0]).toBe("demo-task-6");
+    expect(taskNames[1]).toBe("demo-task-5");
+    expect(text).toContain(
+      "上には直近で更新されたタスクのみを表示しています。すべてのタスクを確認するには 'ococ list' を実行してください。",
+    );
+  });
+
+  it("prints a recency-based unknown-task hint for run in English when many tasks exist", async () => {
+    const tmpBase = fs.mkdtempSync(path.join(os.tmpdir(), "orch-run-unk-en-"));
+    process.env.XDG_STATE_HOME = tmpBase;
+    process.env.LC_ALL = "en_US.UTF-8";
+    process.env.LANG = "en_US.UTF-8";
+
+    const baseDir = path.join(tmpBase, "opencode", "orchestrator");
+    const now = Date.now();
+
+    for (let i = 1; i <= 6; i += 1) {
+      const task = `demo-task-${i}`;
+      const stateDir = path.join(baseDir, task, "state");
+      fs.mkdirSync(stateDir, { recursive: true });
+      const time = new Date(now + i * 1000);
+      fs.utimesSync(stateDir, time, time);
+    }
+
+    const opts: RunCommandOptions = { argv: ["--task", "demo-tak"] };
+    const code = await runRunCommand(opts);
+
+    expect(code).toBe(1);
+    const errMock = console.error as unknown as {
+      mock: { calls: unknown[][] };
+    };
+    const lines = errMock.mock.calls.map((c) => String(c[0]));
+    const text = lines.join("\n");
+    expect(text).toContain("Did you mean");
+    const suggestLine = lines.find((l) => l.includes("Did you mean"));
+    expect(suggestLine).toBeDefined();
+    if (!suggestLine) return;
+    const afterMarker = suggestLine.split("Did you mean:")[1];
+    expect(afterMarker).toBeDefined();
+    const tasksText = afterMarker.split("?")[0].trim();
+    const taskNames = tasksText.split(",").map((s) => s.trim());
+    expect(taskNames.length).toBeLessThanOrEqual(5);
+    expect(taskNames[0]).toBe("demo-task-6");
+    expect(taskNames[1]).toBe("demo-task-5");
+    expect(text).toContain(
+      "Showing only the most recently updated tasks above. Run 'ococ list' to see all available tasks.",
+    );
+  });
 });
 
 describe("runResumeCommand i18n messages", () => {

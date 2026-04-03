@@ -26,6 +26,9 @@ export const messagesJa = {
 
   "cli.root.fatal_error": "[opencode-orchestrator] fatal error: {message}",
 
+  "cli.root.error.task_flag_conflict":
+    "[opencode-orchestrator] {subcommand}: --task と -t を同時には指定できません。どちらか一方を使用してください。",
+
   "cli.list.usage":
     "使い方: opencode-orchestrator list [--json] [--task <task-name> --proposals]\n" +
     "\n" +
@@ -117,6 +120,12 @@ export const messagesJa = {
   "cli.run.info.not_ready_generic":
     "[opencode-orchestrator] このタスク向けの高レベル run はまだ実行の準備ができていません。現時点では計画フェーズを完了させたうえで 'ococ loop --task {task}' を直接実行してください。",
 
+  "cli.run.info.multiple_tasks_hint_use_list":
+    "[opencode-orchestrator] 上には直近で更新されたタスクのみを表示しています。すべてのタスクを確認するには 'ococ list' を実行してください。",
+
+  "cli.run.info.unknown_task_hint_use_list":
+    "[opencode-orchestrator] 上には直近で更新されたタスクのみを表示しています。すべてのタスクを確認するには 'ococ list' を実行してください。",
+
   "cli.resume.error.no_tasks_found":
     "[opencode-orchestrator] 実行可能な orchestrator タスクが見つかりません。まず Refiner/Todo-Writer で少なくとも 1 つタスクを用意してから resume を使ってください。",
 
@@ -125,6 +134,12 @@ export const messagesJa = {
 
   "cli.resume.info.not_ready_generic":
     "[opencode-orchestrator] 高レベル resume はまだセッション再開の準備ができていません。セッションの状態や次のアクションを確認するには 'ococ status --task {task}' や 'ococ fix --task {task}' を利用してください。",
+
+  "cli.resume.info.multiple_tasks_hint_use_list":
+    "[opencode-orchestrator] 上には直近で更新されたタスクのみを表示しています。すべてのタスクを確認するには 'ococ list' を実行してください。",
+
+  "cli.resume.info.unknown_task_hint_use_list":
+    "[opencode-orchestrator] 上には直近で更新されたタスクのみを表示しています。すべてのタスクを確認するには 'ococ list' を実行してください。",
 
   "cli.resume.info.not_ready_planning":
     "[opencode-orchestrator] このタスクのセッションは、計画フェーズや事前チェックが完了していないため再開できません。まず 'ococ status --task {task}' でタスクの状況を確認し、必要に応じて 'ococ fix --task {task}' や 'ococ doctor' を実行してください。",
@@ -146,6 +161,12 @@ export const messagesJa = {
 
   "cli.status.info.not_ready_generic":
     "[opencode-orchestrator] このタスク向けの高レベル status はまだ要約表示の準備ができていません。現時点では 'ococ list' と 'ococ loop --task {task}' を組み合わせて進捗を確認してください。",
+
+  "cli.status.info.multiple_tasks_hint_use_list":
+    "[opencode-orchestrator] 上には直近で更新されたタスクのみを表示しています。すべてのタスクを確認するには 'ococ list' を実行してください。",
+
+  "cli.status.info.unknown_task_hint_use_list":
+    "[opencode-orchestrator] 上には直近で更新されたタスクのみを表示しています。すべてのタスクを確認するには 'ococ list' を実行してください。",
 
   "cli.status.error.state_missing":
     "[opencode-orchestrator] タスク '{task}' の状態ディレクトリが見つかりません。まず計画フェーズを実行してから status を利用してください。",
@@ -212,6 +233,12 @@ export const messagesJa = {
 
   "cli.fix.info.env_blocked":
     "[opencode-orchestrator] このタスクは環境要因 (必要なコマンドが利用できない・実行できない など) によって実行できない状態です。'ococ doctor' を実行して不足しているツールや権限を確認し、問題を解消してから 'ococ run' や 'ococ resume' を再実行してください。",
+
+  "cli.fix.info.multiple_tasks_hint_use_list":
+    "[opencode-orchestrator] 上には直近で更新されたタスクのみを表示しています。すべてのタスクを確認するには 'ococ list' を実行してください。",
+
+  "cli.fix.info.unknown_task_hint_use_list":
+    "[opencode-orchestrator] 上には直近で更新されたタスクのみを表示しています。すべてのタスクを確認するには 'ococ list' を実行してください。",
 
   "cli.doctor.info.tools_ok":
     "[opencode-orchestrator] Node/npm/npx/opencode CLI は一通り見つかりました。環境面の前提条件はおおむね満たされています。",

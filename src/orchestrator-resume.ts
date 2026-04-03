@@ -5,7 +5,11 @@ import { t } from "./i18n/messages.js";
 import { parseLoopArgs } from "./cli-args.js";
 import { runLoop } from "./orchestrator-loop.js";
 import { getOrchestratorStateDir } from "./orchestrator-paths.js";
-import { listKnownTasks, suggestTasks } from "./task-resolution.js";
+import {
+  listKnownTasks,
+  sortTasksByRecency,
+  suggestRecentTasks,
+} from "./task-resolution.js";
 
 export interface ResumeCommandOptions {
   argv: string[];
@@ -34,11 +38,16 @@ export async function runResumeCommand(
     }
 
     if (tasks.length > 1) {
+      const recent = sortTasksByRecency(infos, 5);
+      const shown = recent.map((info) => info.task);
       console.error(
         t("cli.resume.error.multiple_tasks", {
-          tasks: tasks.join(", "),
+          tasks: shown.join(", "),
         }),
       );
+      if (tasks.length > shown.length) {
+        console.error(t("cli.resume.info.multiple_tasks_hint_use_list"));
+      }
       return 1;
     }
 
@@ -53,15 +62,18 @@ export async function runResumeCommand(
       return 1;
     }
 
-    const suggestions = suggestTasks(task, knownTasks);
+    const suggestions = suggestRecentTasks(task, infos, 5);
     if (suggestions.length > 0) {
-      const names = suggestions.map((s) => s.task).join(", ");
+      const names = suggestions.join(", ");
       console.error(
         t("cli.status.error.unknown_task_with_suggestions", {
           input: task,
           candidates: names,
         }),
       );
+      if (infos.length > suggestions.length) {
+        console.error(t("cli.resume.info.unknown_task_hint_use_list"));
+      }
       return 1;
     }
 

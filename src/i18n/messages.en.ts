@@ -26,6 +26,9 @@ export const messagesEn = {
 
   "cli.root.fatal_error": "[opencode-orchestrator] fatal error: {message}",
 
+  "cli.root.error.task_flag_conflict":
+    "[opencode-orchestrator] {subcommand}: please use either --task or -t, not both.",
+
   "cli.list.usage":
     "Usage: opencode-orchestrator list [--json] [--task <task-name> --proposals]\n" +
     "\n" +
@@ -193,6 +196,12 @@ export const messagesEn = {
   "cli.run.info.not_ready_generic":
     "[opencode-orchestrator] High-level 'run' is not ready to start the loop for this task yet. For now, use 'ococ loop --task {task}' after finishing planning.",
 
+  "cli.run.info.multiple_tasks_hint_use_list":
+    "[opencode-orchestrator] Showing only the most recently updated tasks above. Run 'ococ list' to see all available tasks.",
+
+  "cli.run.info.unknown_task_hint_use_list":
+    "[opencode-orchestrator] Showing only the most recently updated tasks above. Run 'ococ list' to see all available tasks.",
+
   "cli.resume.error.no_tasks_found":
     "[opencode-orchestrator] No orchestrator tasks were found. Run planning for at least one task before using 'resume'.",
 
@@ -201,6 +210,12 @@ export const messagesEn = {
 
   "cli.resume.info.not_ready_generic":
     "[opencode-orchestrator] High-level 'resume' is not ready to continue a session yet. Use 'ococ status --task {task}' and 'ococ fix --task {task}' to inspect what remains before resuming.",
+
+  "cli.resume.info.multiple_tasks_hint_use_list":
+    "[opencode-orchestrator] Showing only the most recently updated tasks above. Run 'ococ list' to see all available tasks.",
+
+  "cli.resume.info.unknown_task_hint_use_list":
+    "[opencode-orchestrator] Showing only the most recently updated tasks above. Run 'ococ list' to see all available tasks.",
 
   "cli.resume.info.not_ready_planning":
     "[opencode-orchestrator] This task's session cannot be resumed yet because planning or preflight checks are not finished. Start with 'ococ status --task {task}' to inspect the task, then use 'ococ fix --task {task}' or 'ococ doctor' if needed before running 'ococ resume' again.",
@@ -222,6 +237,12 @@ export const messagesEn = {
 
   "cli.status.info.not_ready_generic":
     "[opencode-orchestrator] High-level 'status' is not ready to summarize this task yet. For now, combine 'ococ list' and 'ococ loop --task {task}' to inspect progress.",
+
+  "cli.status.info.multiple_tasks_hint_use_list":
+    "[opencode-orchestrator] Showing only the most recently updated tasks above. Run 'ococ list' to see all available tasks.",
+
+  "cli.status.info.unknown_task_hint_use_list":
+    "[opencode-orchestrator] Showing only the most recently updated tasks above. Run 'ococ list' to see all available tasks.",
 
   "cli.status.error.state_missing":
     "[opencode-orchestrator] State directory for task '{task}' could not be found. Run planning for this task before using 'status'.",
@@ -288,6 +309,12 @@ export const messagesEn = {
 
   "cli.fix.info.env_blocked":
     "[opencode-orchestrator] This task cannot run because required commands are unavailable or cannot execute in the current environment. Run 'ococ doctor' to identify missing tools or permission issues, fix them, and then re-run 'ococ run' or 'ococ resume'.",
+
+  "cli.fix.info.multiple_tasks_hint_use_list":
+    "[opencode-orchestrator] Showing only the most recently updated tasks above. Run 'ococ list' to see all available tasks.",
+
+  "cli.fix.info.unknown_task_hint_use_list":
+    "[opencode-orchestrator] Showing only the most recently updated tasks above. Run 'ococ list' to see all available tasks.",
 
   "cli.doctor.info.tools_ok":
     "[opencode-orchestrator] Node, npm, npx, and the opencode CLI were all found. Environment prerequisites look OK.",

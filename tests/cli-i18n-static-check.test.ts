@@ -84,6 +84,7 @@ describe("CLI i18n static check", () => {
       "src/orchestrator-resume.ts",
       "src/orchestrator-status.ts",
       "src/orchestrator-fix.ts",
+      "src/task-resolution.ts",
     ]);
 
     const offending: { file: string; token: string }[] = [];

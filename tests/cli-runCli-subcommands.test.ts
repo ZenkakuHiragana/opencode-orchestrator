@@ -165,6 +165,104 @@ describe("runCli subcommands", () => {
     expect(runRunCommandMock).toHaveBeenCalledWith({ argv: ["--task", "t1"] });
   });
 
+  it("rewrites -t to --task for task-accepting subcommands", async () => {
+    runRunCommandMock.mockResolvedValueOnce(0);
+    const { runCli } = await import("../src/cli.js");
+
+    const code = await runCli(["run", "-t", "t1"]);
+
+    expect(code).toBe(0);
+    expect(runRunCommandMock).toHaveBeenCalledTimes(1);
+    expect(runRunCommandMock).toHaveBeenCalledWith({ argv: ["--task", "t1"] });
+  });
+
+  it("rejects when both --task and -t are provided", async () => {
+    const { runCli } = await import("../src/cli.js");
+
+    const code = await runCli(["run", "--task", "t1", "-t", "t2"]);
+
+    expect(code).toBe(1);
+    expect(runRunCommandMock).not.toHaveBeenCalled();
+  });
+
+  it("rewrites -t to --task for resume/status/doctor/fix/list", async () => {
+    runResumeCommandMock.mockResolvedValueOnce(0);
+    runStatusCommandMock.mockResolvedValueOnce(0);
+    runDoctorCommandMock.mockResolvedValueOnce(0);
+    runFixCommandMock.mockResolvedValueOnce(0);
+    const { runCli } = await import("../src/cli.js");
+
+    let code = await runCli(["resume", "-t", "t1"]);
+    expect(code).toBe(0);
+    expect(runResumeCommandMock).toHaveBeenCalledTimes(1);
+    expect(runResumeCommandMock).toHaveBeenCalledWith({
+      argv: ["--task", "t1"],
+    });
+
+    code = await runCli(["status", "-t", "t2"]);
+    expect(code).toBe(0);
+    expect(runStatusCommandMock).toHaveBeenCalledTimes(1);
+    expect(runStatusCommandMock).toHaveBeenCalledWith({
+      argv: ["--task", "t2"],
+    });
+
+    code = await runCli(["doctor", "-t", "t3"]);
+    expect(code).toBe(0);
+    expect(runDoctorCommandMock).toHaveBeenCalledTimes(1);
+    expect(runDoctorCommandMock).toHaveBeenCalledWith({
+      argv: ["--task", "t3"],
+    });
+
+    code = await runCli(["fix", "-t", "t4"]);
+    expect(code).toBe(0);
+    expect(runFixCommandMock).toHaveBeenCalledTimes(1);
+    expect(runFixCommandMock).toHaveBeenCalledWith({
+      argv: ["--task", "t4"],
+    });
+
+    runListMock.mockClear();
+    const listCode = await runCli(["list", "-t", "t5", "--proposals"]);
+    expect(listCode).toBe(0);
+    expect(runListMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("rewrites -t to --task for loop before parsing", async () => {
+    runLoopMock.mockResolvedValueOnce(true);
+    const { runCli } = await import("../src/cli.js");
+
+    const code = await runCli(["loop", "-t", "t1", "do it"]);
+
+    expect(code).toBe(0);
+    expect(runLoopMock).toHaveBeenCalledTimes(1);
+    const call = runLoopMock.mock.calls[0] as unknown[];
+    const opts = call[0] as { task: string };
+    expect(opts.task).toBe("t1");
+  });
+
+  it("rejects when both --task and -t are provided for other task-accepting subcommands", async () => {
+    const { runCli } = await import("../src/cli.js");
+
+    let code = await runCli(["resume", "--task", "t1", "-t", "t2"]);
+    expect(code).toBe(1);
+    expect(runResumeCommandMock).not.toHaveBeenCalled();
+
+    code = await runCli(["status", "--task", "t1", "-t", "t2"]);
+    expect(code).toBe(1);
+    expect(runStatusCommandMock).not.toHaveBeenCalled();
+
+    code = await runCli(["doctor", "--task", "t1", "-t", "t2"]);
+    expect(code).toBe(1);
+    expect(runDoctorCommandMock).not.toHaveBeenCalled();
+
+    code = await runCli(["fix", "--task", "t1", "-t", "t2"]);
+    expect(code).toBe(1);
+    expect(runFixCommandMock).not.toHaveBeenCalled();
+
+    code = await runCli(["list", "--task", "t1", "-t", "t2", "--proposals"]);
+    expect(code).toBe(1);
+    expect(runListMock).not.toHaveBeenCalled();
+  });
+
   it("calls runResumeCommand and returns its exit code", async () => {
     runResumeCommandMock.mockResolvedValueOnce(0);
     const { runCli } = await import("../src/cli.js");

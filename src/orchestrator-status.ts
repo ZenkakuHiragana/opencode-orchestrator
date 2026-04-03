@@ -3,7 +3,11 @@ import * as path from "node:path";
 
 import { t } from "./i18n/messages.js";
 import { getOrchestratorStateDir } from "./orchestrator-paths.js";
-import { listKnownTasks, suggestTasks } from "./task-resolution.js";
+import {
+  listKnownTasks,
+  sortTasksByRecency,
+  suggestRecentTasks,
+} from "./task-resolution.js";
 
 export interface StatusCommandOptions {
   argv: string[];
@@ -149,11 +153,16 @@ export async function runStatusCommand(
       return 1;
     }
     if (knownTasks.length > 1) {
+      const recent = sortTasksByRecency(knownInfos, 5);
+      const shown = recent.map((info) => info.task);
       console.error(
         t("cli.status.error.multiple_tasks", {
-          tasks: knownTasks.join(", "),
+          tasks: shown.join(", "),
         }),
       );
+      if (knownTasks.length > shown.length) {
+        console.error(t("cli.status.info.multiple_tasks_hint_use_list"));
+      }
       return 1;
     }
     task = knownTasks[0];
@@ -168,15 +177,18 @@ export async function runStatusCommand(
     }
 
     if (!knownTasks.includes(explicitTask)) {
-      const suggestions = suggestTasks(explicitTask, knownTasks);
+      const suggestions = suggestRecentTasks(explicitTask, knownInfos, 5);
       if (suggestions.length > 0) {
-        const names = suggestions.map((s) => s.task).join(", ");
+        const names = suggestions.join(", ");
         console.error(
           t("cli.status.error.unknown_task_with_suggestions", {
             input: explicitTask,
             candidates: names,
           }),
         );
+        if (knownInfos.length > suggestions.length) {
+          console.error(t("cli.status.info.unknown_task_hint_use_list"));
+        }
         return 1;
       }
 

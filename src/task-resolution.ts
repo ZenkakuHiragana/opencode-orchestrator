@@ -106,3 +106,70 @@ export function suggestTasks(
 
   return filtered.slice(0, limit);
 }
+
+export function sortTasksByRecency(infos: TaskInfo[], limit = 5): TaskInfo[] {
+  if (infos.length === 0 || limit <= 0) return [];
+
+  type TaskWithTime = TaskInfo & { mtimeMs: number };
+
+  const withTimes: TaskWithTime[] = infos.map((info) => {
+    const candidates: string[] = [
+      info.stateDir,
+      path.join(info.stateDir, "status.json"),
+      path.join(info.stateDir, "command-policy.json"),
+      path.join(info.stateDir, "proposals.json"),
+      path.join(info.stateDir, "todo.json"),
+    ];
+
+    let best = 0;
+    for (const p of candidates) {
+      try {
+        const stat = fs.statSync(p);
+        if (stat.mtimeMs > best) {
+          best = stat.mtimeMs;
+        }
+      } catch {
+        // ignore missing files
+      }
+    }
+
+    return { ...info, mtimeMs: best };
+  });
+
+  withTimes.sort((a, b) => {
+    if (b.mtimeMs !== a.mtimeMs) {
+      return b.mtimeMs - a.mtimeMs;
+    }
+    return a.task.localeCompare(b.task);
+  });
+
+  return withTimes
+    .slice(0, limit)
+    .map(({ task, stateDir }) => ({ task, stateDir }));
+}
+
+export function suggestRecentTasks(
+  input: string,
+  infos: TaskInfo[],
+  limit = 5,
+): string[] {
+  const trimmed = input.trim();
+  if (!trimmed || infos.length === 0 || limit <= 0) {
+    return [];
+  }
+
+  const recent = sortTasksByRecency(infos, infos.length);
+
+  const maxScore = Math.max(3, Math.floor(trimmed.length / 2));
+  const candidates: string[] = [];
+
+  for (const info of recent) {
+    const score = computeEditDistance(trimmed, info.task);
+    if (score <= maxScore) {
+      candidates.push(info.task);
+      if (candidates.length >= limit) break;
+    }
+  }
+
+  return candidates;
+}

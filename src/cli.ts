@@ -127,6 +127,38 @@ export async function runCli(argv: string[]): Promise<number> {
 
   const actualSubcommand = args.shift();
 
+  const taskAwareSubcommands = new Set([
+    "loop",
+    "run",
+    "resume",
+    "status",
+    "doctor",
+    "fix",
+    "list",
+  ]);
+
+  if (actualSubcommand && taskAwareSubcommands.has(actualSubcommand)) {
+    const hasLong = args.includes("--task");
+    const hasShort = args.includes("-t");
+
+    if (hasLong && hasShort) {
+      console.error(
+        t("cli.root.error.task_flag_conflict", {
+          subcommand: actualSubcommand,
+        }),
+      );
+      return 1;
+    }
+
+    if (!hasLong && hasShort) {
+      for (let i = 0; i < args.length; i += 1) {
+        if (args[i] === "-t") {
+          args[i] = "--task";
+        }
+      }
+    }
+  }
+
   if (actualSubcommand === "loop") {
     const opts = parseLoopArgs(args);
     const done = await runLoop(opts);

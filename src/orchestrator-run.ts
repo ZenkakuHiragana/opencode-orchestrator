@@ -2,7 +2,11 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 import { t } from "./i18n/messages.js";
-import { listKnownTasks, suggestTasks } from "./task-resolution.js";
+import {
+  listKnownTasks,
+  sortTasksByRecency,
+  suggestRecentTasks,
+} from "./task-resolution.js";
 import { getOrchestratorStateDir } from "./orchestrator-paths.js";
 import { parseLoopArgs } from "./cli-args.js";
 import { runLoop } from "./orchestrator-loop.js";
@@ -31,11 +35,16 @@ export async function runRunCommand(opts: RunCommandOptions): Promise<number> {
       return 1;
     }
     if (knownTasks.length > 1) {
+      const recent = sortTasksByRecency(knownInfos, 5);
+      const shown = recent.map((info) => info.task);
       console.error(
         t("cli.run.error.multiple_tasks", {
-          tasks: knownTasks.join(", "),
+          tasks: shown.join(", "),
         }),
       );
+      if (knownTasks.length > shown.length) {
+        console.error(t("cli.run.info.multiple_tasks_hint_use_list"));
+      }
       return 1;
     }
 
@@ -56,15 +65,18 @@ export async function runRunCommand(opts: RunCommandOptions): Promise<number> {
     return await runForResolvedTask(explicitTask);
   }
 
-  const suggestions = suggestTasks(explicitTask, knownTasks);
+  const suggestions = suggestRecentTasks(explicitTask, knownInfos, 5);
   if (suggestions.length > 0) {
-    const names = suggestions.map((s) => s.task).join(", ");
+    const names = suggestions.join(", ");
     console.error(
       t("cli.run.error.unknown_task_with_suggestions", {
         input: explicitTask,
         candidates: names,
       }),
     );
+    if (knownInfos.length > suggestions.length) {
+      console.error(t("cli.run.info.unknown_task_hint_use_list"));
+    }
     return 1;
   }
 
