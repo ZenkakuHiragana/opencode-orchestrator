@@ -6,6 +6,14 @@ import {
 } from "../src/orchestrator-prompts.js";
 
 describe("buildExecutorPrompt", () => {
+  it("starts with a finish-the-todo completion bias", () => {
+    const prompt = buildExecutorPrompt(false, { version: 1 });
+
+    expect(prompt).toContain("finish an actionable todo in this run");
+    expect(prompt).toContain("what counts as completion");
+    expect(prompt).toContain("Do not stop at the first plausible edit");
+  });
+
   it("includes failed requirement prioritization from auditor report", () => {
     const prompt = buildExecutorPrompt(false, {
       version: 1,
@@ -36,8 +44,26 @@ describe("buildExecutorPrompt", () => {
       },
     });
 
+    expect(prompt).toContain("perform a completion review");
     expect(prompt).toContain("STEP_AUDIT: ready");
     expect(prompt).toContain("STEP_VERIFY: ready");
+  });
+
+  it("reinforces strict step output after contract gaps", () => {
+    const prompt = buildExecutorPrompt(false, {
+      version: 1,
+      failure_budget: {
+        todo_writer_safety_restarts: 0,
+        executor_safety_restarts: 0,
+        consecutive_env_blocked: 0,
+        consecutive_audit_failures: 0,
+        consecutive_verification_gaps: 0,
+        consecutive_contract_gaps: 2,
+      },
+    });
+
+    expect(prompt).toContain("exactly one `STEP_INTENT`");
+    expect(prompt).toContain("no free-form text");
   });
 
   it("adds audit-read reminder when shouldEmphasizeAuditRead is true", () => {

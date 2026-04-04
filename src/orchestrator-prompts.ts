@@ -73,7 +73,9 @@ export function buildExecutorPrompt(
   shouldEmphasizeAuditRead: boolean,
   status?: OrchestratorStatus,
 ): string {
-  const parts: string[] = [];
+  const parts: string[] = [
+    "Default mode: finish an actionable todo in this run. Before editing, decide internally what the todo must accomplish, which files or surfaces are likely affected, and what counts as completion; then keep working until it is complete or concretely blocked. Do not stop at the first plausible edit and do not end with future-work language unless you emit a real blocker.",
+  ];
 
   if (shouldEmphasizeAuditRead) {
     parts.push(
@@ -93,7 +95,13 @@ export function buildExecutorPrompt(
 
   if ((status?.failure_budget?.consecutive_verification_gaps ?? 0) > 0) {
     parts.push(
-      "Do not emit `STEP_AUDIT: ready` unless you also emit `STEP_VERIFY: ready` with concrete command IDs or an explicit no-command evidence reason.",
+      "Before marking work audit-ready, perform a completion review against the original request and obvious dependent surfaces. Do not emit `STEP_AUDIT: ready` unless you also emit `STEP_VERIFY: ready` with concrete command IDs or an explicit no-command evidence reason.",
+    );
+  }
+
+  if ((status?.failure_budget?.consecutive_contract_gaps ?? 0) > 0) {
+    parts.push(
+      "Your final reply must contain exactly one `STEP_INTENT`, one `STEP_VERIFY`, and one `STEP_AUDIT` line, with valid status tokens and no free-form text.",
     );
   }
 
