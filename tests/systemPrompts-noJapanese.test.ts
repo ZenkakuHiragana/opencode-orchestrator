@@ -33,4 +33,14 @@ describe("system prompts must not contain Japanese text", () => {
     const content = readFile("agents/orch-spec-checker.md");
     expect(japaneseCharPattern.test(content)).toBe(false);
   });
+
+  it("orch-todo-writer system prompt has no Japanese characters", () => {
+    const content = readFile("agents/orch-todo-writer.md");
+    expect(japaneseCharPattern.test(content)).toBe(false);
+  });
+
+  it("orch-auditor system prompt has no Japanese characters", () => {
+    const content = readFile("agents/orch-auditor.md");
+    expect(japaneseCharPattern.test(content)).toBe(false);
+  });
 });

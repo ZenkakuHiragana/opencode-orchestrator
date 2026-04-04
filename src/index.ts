@@ -18,6 +18,12 @@ import {
   type PreflightRunnerBashPermissionSource,
 } from "./preflight-permission-store.js";
 import { evaluateEffectiveBashPermission } from "./preflight-cli.js";
+import {
+  buildPackagedSkillGlobalDenyRule,
+  mergePermissionConfigPreservingExisting,
+  mergePermissionRulePreservingExisting,
+  ORCHESTRATOR_SKILLS_DIRNAME,
+} from "./orchestrator-skills.js";
 
 export const OrchestratorPlugin: Plugin = async (input) => {
   // Store the OpenCode client so that tools can call the API directly
@@ -30,6 +36,7 @@ export const OrchestratorPlugin: Plugin = async (input) => {
   const agentsDir = path.join(baseDir, "agents");
   const commandsDir = path.join(baseDir, "commands");
   const schemaDir = path.join(baseDir, "resources");
+  const packagedSkillsDir = path.join(baseDir, ORCHESTRATOR_SKILLS_DIRNAME);
 
   const loadJsonSchema = (name: string): string | undefined => {
     const fullPath = path.join(schemaDir, `${name}.json`);
@@ -104,6 +111,42 @@ export const OrchestratorPlugin: Plugin = async (input) => {
         config.command = {};
       }
 
+      const existingSkillPaths = Array.isArray(config.skills?.paths)
+        ? config.skills.paths.filter((value: unknown): value is string => {
+            return typeof value === "string" && value.trim().length > 0;
+          })
+        : [];
+      const needsPackagedSkillsPath = !existingSkillPaths.some(
+        (entry: string) => {
+          return path.resolve(entry) === path.resolve(packagedSkillsDir);
+        },
+      );
+      config.skills = {
+        ...(config.skills ?? {}),
+        paths: needsPackagedSkillsPath
+          ? [...existingSkillPaths, packagedSkillsDir]
+          : existingSkillPaths,
+      };
+
+      const existingGlobalPermission =
+        typeof config.permission === "object" && config.permission !== null
+          ? config.permission
+          : {};
+      // Upstream skill discovery reads config.skills.paths from the merged
+      // config directories, while skill visibility is decided from
+      // permission.skill: available skills are shown in the system prompt only
+      // when allowed for the current agent, and the same permission is checked
+      // again when the skill tool executes. We therefore register the packaged
+      // skills directory here and deny our packaged skill names globally by
+      // default, then re-allow only the intended skills per orchestrator agent.
+      config.permission = {
+        ...existingGlobalPermission,
+        skill: mergePermissionRulePreservingExisting(
+          (existingGlobalPermission as any).skill,
+          buildPackagedSkillGlobalDenyRule(),
+        ),
+      };
+
       // Per-agent visibility control for non-orchestrator agents (e.g. the
       // built-in `build` agent). When an agent's key is absent or set to
       // false, its description is cleared so the task tool shows the generic
@@ -175,9 +218,16 @@ export const OrchestratorPlugin: Plugin = async (input) => {
         const metaForMerge = shouldClearDescription
           ? { ...meta, description: undefined }
           : meta;
+        const mergedPermission = mergePermissionConfigPreservingExisting(
+          (metaForMerge as any).permission,
+          existing && typeof existing.permission === "object"
+            ? existing.permission
+            : undefined,
+        );
         const merged = {
           ...metaForMerge,
           ...existing,
+          permission: mergedPermission,
           ...(prompt ? { prompt } : {}),
         };
         // Rewrite any $XDG_STATE_HOME/legacy state paths in both prompts and

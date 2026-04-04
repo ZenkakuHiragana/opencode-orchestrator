@@ -4,12 +4,20 @@
 // YAML-style permission config (task/write/etc.) that the OpenCode server
 // understands, so we keep this file structurally typed instead.
 
+import {
+  agentUsesSkillTool,
+  buildSkillPermission,
+  orchestratorAgentSkillAllowlist,
+} from "./orchestrator-skills.js";
+
 // Agent metadata (frontmatter equivalent) for orchestrator-related agents.
-// The long prompt bodies live in `agents/*.md` and are loaded at runtime by
-// the plugin's config hook. All fields from the original frontmatter
-// (description, mode, hidden, temperature, tools, permission, etc.) are
-// mirrored here so that the plugin can reconstruct the complete config
-// without relying on markdown parsing. We keep the type loose enough to
+// Core role contracts live in `agents/*.md`; longer reusable procedures are
+// packaged as skills and exposed through per-agent `permission.skill`
+// allowlists. The plugin's config hook loads the markdown prompt bodies and
+// merges them with the metadata here. All fields from the original
+// frontmatter (description, mode, hidden, temperature, tools, permission,
+// etc.) are mirrored here so that the plugin can reconstruct the complete
+// config without relying on markdown parsing. We keep the type loose enough to
 // accept the full PermissionConfig surface.
 
 export type OrchestratorAgentConfig = { [key: string]: any };
@@ -37,7 +45,7 @@ export const orchestratorAgents: Record<string, OrchestratorAgentConfig> = {
       patch: false,
       question: true,
       read: true,
-      skill: false,
+      skill: agentUsesSkillTool("orch-planner"),
       todoread: false,
       todowrite: false,
       orch_todo_read: false,
@@ -65,6 +73,9 @@ export const orchestratorAgents: Record<string, OrchestratorAgentConfig> = {
       external_directory: {
         "$XDG_STATE_HOME/opencode/orchestrator/**": "allow",
       },
+      skill: buildSkillPermission(
+        orchestratorAgentSkillAllowlist["orch-planner"],
+      ),
     },
   },
   "orch-refiner": {
@@ -80,6 +91,7 @@ export const orchestratorAgents: Record<string, OrchestratorAgentConfig> = {
       patch: false,
       question: true,
       read: true,
+      skill: agentUsesSkillTool("orch-refiner"),
       list: true,
       glob: true,
       grep: true,
@@ -104,6 +116,9 @@ export const orchestratorAgents: Record<string, OrchestratorAgentConfig> = {
       external_directory: {
         "$XDG_STATE_HOME/opencode/orchestrator/**": "allow",
       },
+      skill: buildSkillPermission(
+        orchestratorAgentSkillAllowlist["orch-refiner"],
+      ),
     },
   },
   "orch-todo-writer": {
@@ -122,7 +137,7 @@ export const orchestratorAgents: Record<string, OrchestratorAgentConfig> = {
       patch: false,
       question: false,
       read: true,
-      skill: false,
+      skill: agentUsesSkillTool("orch-todo-writer"),
       todoread: false,
       todowrite: true,
       orch_todo_read: true,
@@ -140,6 +155,9 @@ export const orchestratorAgents: Record<string, OrchestratorAgentConfig> = {
       external_directory: {
         "$XDG_STATE_HOME/opencode/orchestrator/**": "allow",
       },
+      skill: buildSkillPermission(
+        orchestratorAgentSkillAllowlist["orch-todo-writer"],
+      ),
     },
   },
   "orch-executor": {
@@ -157,7 +175,7 @@ export const orchestratorAgents: Record<string, OrchestratorAgentConfig> = {
       patch: true,
       question: false,
       read: true,
-      skill: true,
+      skill: agentUsesSkillTool("orch-executor"),
       task: true,
       todoread: false,
       todowrite: true,
@@ -174,6 +192,9 @@ export const orchestratorAgents: Record<string, OrchestratorAgentConfig> = {
         "orch-local-investigator": "allow",
         "orch-public-researcher": "allow",
       },
+      skill: buildSkillPermission(
+        orchestratorAgentSkillAllowlist["orch-executor"],
+      ),
       write: {
         ".opencode/orchestrator/*/artifacts/*": "allow",
       },
@@ -198,7 +219,7 @@ export const orchestratorAgents: Record<string, OrchestratorAgentConfig> = {
       patch: false,
       question: false,
       read: true,
-      skill: false,
+      skill: agentUsesSkillTool("orch-auditor"),
       todoread: false,
       todowrite: false,
       orch_todo_read: false,
@@ -319,6 +340,9 @@ export const orchestratorAgents: Record<string, OrchestratorAgentConfig> = {
       webfetch: "deny",
       websearch: "deny",
       write: "deny",
+      skill: buildSkillPermission(
+        orchestratorAgentSkillAllowlist["orch-auditor"],
+      ),
       external_directory: {
         "$XDG_STATE_HOME/opencode/orchestrator/**": "allow",
       },
@@ -341,7 +365,7 @@ export const orchestratorAgents: Record<string, OrchestratorAgentConfig> = {
       patch: false,
       question: false,
       read: true,
-      skill: false,
+      skill: agentUsesSkillTool("orch-spec-checker"),
       todoread: false,
       todowrite: false,
       orch_todo_read: false,
@@ -368,6 +392,9 @@ export const orchestratorAgents: Record<string, OrchestratorAgentConfig> = {
       webfetch: "deny",
       websearch: "deny",
       write: "deny",
+      skill: buildSkillPermission(
+        orchestratorAgentSkillAllowlist["orch-spec-checker"],
+      ),
       external_directory: {
         "$XDG_STATE_HOME/opencode/orchestrator/**": "allow",
       },
@@ -390,7 +417,7 @@ export const orchestratorAgents: Record<string, OrchestratorAgentConfig> = {
       patch: false,
       question: false,
       read: true,
-      skill: false,
+      skill: agentUsesSkillTool("orch-local-investigator"),
       task: false,
       todoread: false,
       todowrite: false,
@@ -418,6 +445,9 @@ export const orchestratorAgents: Record<string, OrchestratorAgentConfig> = {
       webfetch: "deny",
       websearch: "deny",
       write: "deny",
+      skill: buildSkillPermission(
+        orchestratorAgentSkillAllowlist["orch-local-investigator"],
+      ),
       external_directory: {
         "$XDG_STATE_HOME/opencode/orchestrator/**": "allow",
       },
@@ -440,7 +470,7 @@ export const orchestratorAgents: Record<string, OrchestratorAgentConfig> = {
       patch: false,
       question: false,
       read: true,
-      skill: false,
+      skill: agentUsesSkillTool("orch-public-researcher"),
       task: false,
       todoread: false,
       todowrite: false,
@@ -468,6 +498,9 @@ export const orchestratorAgents: Record<string, OrchestratorAgentConfig> = {
       webfetch: "allow",
       websearch: "allow",
       write: "deny",
+      skill: buildSkillPermission(
+        orchestratorAgentSkillAllowlist["orch-public-researcher"],
+      ),
       external_directory: {
         "$XDG_STATE_HOME/opencode/orchestrator/**": "allow",
       },

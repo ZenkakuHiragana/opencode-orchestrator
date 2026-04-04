@@ -8,12 +8,17 @@
 
 - `agents/*.md`
   - 各エージェントのシステムプロンプト（役割・制約・入出力契約）を英語で定義。
+  - 現在は「常時必要なコア契約」を主に保持し、長い再利用手順は同梱 skill へ移しています。
+- `skills/**/SKILL.md`
+  - Orchestrator 同梱 skill 定義。
+  - `permission.skill` により agent ごとに露出を絞り、prompt 常駐の長手順を減らします。
   - 各エージェントの出力言語ポリシーや、どのパスに対して読み書き可能かを明示。
 - `commands/orch-*.md`
   - Orchestrator 関連 CLI コマンドの「ユーザープロンプト」部分を定義。
   - `opencode run --command orch-...` 実行時に `$ARGUMENTS` が差し込まれる。
 - `src/orchestrator-agents.ts`
   - `orchestratorAgents` テーブルで、各エージェントの使用可能ツールと permission を定義。
+  - `permission.skill` allowlist で、どの agent がどの skill を読めるかもここで固定する。
 - `src/orchestrator-commands.ts`
   - `orchestratorCommands` テーブルで、`orch-todo-write` などのコマンド名 → 紐づくエージェント名
     （`agent` フィールド）を定義。
@@ -235,6 +240,7 @@ sequenceDiagram
     などを揃える。
   - `command-policy.json` の `summary.loop_status` と `commands[]` を最終的に更新する唯一の
     エージェント（コマンド定義自体は Refiner の責務）。
+  - prompt 本体は role boundary / loop-readiness 判定 / human-facing summary に絞り、長い gate-cycle 手順は `orch-planner-gate-cycle` skill に切り出した。
 
 - (B) 主な入力（読むファイル）
   - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/acceptance-index.json`
@@ -255,6 +261,7 @@ sequenceDiagram
     - `Next actions`（次に行うべきステップ）
   - 付随する spec-check / preflight 結果は JSON だが、Planner 自身の最終応答は
     上記の箇条書きテキスト。
+  - substantial な planning / replanning / readiness 判定では `orch-planner-gate-cycle` skill をロードしてから判断する前提。
 
 ## 3. orch-refiner / orch-refine
 
@@ -286,6 +293,7 @@ sequenceDiagram
     - **open decision**: まだユーザー確認や trade-off 判断が必要な点
   - `spec.md` には調査結果を専用セクション（Confirmed from repository / Relevant public guidance /
     Candidate approaches / Decisions requiring user confirmation）に分離して記録する。
+  - prompt 本体は ownership / persisted-state obligation / quality bar に絞り、長い requirement-to-evidence 手順は `orch-refiner-evidence-design` skill に切り出した。
 
 - (B) 主な入力
   - 高レベルゴール（CLI 引数 / 添付ファイルで渡される）
@@ -312,6 +320,7 @@ sequenceDiagram
     - 必要コマンド候補（ID, command, role, usage, parameters など）
       を短く説明するテキスト。
   - ファイル内容そのものは JSON / Markdown として state ディレクトリに書き出される。
+  - non-trivial な refinement pass では `orch-refiner-evidence-design` skill をロードしてから要件・証拠・コマンド定義を詰める前提。
 
 ## 4. orch-spec-checker / orch-spec-check
 
@@ -330,6 +339,7 @@ sequenceDiagram
     - 弱い証拠境界（requirement の完了証明にファイル・コマンド・状態変化の hook がないもの）
     - wrapper script や複合 shell エントリポイントを隠す unsafe なコマンド定義
     - command-policy 変更時の Planner 確認ルールの曖昧さ
+  - prompt 本体は read-only contract と JSON 出力契約に絞り、live-surface / stale-model / downstream-blocker 検査の長い手順は `orch-spec-operational-check` skill に切り出した。
 
 - (B) 主な入力
   - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/acceptance-index.json`
@@ -343,6 +353,7 @@ sequenceDiagram
     - `status`: `"ok"` / `"needs_revision"`
     - `feasible_for_loop`: orchestrator ループに載せられるかのブール値
     - `issues[]`: acceptance-index / spec / command-policy に関する問題一覧（`summary`/`suggested_action` は英語）
+  - substantive な spec-check pass では `orch-spec-operational-check` skill をロードしてから JSON をまとめる前提。
 
 ## 5. Preflight（preflight-cli ツール）
 
@@ -388,6 +399,7 @@ sequenceDiagram
     を添付することで、Executor と Auditor が todo だけで証拠境界を推測なしに把握できるようにする。
   - 大きい requirement は垂直スライス（実装 + テスト + 関連する docs/prompt を一并に完了境界まで持っていく）
     で分解し、layer-only な巨大 todo バケットを避ける。
+  - prompt 本体は todo ownership / coverage invariants / output shape に絞り、長い decomposition 手順は `orch-todo-decomposition` skill に切り出した。
 
 - (B) 主な入力
   - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/acceptance-index.json`
@@ -409,6 +421,7 @@ sequenceDiagram
   - エージェント応答としては、どの要件に対してどのような Todo を追加／更新したかの
     簡潔な説明テキスト。
   - 具体的な Todo 構造は `todo.json` の JSON として保存される。
+  - substantive な decomposition / replanning pass では `orch-todo-decomposition` skill をロードしてから canonical todo を更新する前提。
 
 ## 7. orch-executor / orch-exec
 
@@ -429,6 +442,7 @@ sequenceDiagram
   - ビルドコマンドやテストコマンドは回帰確認の補助証拠であり、requirement ごとの diff 証拠の代替ではない。
   - ルーティングは軽量・逐次的: 委譲は広範な read-only 探索に使い、実装自体は local で担う。
     並列 executor 分岐や外部キューを前提にした振る舞いは禁止。
+  - prompt 本体は ownership boundary / command-policy obedience / blocker 基準 / `STEP_*` 契約に絞り、長い実装手順は `implementation` skill、完了前の仕上げ判定は `completion-review` skill に委ねる構成になった。
 
 - (B) 主な入力
   - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/acceptance-index.json`
@@ -461,6 +475,7 @@ sequenceDiagram
   - これらは `src/orchestrator-status.ts` の `parseExecutorStepSnapshot` などでパースされ、
     `status.json` の `last_executor_step` / `failure_budget`
     などに反映される。
+  - execution-phase skill 露出は runtime で `permission.skill` allowlist により絞られ、Executor には `implementation` と `completion-review` のみが見える。
 
 ## 8. orch-auditor / orch-audit
 

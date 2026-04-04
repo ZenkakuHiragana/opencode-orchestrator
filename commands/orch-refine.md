@@ -4,5 +4,8 @@ index, spec, and command policy for this orchestrated story.
 Ask targeted questions when needed, then update acceptance-index and related
 summaries so that todo-writer, executor, and auditor can rely on them.
 
+Persist the canonical state files for this pass instead of merely proposing
+changes in chat.
+
 High-level goal and context:
 $ARGUMENTS

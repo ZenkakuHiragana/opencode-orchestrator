@@ -39,6 +39,8 @@ describe("OrchestratorPlugin", () => {
 
     expect(config.agent["orch-executor"]).toBeTruthy();
     expect(typeof config.agent["orch-executor"].prompt).toBe("string");
+    expect(Array.isArray(config.skills?.paths)).toBe(true);
+    expect(config.skills.paths.join("\n")).toContain("skills");
     expect(config.command["orch-exec"]).toBeTruthy();
     expect(typeof config.command["orch-exec"].template).toBe("string");
   });

@@ -87,9 +87,50 @@ describe("orchestratorAgents", () => {
     expect(executor.tools.edit).toBe(true);
     expect(executor.tools.write).toBe(true);
     expect(executor.tools.read).toBe(true);
+    expect(executor.tools.skill).toBe(true);
     expect(executor.tools.task).toBe(true);
     expect(executor.tools.webfetch).toBe(true);
     expect(executor.tools.websearch).toBe(true);
+  });
+
+  it("uses skill tool only on the intended orchestrator agents", () => {
+    expect(orchestratorAgents["orch-planner"].tools.skill).toBe(true);
+    expect(orchestratorAgents["orch-refiner"].tools.skill).toBe(true);
+    expect(orchestratorAgents["orch-todo-writer"].tools.skill).toBe(true);
+    expect(orchestratorAgents["orch-executor"].tools.skill).toBe(true);
+    expect(orchestratorAgents["orch-spec-checker"].tools.skill).toBe(true);
+    expect(orchestratorAgents["orch-auditor"].tools.skill).toBe(false);
+    expect(orchestratorAgents["orch-local-investigator"].tools.skill).toBe(
+      false,
+    );
+    expect(orchestratorAgents["orch-public-researcher"].tools.skill).toBe(
+      false,
+    );
+  });
+
+  it("narrows permission.skill per agent", () => {
+    expect(orchestratorAgents["orch-planner"].permission.skill).toEqual({
+      "*": "deny",
+      "orch-planner-gate-cycle": "allow",
+    });
+    expect(orchestratorAgents["orch-refiner"].permission.skill).toEqual({
+      "*": "deny",
+      "orch-refiner-evidence-design": "allow",
+    });
+    expect(orchestratorAgents["orch-todo-writer"].permission.skill).toEqual({
+      "*": "deny",
+      "orch-todo-decomposition": "allow",
+    });
+    expect(orchestratorAgents["orch-spec-checker"].permission.skill).toEqual({
+      "*": "deny",
+      "orch-spec-operational-check": "allow",
+    });
+    expect(orchestratorAgents["orch-executor"].permission.skill).toEqual({
+      "*": "deny",
+      implementation: "allow",
+      "completion-review": "allow",
+    });
+    expect(orchestratorAgents["orch-auditor"].permission.skill).toBe("deny");
   });
 
   it("orch-spec-checker has read-only tools", () => {

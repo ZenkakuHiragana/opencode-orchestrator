@@ -1,11 +1,13 @@
 import type { OrchestratorStatus } from "./orchestrator-status.js";
 import type { ProposalEntry } from "./orchestrator-proposals.js";
 
-// For todo-writer/executor/auditor, the true behavior and role instructions live in
-// agents/*.md as system prompts. Here we keep per-step "user" prompts as thin
-// as possible to avoid poisoning the conversation history with redundant role
-// descriptions. Todo-Writer does not need any extra per-step text beyond the
-// attached files and its system prompt, so we return an empty string.
+// Core role contracts live in agents/*.md, while longer reusable procedures now
+// live in packaged skills exposed through permission.skill allowlists. Here we
+// keep per-step "user" prompts as thin as possible so the conversation history
+// carries only step-local nudges instead of reloading role contracts or long
+// procedures on every step. Todo-Writer does not need extra per-step text
+// beyond attached files and these small nudges, so we return an empty string
+// when no status/proposal hints exist.
 export function buildTodoWriterPrompt(
   status?: OrchestratorStatus,
   openProposals?: ProposalEntry[],
