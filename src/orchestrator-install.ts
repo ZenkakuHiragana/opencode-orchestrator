@@ -1,8 +1,10 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import os from "node:os";
+import { fileURLToPath } from "node:url";
 
 import { t } from "./i18n/messages.js";
+import { ORCHESTRATOR_SKILLS_DIRNAME } from "./orchestrator-skills.js";
 
 export type InstallScope = "local" | "global";
 
@@ -75,6 +77,13 @@ function getGlobalConfigPath(): string {
 
 function getLocalConfigPath(): string {
   return path.resolve(process.cwd(), "opencode.json");
+}
+
+function getPackagedSkillsPath(): string {
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = path.dirname(__filename);
+  const baseDir = path.dirname(__dirname);
+  return path.join(baseDir, ORCHESTRATOR_SKILLS_DIRNAME);
 }
 
 function stripJsonc(input: string): string {
@@ -212,6 +221,41 @@ function ensurePlugin(config: any): { changed: boolean; config: any } {
   return { changed: true, config: nextConfig };
 }
 
+function ensurePackagedSkillsPath(config: any): {
+  changed: boolean;
+  config: any;
+} {
+  const packagedSkillsPath = getPackagedSkillsPath();
+  const existingSkills =
+    config && typeof config.skills === "object" && config.skills !== null
+      ? config.skills
+      : {};
+  const existingPaths = Array.isArray(existingSkills.paths)
+    ? existingSkills.paths.filter((value: unknown) => {
+        return typeof value === "string" && value.trim().length > 0;
+      })
+    : [];
+
+  const hasPackagedSkillsPath = existingPaths.some((entry: string) => {
+    return path.resolve(entry) === path.resolve(packagedSkillsPath);
+  });
+
+  if (hasPackagedSkillsPath) {
+    return { changed: false, config };
+  }
+
+  return {
+    changed: true,
+    config: {
+      ...config,
+      skills: {
+        ...existingSkills,
+        paths: [...existingPaths, packagedSkillsPath],
+      },
+    },
+  };
+}
+
 function ensureDefaultPermission(
   config: any,
   isNewFile: boolean,
@@ -251,6 +295,9 @@ function buildNewConfig(): any {
   return {
     $schema: "https://opencode.ai/config.json",
     plugin: [PLUGIN_NAME],
+    skills: {
+      paths: [getPackagedSkillsPath()],
+    },
   };
 }
 
@@ -283,6 +330,10 @@ export async function runInstall(opts: InstallOptions): Promise<void> {
   const pluginResult = ensurePlugin(config);
   config = pluginResult.config;
   changed = changed || pluginResult.changed;
+
+  const skillsResult = ensurePackagedSkillsPath(config);
+  config = skillsResult.config;
+  changed = changed || skillsResult.changed;
 
   const permissionResult = ensureDefaultPermission(config, isNewFile);
   config = permissionResult.config;

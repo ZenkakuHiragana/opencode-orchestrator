@@ -345,6 +345,8 @@ JSON 出力例 (開発者向け):
   - TypeScript 実装本体
 - `agents/*.md`
   - 各 orchestrator エージェントのプロンプト本文 (frontmatter なし)
+- `skills/**/SKILL.md`
+  - Orchestrator が同梱する skill 定義。長い再利用手順はここに置き、agent prompt は core contract を保つ
 - `commands/*.md`
   - `orch-todo-write` / `orch-exec` / `orch-audit` などのコマンドテンプレート本文
 - `resources/*.json`
@@ -420,15 +422,18 @@ Spec-Checker / Preflight-Runner が出した結果を、Planner が集約して�
   - 高レベルなゴールをテスト可能な受け入れ条件に分解する Requirements Refiner です。
   - `acceptance-index.json`, `spec.md`, `command-policy.json` を管理し、コマンド定義も含めたメタデータを提案します。
   - `spec.md` に、タスクのゴール / non-goals / 制約 / 成果物 / 終了条件 / 受け入れ条件の解釈方針などを英語でまとめた仕様を書き出します。
+  - 長い requirement-to-evidence 手順は同梱 skill (`orch-refiner-evidence-design`) に寄せています。
 - Spec-Checker (`orch-spec-checker`)
   - acceptance-index と spec.md、および command-policy.json を解析し、仕様やコマンド定義の抜け・構造的問題・受け入れ条件との対応関係の不整合を指摘する解析専用サブエージェントです。
   - `issues[]` に acceptance-index / spec / command-policy それぞれに対する指摘を JSON として出力しますが、ファイルの編集・更新は行いません (完全 read-only)。
+  - 詳細な operational check は同梱 skill (`orch-spec-operational-check`) に切り出しています。
 - Todo-Writer (`orch-todo-writer`)
   - Refiner が作った acceptance-index と spec.md を読み、Executor が実行しやすい todo リストに分解する計画専任エージェントです。
   - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/todo.json` に「derived planning cache」として todo 構造を書き出します。
   - 各 todo を 15-30 分程度の bounded unit に保ち、大きすぎる場合は垂直スライスで分割します。
     主作業面・橋渡し作業・期待証拠・完了境界を decision-complete な形で明示し、`execution_contract` メタデータで Auditor 向けの証拠境界を状態から追跡可能にします。
   - `orch_todo_read` / `orch_todo_write` ツールを使ってタスクリストを管理します。
+  - 分解や監査失敗 remediation の長い手順は同梱 skill (`orch-todo-decomposition`) に寄せています。
 - Executor (`orch-executor`)
   - 実装とローカル検証専任エージェントです。Todo-Writer/Refiner が用意した acceptance-index や todo を読み取り、コード・テスト・ドキュメント変更とローカル検証を担当します。
   - `bash` / `glob` / `grep` / `read` / `apply_patch` などを利用
@@ -436,11 +441,26 @@ Spec-Checker / Preflight-Runner が出した結果を、Planner が集約して�
   - `STEP_VERIFY: ready` は command IDs・明示的に再確認した diffs・no-command 理由のうち少なくとも 1 つの根拠を要求します。根拠なしで `STEP_AUDIT: ready` をemit しても Auditor は起動されません。
   - 主要 requirement の作業では requirement-to-diff トレーサビリティ（`requirement_traceability`）を残します。
   - ルーティングは軽量・逐次的です。サブエージェントの委譲は広範な読み取り専用の探索に限定し、並列実行や外部キューは前提としません。
+  - 実装と完了前レビューの長い手順は同梱 skill (`orch-executor-implementation`, `orch-executor-completion-review`) に寄せています。
 - Auditor (`orch-auditor`)
   - 完了判定専用の外部監査役
   - Git の読み取り系コマンドとログのみを参照し、1 行 JSON (`{ done, requirements[] }`) を返す
   - Orchestrator CLI では `STEP_AUDIT: ready` に加えて `STEP_VERIFY: ready` が揃った step でのみ起動されます。
   - ファイルを変更せず、`git status` / `git diff` / ログファイルなどを参照して `done` と `requirements[{id, passed, reason}]` を返します。
+
+### スキル露出制御
+
+- このパッケージは `skills/` 配下に Orchestrator 専用 skill を同梱します。
+- install コマンドは OpenCode 設定の `skills.paths` に同梱 `skills/` ディレクトリを追記します。
+- runtime 側では packaged skill 名を global で deny し、各 orchestrator agent の `permission.skill` で必要な skill だけを allow します。
+- 現在の割り当ては次のとおりです。
+  - `orch-planner` -> `orch-planner-gate-cycle`
+  - `orch-refiner` -> `orch-refiner-evidence-design`
+  - `orch-spec-checker` -> `orch-spec-operational-check`
+  - `orch-todo-writer` -> `orch-todo-decomposition`
+  - `orch-executor` -> `orch-executor-implementation`, `orch-executor-completion-review`
+  - `orch-auditor` / `orch-local-investigator` / `orch-public-researcher` -> skill なし
+- 現行 OpenCode/plugin API では session 単位の動的 skill 露出までは強制できないため、このリポジトリでは agent 単位の静的 allowlist を最も強い実用制御として採用しています。
 
 ## ツール / コマンド
 

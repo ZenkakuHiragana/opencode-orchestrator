@@ -12,6 +12,11 @@ import {
   rewriteAgentConfigPaths,
   rewritePromptPaths,
 } from "./orchestrator-paths.js";
+import {
+  buildPackagedSkillGlobalDenyRule,
+  mergePermissionConfigPreservingExisting,
+  mergePermissionRulePreservingExisting,
+} from "./orchestrator-skills.js";
 import { loadMarkdownBody } from "./markdown.js";
 import {
   getPreflightRunnerBashPermissionSource,
@@ -104,6 +109,22 @@ export const OrchestratorPlugin: Plugin = async (input) => {
         config.command = {};
       }
 
+      const existingGlobalPermission =
+        typeof config.permission === "object" && config.permission !== null
+          ? config.permission
+          : {};
+
+      // Skill discovery is handled by static config written at install time.
+      // At runtime we only narrow `permission.skill` so packaged skill names
+      // stay hidden unless explicitly allowed for the intended agents.
+      config.permission = {
+        ...existingGlobalPermission,
+        skill: mergePermissionRulePreservingExisting(
+          existingGlobalPermission.skill,
+          buildPackagedSkillGlobalDenyRule(),
+        ),
+      };
+
       // Per-agent visibility control for non-orchestrator agents (e.g. the
       // built-in `build` agent). When an agent's key is absent or set to
       // false, its description is cleared so the task tool shows the generic
@@ -175,9 +196,16 @@ export const OrchestratorPlugin: Plugin = async (input) => {
         const metaForMerge = shouldClearDescription
           ? { ...meta, description: undefined }
           : meta;
+        const mergedPermission = mergePermissionConfigPreservingExisting(
+          metaForMerge.permission,
+          existing && typeof existing.permission === "object"
+            ? existing.permission
+            : undefined,
+        );
         const merged = {
           ...metaForMerge,
           ...existing,
+          permission: mergedPermission,
           ...(prompt ? { prompt } : {}),
         };
         // Rewrite any $XDG_STATE_HOME/legacy state paths in both prompts and

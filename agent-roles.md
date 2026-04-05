@@ -14,6 +14,8 @@
   - `opencode run --command orch-...` 実行時に `$ARGUMENTS` が差し込まれる。
 - `src/orchestrator-agents.ts`
   - `orchestratorAgents` テーブルで、各エージェントの使用可能ツールと permission を定義。
+- `skills/**/SKILL.md`
+  - 長い再利用手順を置く同梱 skill。agent prompt は core contract、詳細手順は skill に分担する。
 - `src/orchestrator-commands.ts`
   - `orchestratorCommands` テーブルで、`orch-todo-write` などのコマンド名 → 紐づくエージェント名
     （`agent` フィールド）を定義。

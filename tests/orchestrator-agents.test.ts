@@ -88,8 +88,40 @@ describe("orchestratorAgents", () => {
     expect(executor.tools.write).toBe(true);
     expect(executor.tools.read).toBe(true);
     expect(executor.tools.task).toBe(true);
+    expect(executor.tools.skill).toBe(true);
     expect(executor.tools.webfetch).toBe(true);
     expect(executor.tools.websearch).toBe(true);
+  });
+
+  it("only intended orchestrator agents have skill access", () => {
+    expect(orchestratorAgents["orch-planner"].tools.skill).toBe(true);
+    expect(orchestratorAgents["orch-refiner"].tools.skill).toBe(true);
+    expect(orchestratorAgents["orch-spec-checker"].tools.skill).toBe(true);
+    expect(orchestratorAgents["orch-todo-writer"].tools.skill).toBe(true);
+    expect(orchestratorAgents["orch-executor"].tools.skill).toBe(true);
+    expect(orchestratorAgents["orch-auditor"].tools.skill).toBe(false);
+    expect(orchestratorAgents["orch-local-investigator"].tools.skill).toBe(
+      false,
+    );
+    expect(orchestratorAgents["orch-public-researcher"].tools.skill).toBe(
+      false,
+    );
+  });
+
+  it("adds per-agent skill allowlists", () => {
+    expect(orchestratorAgents["orch-planner"].permission.skill).toEqual(
+      expect.objectContaining({
+        "*": "deny",
+        "orch-planner-gate-cycle": "allow",
+      }),
+    );
+    expect(orchestratorAgents["orch-executor"].permission.skill).toEqual(
+      expect.objectContaining({
+        "*": "deny",
+        "orch-executor-implementation": "allow",
+        "orch-executor-completion-review": "allow",
+      }),
+    );
   });
 
   it("orch-spec-checker has read-only tools", () => {
