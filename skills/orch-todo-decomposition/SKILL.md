@@ -1,6 +1,6 @@
 ---
 name: orch-todo-decomposition
-description: Todo-Writer-only decomposition procedure for orch-todo-writer. Use this when deriving or revising canonical todos from accepted requirements. Do not use for acceptance design, implementation work, or general planning summaries.
+description: Todo-Writer-only decomposition procedure for orch-todo-writer. Use this when deriving or revising canonical todos from accepted requirements. Do not use for acceptance design, implementation work, execution-phase completion, or general planning summaries.
 ---
 
 # Orchestrator Todo Decomposition
@@ -61,6 +61,7 @@ in-scope requirement without forcing downstream re-planning.
    execution contract. Prefer recording the planning gap through proposals or by
    tightening the todo boundary to what is actually feasible.
 10. Prefer incremental canonical updates when the current todo set is salvageable.
+11. Do not borrow executor completion heuristics into todo decomposition.
 
 ## Final check
 

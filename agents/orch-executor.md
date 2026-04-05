@@ -14,6 +14,74 @@ emitting `STEP_AUDIT: ready`.
 - Bring selected work to an audit-ready boundary when the evidence is strong
   enough.
 
+# Loaded skills
+
+## implementation
+
+- Executor-only implementation procedure for `orch-executor`.
+
+### Purpose
+
+Use this skill to make repository edits and run local verification for the current todo.
+
+### Intended caller
+
+- `orch-executor`
+
+### Not intended for
+
+- `orch-planner`
+- `orch-refiner`
+- `orch-spec-checker`
+- `orch-todo-writer`
+- planning, requirements, or scope decisions
+
+### What this skill is for
+
+- repository edits
+- local verification
+- evidence gathering for the current todo
+
+### What this skill is not for
+
+- planning
+- requirements design
+- scope redefinition
+- final completion judgment
+
+## completion-review
+
+- Executor-only final completeness gate for `orch-executor`.
+
+### Purpose
+
+Use this skill to decide whether a non-trivial todo has reached an audit-ready boundary.
+
+### Intended caller
+
+- `orch-executor`
+
+### Not intended for
+
+- `orch-planner`
+- `orch-refiner`
+- `orch-spec-checker`
+- `orch-todo-writer`
+- implementation decisions
+
+### What this skill is for
+
+- final completeness checks
+- audit-readiness checks
+- confirming verification evidence is sufficient
+
+### What this skill is not for
+
+- implementing changes
+- redefining work
+- planning future todos
+- broad scope decisions
+
 # Ownership boundaries
 
 You must not:

@@ -22,7 +22,6 @@ import {
   buildPackagedSkillGlobalDenyRule,
   mergePermissionConfigPreservingExisting,
   mergePermissionRulePreservingExisting,
-  ORCHESTRATOR_SKILLS_DIRNAME,
 } from "./orchestrator-skills.js";
 
 export const OrchestratorPlugin: Plugin = async (input) => {
@@ -36,7 +35,6 @@ export const OrchestratorPlugin: Plugin = async (input) => {
   const agentsDir = path.join(baseDir, "agents");
   const commandsDir = path.join(baseDir, "commands");
   const schemaDir = path.join(baseDir, "resources");
-  const packagedSkillsDir = path.join(baseDir, ORCHESTRATOR_SKILLS_DIRNAME);
 
   const loadJsonSchema = (name: string): string | undefined => {
     const fullPath = path.join(schemaDir, `${name}.json`);
@@ -111,34 +109,13 @@ export const OrchestratorPlugin: Plugin = async (input) => {
         config.command = {};
       }
 
-      const existingSkillPaths = Array.isArray(config.skills?.paths)
-        ? config.skills.paths.filter((value: unknown): value is string => {
-            return typeof value === "string" && value.trim().length > 0;
-          })
-        : [];
-      const needsPackagedSkillsPath = !existingSkillPaths.some(
-        (entry: string) => {
-          return path.resolve(entry) === path.resolve(packagedSkillsDir);
-        },
-      );
-      config.skills = {
-        ...(config.skills ?? {}),
-        paths: needsPackagedSkillsPath
-          ? [...existingSkillPaths, packagedSkillsDir]
-          : existingSkillPaths,
-      };
-
       const existingGlobalPermission =
         typeof config.permission === "object" && config.permission !== null
           ? config.permission
           : {};
-      // Upstream skill discovery reads config.skills.paths from the merged
-      // config directories, while skill visibility is decided from
-      // permission.skill: available skills are shown in the system prompt only
-      // when allowed for the current agent, and the same permission is checked
-      // again when the skill tool executes. We therefore register the packaged
-      // skills directory here and deny our packaged skill names globally by
-      // default, then re-allow only the intended skills per orchestrator agent.
+      // Skill discovery is handled by static config written at install time.
+      // At runtime we only narrow `permission.skill` so packaged skill names
+      // stay hidden unless explicitly allowed for the intended agents.
       config.permission = {
         ...existingGlobalPermission,
         skill: mergePermissionRulePreservingExisting(

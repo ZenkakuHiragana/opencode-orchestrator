@@ -1,6 +1,6 @@
 ---
 name: orch-spec-operational-check
-description: Spec-Checker-only operational audit procedure for orch-spec-checker. Use this when evaluating whether the current acceptance/spec/policy state is structurally sound and executable by downstream agents. Do not use for editing, planning summaries, or implementation.
+description: Spec-Checker-only operational audit procedure for orch-spec-checker. Use this when evaluating whether the current acceptance/spec/policy state is structurally sound and executable by downstream agents. Do not use for editing, planning summaries, implementation, or execution-phase completion.
 ---
 
 # Orchestrator Spec Operational Check
@@ -60,6 +60,7 @@ plausible, but actually usable by Todo-Writer, Executor, and Auditor.
    surfaces.
 8. Emit conservative, non-overlapping issues that explain the smallest decisive
    next repair.
+9. Do not import executor completion heuristics into spec validation.
 
 ## Decision standard
 

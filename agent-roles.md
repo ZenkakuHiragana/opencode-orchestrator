@@ -442,7 +442,13 @@ sequenceDiagram
   - ビルドコマンドやテストコマンドは回帰確認の補助証拠であり、requirement ごとの diff 証拠の代替ではない。
   - ルーティングは軽量・逐次的: 委譲は広範な read-only 探索に使い、実装自体は local で担う。
     並列 executor 分岐や外部キューを前提にした振る舞いは禁止。
-  - prompt 本体は ownership boundary / command-policy obedience / blocker 基準 / `STEP_*` 契約に絞り、長い実装手順は `implementation` skill、完了前の仕上げ判定は `completion-review` skill に委ねる構成になった。
+  - prompt 本体は ownership boundary / command-policy obedience / blocker 基準 / `STEP_*` 契約に絞る。
+  - `implementation` skill:
+    - `orch-executor` 用の実装・ローカル検証手順。
+    - planning / requirements / scope decisions には使わない。
+  - `completion-review` skill:
+    - `orch-executor` 用の non-trivial todo 完了判定・audit-readiness 手順。
+    - implementation や scope 再定義には使わない。
 
 - (B) 主な入力
   - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/acceptance-index.json`

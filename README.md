@@ -450,7 +450,7 @@ Spec-Checker / Preflight-Runner が出した結果を、Planner が集約して�
 ### スキル露出制御
 
 - このパッケージは `skills/` 配下に Orchestrator 専用 skill を同梱します。
-- plugin config hook は `config.skills.paths` に同梱 `skills/` ディレクトリを追加して読み込ませます。
+- install コマンドが OpenCode 設定の `config.skills.paths` に同梱 `skills/` ディレクトリを追記し、skill discovery できるようにします。
 - ただし skill は全 agent へ一様公開しません。
   - upstream OpenCode は `permission.skill` を使って、available skills の system prompt 露出と `skill` ツール実行可否の両方を制御します。
 - そのため本プラグインでは、同梱 skill 名を global では deny にし、各 orchestrator agent の `permission.skill` で必要な skill だけを allow します。
@@ -461,6 +461,7 @@ Spec-Checker / Preflight-Runner が出した結果を、Planner が集約して�
   - `orch-todo-writer` -> `orch-todo-decomposition`
   - `orch-executor` -> `implementation`, `completion-review`
   - `orch-auditor` / `orch-local-investigator` / `orch-public-researcher` -> skill なし
+- 実装・完了判定用の skill (`implementation`, `completion-review`) は `agents/orch-executor.md` で executor 専用として境界を明示しています。
 - 現行 OpenCode/plugin API では session ごとの skill 名動的差し替えまではできないため、最も強い実用的 fallback として「agent 単位の静的 allowlist + skill tool を持つ agent の最小化」を採用しています。
 
 ## ツール / コマンド

@@ -1,6 +1,6 @@
 ---
 name: orch-refiner-evidence-design
-description: Refiner-only requirement-to-evidence design procedure for orch-refiner. Use this when turning goals into acceptance state, specification text, and command definitions. Do not use for planning summaries, todo decomposition, or implementation work.
+description: Refiner-only requirement-to-evidence design procedure for orch-refiner. Use this when turning goals into acceptance state, specification text, and command definitions. Do not use for planning summaries, todo decomposition, implementation work, or execution-phase completion.
 ---
 
 # Orchestrator Refiner Evidence Design
@@ -68,6 +68,7 @@ and unresolved choices.
    - relevant public guidance
    - candidate approaches
    - decisions requiring user confirmation
+   - execution-phase completion heuristics do not belong here
 8. Design command definitions only when they are needed to support exploration,
    implementation, or verification.
 9. Prefer the smallest command surface that still gives downstream agents a real

@@ -52,6 +52,11 @@ describe("orchestrator-install", () => {
       expect(fs.existsSync(target)).toBe(true);
       const json = JSON.parse(fs.readFileSync(target, "utf8"));
       expect(json.plugin).toEqual(["@zenorg/opencode-orchestrator"]);
+      expect(
+        json.skills.paths.some(
+          (entry: string) => path.basename(entry) === "skills",
+        ),
+      ).toBe(true);
       expect(json.permission.bash["*"]).toBe("ask");
     } finally {
       process.chdir(cwd);
@@ -91,6 +96,11 @@ describe("orchestrator-install", () => {
         "foo-plugin",
         "@zenorg/opencode-orchestrator",
       ]);
+      expect(
+        json.skills.paths.some(
+          (entry: string) => path.basename(entry) === "skills",
+        ),
+      ).toBe(true);
       // 既存の permission.bash は変更されない
       expect(json.permission.bash["*"]).toBe("allow");
     } finally {

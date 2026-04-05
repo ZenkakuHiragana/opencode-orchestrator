@@ -39,8 +39,14 @@ describe("OrchestratorPlugin", () => {
 
     expect(config.agent["orch-executor"]).toBeTruthy();
     expect(typeof config.agent["orch-executor"].prompt).toBe("string");
-    expect(Array.isArray(config.skills?.paths)).toBe(true);
-    expect(config.skills.paths.join("\n")).toContain("skills");
+    expect(config.permission.skill).toEqual(
+      expect.objectContaining({
+        "orch-planner-gate-cycle": "deny",
+        "orch-refiner-evidence-design": "deny",
+        "orch-spec-operational-check": "deny",
+        "orch-todo-decomposition": "deny",
+      }),
+    );
     expect(config.command["orch-exec"]).toBeTruthy();
     expect(typeof config.command["orch-exec"].template).toBe("string");
   });

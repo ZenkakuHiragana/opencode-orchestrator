@@ -14,17 +14,10 @@ describe("OrchestratorPlugin skill wiring", () => {
     vi.restoreAllMocks();
   });
 
-  it("registers the packaged skills directory and global skill deny defaults", async () => {
+  it("sets global skill deny defaults and per-agent allowlists", async () => {
     const plugin = await OrchestratorPlugin({ client: {} } as any);
     const config: any = {};
     await plugin.config!(config);
-
-    expect(Array.isArray(config.skills?.paths)).toBe(true);
-    const joined =
-      String(config.skills.paths[0] ?? "") +
-      "\n" +
-      config.skills.paths.join("\n");
-    expect(joined).toContain("skills");
 
     expect(config.permission.skill).toEqual(
       expect.objectContaining({
@@ -65,6 +58,17 @@ describe("OrchestratorPlugin skill wiring", () => {
     expect(config.agent["orch-auditor"].permission.skill).toBe("deny");
   });
 
+  it("documents executor-only skills on orch-executor", async () => {
+    const plugin = await OrchestratorPlugin({ client: {} } as any);
+    const config: any = {};
+    await plugin.config!(config);
+
+    const prompt = config.agent["orch-executor"]?.prompt as string | undefined;
+    expect(prompt).toContain("implementation");
+    expect(prompt).toContain("completion-review");
+    expect(prompt).toContain("Executor-only");
+  });
+
   it("preserves user-provided global and agent skill overrides", async () => {
     const plugin = await OrchestratorPlugin({ client: {} } as any);
     const config: any = {
@@ -103,9 +107,6 @@ describe("OrchestratorPlugin skill wiring", () => {
       "completion-review": "allow",
       customExecSkill: "allow",
     });
-    expect(config.skills.paths).toEqual(
-      expect.arrayContaining(["C:/custom/skills"]),
-    );
-    expect(config.skills.paths.join("\n")).toContain("skills");
+    expect(config.skills.paths).toEqual(["C:/custom/skills"]);
   });
 });

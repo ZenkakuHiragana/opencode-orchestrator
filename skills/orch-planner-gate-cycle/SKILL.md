@@ -1,6 +1,6 @@
 ---
 name: orch-planner-gate-cycle
-description: Planner-only gate-cycle procedure for orch-planner. Use this when coordinating refinement, preflight, and spec-checking for executor-loop readiness. Do not use for implementation, todo decomposition, or repository editing.
+description: Planner-only gate-cycle procedure for orch-planner. Use this when coordinating refinement, preflight, and spec-checking for executor-loop readiness. Do not use for implementation, todo decomposition, executor completion, or repository editing.
 ---
 
 # Orchestrator Planner Gate Cycle
@@ -32,6 +32,7 @@ planning action, a refreshed gate run, or a loop-readiness summary.
 - triaging `proposals.json` and recent planning failures
 - separating true loop blockers from mere incompleteness
 - producing a short human-facing readiness summary
+- keep execution-phase skills and completion heuristics out of the planning flow
 
 ## What this skill is not for
 
