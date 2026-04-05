@@ -123,13 +123,18 @@ describe("OrchestratorPlugin", () => {
     // names are hidden by default.
     expect(typeof config.permission.skill).toBe("object");
     expect(config.permission.skill).not.toBe("allow");
+
+    // OpenCode resolves permission.skill last-key-wins, so the wildcard
+    // MUST be the first key.  Specific deny entries come after and win.
+    const keys = Object.keys(config.permission.skill);
+    expect(keys[0]).toBe("*");
+    expect(config.permission.skill["*"]).toBe("allow");
     expect(config.permission.skill).toEqual(
       expect.objectContaining({
         "orch-planner-gate-cycle": "deny",
         "orch-refiner-evidence-design": "deny",
         "orch-executor-implementation": "deny",
         "orch-executor-completion-review": "deny",
-        "*": "allow",
       }),
     );
   });

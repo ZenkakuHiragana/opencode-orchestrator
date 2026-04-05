@@ -64,19 +64,29 @@ export function mergePermissionRulePreservingExisting(
   }
 
   if (typeof existing === "string") {
-    // A bare string like "allow" or "deny" is a broad catch-all that would
-    // override the per-skill deny map we are trying to inject.  When the
-    // existing value is a string we treat it as a wildcard fallback and
-    // prepend the explicit deny entries so they take precedence.
+    // A bare string like "allow" or "deny" is a broad catch-all.  OpenCode
+    // resolves permission rules last-key-wins, so the wildcard MUST come
+    // first and the specific deny entries after it.
     return {
-      ...additions,
       "*": existing,
+      ...additions,
     };
   }
 
+  // For an existing object, extract the wildcard (if any) so it lands
+  // before the specific deny entries.  Non-wildcard user keys keep their
+  // override power by coming last.
+  const existingObj = existing as Record<string, string>;
+  const wildcard = existingObj["*"];
+  const rest: Record<string, string> = {};
+  for (const [k, v] of Object.entries(existingObj)) {
+    if (k !== "*") rest[k] = v;
+  }
+
   return {
+    ...(wildcard !== undefined ? { "*": wildcard } : {}),
     ...additions,
-    ...(existing as Record<string, string>),
+    ...rest,
   };
 }
 
