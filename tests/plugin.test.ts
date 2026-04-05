@@ -108,4 +108,39 @@ describe("OrchestratorPlugin", () => {
       "string",
     );
   });
+
+  it("overrides string permission.skill with packaged deny map", async () => {
+    const plugin = await OrchestratorPlugin({ client: {} } as any);
+    const config: any = {
+      permission: {
+        skill: "allow",
+      },
+    };
+    await plugin.config!(config);
+
+    // When the user has permission.skill: "allow" (a bare string), the
+    // packaged deny map must still be injected so that orchestrator skill
+    // names are hidden by default.
+    expect(typeof config.permission.skill).toBe("object");
+    expect(config.permission.skill).not.toBe("allow");
+    expect(config.permission.skill).toEqual(
+      expect.objectContaining({
+        "orch-planner-gate-cycle": "deny",
+        "orch-refiner-evidence-design": "deny",
+        "orch-executor-implementation": "deny",
+        "orch-executor-completion-review": "deny",
+        "*": "allow",
+      }),
+    );
+  });
+
+  it("executor prompt explicitly names both skills", async () => {
+    const plugin = await OrchestratorPlugin({ client: {} } as any);
+    const config: any = {};
+    await plugin.config!(config);
+
+    const prompt: string = config.agent["orch-executor"].prompt;
+    expect(prompt).toContain("orch-executor-implementation");
+    expect(prompt).toContain("orch-executor-completion-review");
+  });
 });

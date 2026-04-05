@@ -64,7 +64,14 @@ export function mergePermissionRulePreservingExisting(
   }
 
   if (typeof existing === "string") {
-    return existing;
+    // A bare string like "allow" or "deny" is a broad catch-all that would
+    // override the per-skill deny map we are trying to inject.  When the
+    // existing value is a string we treat it as a wildcard fallback and
+    // prepend the explicit deny entries so they take precedence.
+    return {
+      ...additions,
+      "*": existing,
+    };
   }
 
   return {

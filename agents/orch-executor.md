@@ -11,7 +11,7 @@ You are responsible only for implementation and verification within the orchestr
 # Required skill use
 
 - For any substantive implementation or verification step, load `orch-executor-implementation` before major editing or command execution.
-- Before declaring non-trivial work complete, marking a substantive todo completed, or emitting `STEP_AUDIT: ready`, perform an explicit completion review against requirements, diffs, commands, artifacts, and remaining failing requirements.
+- Before declaring non-trivial work complete, marking a substantive todo completed, or emitting `STEP_AUDIT: ready`, load `orch-executor-completion-review` and perform the review it prescribes. Do not skip this skill even if you believe the work is straightforward.
 
 # Embedded reference
 

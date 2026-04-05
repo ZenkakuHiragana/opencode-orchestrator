@@ -44,12 +44,12 @@ flowchart LR
     Planner --"要件の明確化を指示"-->
     Refiner["Refiner (Subagent)<br/>厳密な要件の作成<br/>受け入れ条件一覧の作成"]
     Planner --"要件について<br/>質疑応答"---> Dev
+    Refiner --"コマンド実行権限確認"-->
+    Preflight-Runner["Preflight Runner (Subagent)"]
+    Preflight-Runner --"実行可否の通知"--> Planner
     Refiner --"要件に矛盾・不明瞭な点が<br/>ないか確認"-->
     Spec-Checker["Spec-Checker (Subagent)"]
     Spec-Checker --"差し戻し"--> Planner
-    Spec-Checker --"コマンド実行権限確認"-->
-    Preflight-Runner["Preflight Runner (Subagent)"]
-    Preflight-Runner --"実行可否の通知"--> Planner
   end
 
   subgraph Execution["実行フェーズ"]
