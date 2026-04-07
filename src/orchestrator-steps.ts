@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 import type { LoopOptions } from "./cli-args.js";
+import { t } from "./i18n/messages.js";
 import { runOpencode, runOpencodeBwrap } from "./orchestrator-process.js";
 import {
   buildAuditPrompt,
@@ -121,6 +122,83 @@ export async function maybeRunTodoWriterStep(
     true,
     todoEnv,
   );
+
+  const infraError = detectExecutorOpencodeInfraError(
+    planRes.stdout,
+    planRes.stderr,
+  );
+  if (infraError) {
+    if (failureBudget.executor_opencode_error_last_session_id === sessionId) {
+      failureBudget.executor_opencode_error_consecutive_in_session =
+        (failureBudget.executor_opencode_error_consecutive_in_session ?? 0) + 1;
+    } else {
+      failureBudget.executor_opencode_error_last_session_id = sessionId;
+      failureBudget.executor_opencode_error_consecutive_in_session = 1;
+    }
+
+    const consecutiveInSession =
+      failureBudget.executor_opencode_error_consecutive_in_session ?? 1;
+
+    failureBudget.last_failure_kind = "todo_writer_opencode_error";
+    failureBudget.last_failure_summary =
+      "todo-writer 実行中に OpenCode 実行エラーが発生しました: " +
+      infraError.message;
+    saveStatusJson(statusPath, status);
+
+    const maxPerSession = 3;
+
+    if (consecutiveInSession < maxPerSession) {
+      // このステップでは Executor/Auditor フェーズをスキップし、
+      // 次のループステップで同じセッションのまま Todo-Writer を再実行する。
+      return {
+        sessionId,
+        restartCount,
+        forceTodoWriterNextStep: true,
+        restartedSession: false,
+        abortLoop: false,
+        skipExecutorThisStep: true,
+      };
+    }
+
+    // 同一セッション内での OpenCode 実行エラーが一定回数を超えたため、
+    // Todo-Writer セッションごと再起動する。全体の MAX_RESTARTS も尊重する。
+    if (restartCount >= opts.maxRestarts) {
+      return {
+        sessionId,
+        restartCount,
+        forceTodoWriterNextStep,
+        restartedSession: false,
+        abortLoop: true,
+        skipExecutorThisStep: true,
+      };
+    }
+
+    const newRestartCount = restartCount + 1;
+    const newSessionId = await restartFromSafety(
+      "todo-writer",
+      opts,
+      logDir,
+      appendFileArg(fileArgs, statusPath),
+      sessionId,
+      status,
+      statusPath,
+      newRestartCount,
+    );
+
+    // 新しいセッションでは OpenCode エラーカウンタをリセットする。
+    failureBudget.executor_opencode_error_consecutive_in_session = 0;
+    failureBudget.executor_opencode_error_last_session_id = newSessionId;
+    saveStatusJson(statusPath, status);
+
+    return {
+      sessionId: newSessionId,
+      restartCount: newRestartCount,
+      forceTodoWriterNextStep: false,
+      restartedSession: true,
+      abortLoop: false,
+      skipExecutorThisStep: true,
+    };
+  }
 
   const todowriterSafety = planRes.stdout.includes(
     "I'm sorry, but I cannot assist with that request.",
@@ -378,6 +456,108 @@ export async function runExecutorAndAuditorStep(
   const execRes = opts.bwrapSkipCommandPolicy
     ? await runOpencodeBwrap(opts.bwrapArgs, execArgs, orchLog, true, execEnv)
     : await runOpencode(execArgs, orchLog, true, execEnv);
+
+  // Detect low-level OpenCode runtime errors that prevent the Executor
+  // contract from even starting (for example plugin load failures or
+  // transient request-format errors around reasoning items). These are
+  // distinct from model-level safety trips and are handled with a
+  // "retry within the same session up to 3 times, then restart session"
+  // policy.
+  const infraError = detectExecutorOpencodeInfraError(
+    execRes.stdout,
+    execRes.stderr,
+  );
+  if (infraError) {
+    if (failureBudget.executor_opencode_error_last_session_id === sessionId) {
+      failureBudget.executor_opencode_error_consecutive_in_session =
+        (failureBudget.executor_opencode_error_consecutive_in_session ?? 0) + 1;
+    } else {
+      failureBudget.executor_opencode_error_last_session_id = sessionId;
+      failureBudget.executor_opencode_error_consecutive_in_session = 1;
+    }
+
+    const consecutiveInSession =
+      failureBudget.executor_opencode_error_consecutive_in_session ?? 1;
+
+    failureBudget.last_failure_kind = "executor_opencode_error";
+    const summaryKey =
+      infraError.kind === "unexpected_error"
+        ? "loop.executor.failure.opencode_unexpected_summary"
+        : "loop.executor.failure.opencode_reasoning_summary";
+    failureBudget.last_failure_summary = t(summaryKey, {
+      message: infraError.message,
+    });
+    saveStatusJson(statusPath, status);
+
+    const maxPerSession = 3;
+
+    if (consecutiveInSession < maxPerSession) {
+      console.error(
+        t("loop.executor.error.opencode_retry", {
+          kind: infraError.kind,
+          current: consecutiveInSession,
+          max: maxPerSession,
+        }),
+      );
+      return {
+        sessionId,
+        restartCount,
+        forceTodoWriterNextStep,
+        done: false,
+        abortLoop: false,
+        skipAuditorThisStep: true,
+      };
+    }
+
+    console.error(
+      t("loop.executor.error.opencode_restart", {
+        current: consecutiveInSession,
+      }),
+    );
+
+    // Guardrail: do not exceed the global MAX_RESTARTS budget.
+    if (restartCount >= opts.maxRestarts) {
+      console.error(
+        t("loop.executor.error.opencode_restart_limit_reached", {
+          maxRestarts: opts.maxRestarts,
+        }),
+      );
+      return {
+        sessionId,
+        restartCount,
+        forceTodoWriterNextStep,
+        done: false,
+        abortLoop: true,
+        skipAuditorThisStep: false,
+      };
+    }
+
+    const newRestartCount = restartCount + 1;
+    const newSessionId = await restartFromSafety(
+      "executor",
+      opts,
+      logDir,
+      fileArgs,
+      sessionId,
+      status,
+      statusPath,
+      newRestartCount,
+    );
+
+    // Reset OpenCode error budget for the fresh session.
+    failureBudget.executor_opencode_error_consecutive_in_session = 0;
+    failureBudget.executor_opencode_error_last_session_id = newSessionId;
+    saveStatusJson(statusPath, status);
+
+    return {
+      sessionId: newSessionId,
+      restartCount: newRestartCount,
+      forceTodoWriterNextStep,
+      done: false,
+      abortLoop: false,
+      skipAuditorThisStep: true,
+    };
+  }
 
   const safetyTripped = execRes.stdout.includes(
     "I'm sorry, but I cannot assist with that request.",
@@ -1004,6 +1184,8 @@ function ensureFailureBudget(
       executor_safety_restarts: 0,
       executor_safety_consecutive_in_session: 0,
       executor_safety_last_session_id: status.last_session_id,
+      executor_opencode_error_consecutive_in_session: 0,
+      executor_opencode_error_last_session_id: status.last_session_id,
       consecutive_env_blocked: status.consecutive_env_blocked ?? 0,
       consecutive_audit_failures: 0,
       consecutive_verification_gaps: 0,
@@ -1389,6 +1571,56 @@ function isCanonicalTodoLike(value: unknown): boolean {
     Array.isArray(todo.related_requirement_ids) &&
     todo.related_requirement_ids.every((rid) => typeof rid === "string")
   );
+}
+
+type ExecutorOpencodeInfraErrorKind =
+  | "unexpected_error"
+  | "reasoning_item_missing";
+
+type ExecutorOpencodeInfraError = {
+  kind: ExecutorOpencodeInfraErrorKind;
+  message: string;
+};
+
+function detectExecutorOpencodeInfraError(
+  stdout: string,
+  stderr?: string,
+): ExecutorOpencodeInfraError | null {
+  const combinedRaw = `${stdout ?? ""}\n${stderr ?? ""}`;
+  // Strip common ANSI color codes so that we can reliably search for error
+  // phrases even when the terminal renders "Error:" in red, etc.
+  const combined = combinedRaw.replace(/\u001b\[[0-9;]*m/g, "");
+
+  if (combined.includes("Error: Unexpected error, check log file at ")) {
+    const line = combined
+      .split(/\r?\n/)
+      .find((l) => l.includes("Error: Unexpected error, check log file at "));
+    return {
+      kind: "unexpected_error",
+      message: (
+        line || "Error: Unexpected error, check log file at <log>"
+      ).trim(),
+    };
+  }
+
+  // Reasoning item format error. The exact type name ("reasoning") or spacing
+  // around it may change, and the message may be broken across multiple lines.
+  // For robustness, we only require that the generic phrase structure matches.
+  const hasReasoningItemPrefix = combined.includes("Error: Item ");
+  const hasReasoningItemSuffix = combined.includes(
+    "was provided without its required following item.",
+  );
+  if (hasReasoningItemPrefix && hasReasoningItemSuffix) {
+    const idx = combined.indexOf("Error: Item ");
+    const endIdx = combined.indexOf("\n", idx);
+    const line = combined.slice(idx, endIdx === -1 ? undefined : endIdx).trim();
+    return {
+      kind: "reasoning_item_missing",
+      message: line,
+    };
+  }
+
+  return null;
 }
 
 async function restartFromSafety(

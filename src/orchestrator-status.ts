@@ -111,6 +111,14 @@ export type FailureBudgetSnapshot = {
   // session a few times before giving up and calling restartSession.
   executor_safety_consecutive_in_session?: number;
   executor_safety_last_session_id?: string;
+  // Number of consecutive low-level OpenCode startup / inference errors
+  // (for example, plugin load failures or transient request-format errors)
+  // observed within the same opencode session while running orchestrator
+  // agents (Todo-Writer / Executor / Auditor など)。
+  // executor_safety_* がモデル側 safety フィルタの発火回数を追跡するのに対し、
+  // こちらは OpenCode ランタイムやトランスポート層に起因する失敗を追跡する。
+  executor_opencode_error_consecutive_in_session?: number;
+  executor_opencode_error_last_session_id?: string;
   consecutive_env_blocked: number;
   consecutive_audit_failures: number;
   consecutive_verification_gaps: number;

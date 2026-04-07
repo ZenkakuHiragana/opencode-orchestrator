@@ -60,7 +60,7 @@ export async function restartSession(
   const restartPromptBase =
     opts.prompt +
     "\n\n----\n\n" +
-    "Note: A previous orchestrator session for this goal was interrupted due to a safety trigger. " +
+    "Note: A previous orchestrator session for this goal was interrupted due to a safety or infrastructure trigger (for example, a safety filter or transient environment error). " +
     "The current git working tree already contains all changes made so far. " +
     "Please continue the story from the current repository state. You do not need to reapply past diffs; " +
     "just move the story forward from here.";

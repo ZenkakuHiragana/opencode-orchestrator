@@ -289,6 +289,21 @@ export const messagesEn = {
   "cli.status.summary.next_action.unknown":
     "[opencode-orchestrator] Next step: run 'ococ status --task {task}' again after ensuring planning and environment checks have completed, or consult 'ococ fix --task {task}'.",
 
+  "loop.executor.error.opencode_retry":
+    "[opencode-orchestrator] Detected an OpenCode execution error in the executor step ({kind}); this is failure {current} of {max} in the current session. Skipping the auditor for this step and retrying in the same session on the next loop step.",
+
+  "loop.executor.error.opencode_restart":
+    "[opencode-orchestrator] OpenCode execution errors occurred {current} times in a row within the same session; starting a new session.",
+
+  "loop.executor.error.opencode_restart_limit_reached":
+    "[opencode-orchestrator] Tried to restart the session for OpenCode execution errors, but MAX_RESTARTS={maxRestarts} was reached; aborting the loop.",
+
+  "loop.executor.failure.opencode_unexpected_summary":
+    "Executor hit an OpenCode Unexpected error: {message}",
+
+  "loop.executor.failure.opencode_reasoning_summary":
+    "Executor hit an OpenCode 'Item of type ...' reasoning-format error: {message}",
+
   "cli.fix.error.no_tasks_found":
     "[opencode-orchestrator] No orchestrator tasks were found. Run planning for at least one task before using 'fix'.",
 

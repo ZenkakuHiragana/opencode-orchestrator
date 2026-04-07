@@ -639,6 +639,197 @@ describe("runExecutorAndAuditorStep", () => {
     });
   });
 
+  it("retries Todo-Writer in the same session when OpenCode Unexpected error occurs", async () => {
+    const status = createStatus();
+    const tmpState = fs.mkdtempSync(
+      path.join(os.tmpdir(), "orch-steps-state-todowriter-unexpected-"),
+    );
+    const tmpLogs = fs.mkdtempSync(
+      path.join(os.tmpdir(), "orch-steps-logs-todowriter-unexpected-"),
+    );
+    const acceptancePath = path.join(tmpState, "acceptance-index.json");
+    const statusPath = path.join(tmpState, "status.json");
+    fs.writeFileSync(acceptancePath, "{}", "utf8");
+
+    mockRunOpencode.mockResolvedValueOnce({
+      code: 1,
+      stdout: "",
+      stderr:
+        "Error: Unexpected error, check log file at ~/.local/share/opencode/log/2026-04-07T014835.log for more details\n",
+    } as any);
+
+    const res = await maybeRunTodoWriterStep(
+      baseOpts,
+      1,
+      "001",
+      tmpState,
+      tmpLogs,
+      acceptancePath,
+      "sess-1",
+      [],
+      status,
+      statusPath,
+      0,
+      false,
+    );
+
+    expect(res.abortLoop).toBe(false);
+    expect(res.skipExecutorThisStep).toBe(true);
+    expect(res.forceTodoWriterNextStep).toBe(true);
+    expect(res.sessionId).toBe("sess-1");
+    expect(res.restartCount).toBe(0);
+
+    const saved = JSON.parse(
+      fs.readFileSync(statusPath, "utf8"),
+    ) as OrchestratorStatus;
+    expect(
+      saved.failure_budget?.executor_opencode_error_consecutive_in_session,
+    ).toBe(1);
+    expect(saved.failure_budget?.last_failure_kind).toBe(
+      "todo_writer_opencode_error",
+    );
+  });
+
+  it("detects OpenCode Unexpected error and retries within the same session", async () => {
+    const status = createStatus();
+    const tmpState = fs.mkdtempSync(
+      path.join(os.tmpdir(), "orch-steps-state-opencode-unexpected-"),
+    );
+    const statusPath = path.join(tmpState, "status.json");
+
+    mockRunOpencode.mockResolvedValueOnce({
+      code: 1,
+      stdout: "",
+      stderr:
+        "Error: Unexpected error, check log file at ~/.local/share/opencode/log/2026-04-07T014835.log for more details\n",
+    } as any);
+
+    const res = await runExecutorAndAuditorStep(
+      baseOpts,
+      1,
+      "sess-1",
+      [],
+      "/tmp/logs/orch_step_001.txt",
+      "/tmp/logs/audit_step_001.jsonl",
+      status,
+      statusPath,
+      0,
+      false,
+      "/tmp/logs",
+    );
+
+    expect(res.abortLoop).toBe(false);
+    expect(res.skipAuditorThisStep).toBe(true);
+    expect(res.sessionId).toBe("sess-1");
+    expect(res.restartCount).toBe(0);
+
+    const saved = JSON.parse(
+      fs.readFileSync(statusPath, "utf8"),
+    ) as OrchestratorStatus;
+    expect(
+      saved.failure_budget?.executor_opencode_error_consecutive_in_session,
+    ).toBe(1);
+    expect(saved.failure_budget?.last_failure_kind).toBe(
+      "executor_opencode_error",
+    );
+    expect(saved.failure_budget?.last_failure_summary).toContain(
+      "Unexpected error",
+    );
+  });
+
+  it("restarts the executor session after 3 consecutive OpenCode reasoning-item errors", async () => {
+    const status = createStatus();
+    const tmpState = fs.mkdtempSync(
+      path.join(os.tmpdir(), "orch-steps-state-opencode-reasoning-"),
+    );
+    const statusPath = path.join(tmpState, "status.json");
+
+    const reasoningError =
+      "Error: Item 'rs_dummy_reasoning_item_id' of type 'reasoning' was provided without its required following item.";
+
+    let execCallCount = 0;
+    mockRunOpencode.mockImplementation(async (args: string[]) => {
+      if (args[0] === "run" && args.includes("orch-exec")) {
+        execCallCount += 1;
+        return {
+          code: 1,
+          stdout: "",
+          stderr: reasoningError,
+        } as any;
+      }
+
+      if (args[0] === "export") {
+        // restartFromSafety safeExport
+        return { code: 0, stdout: "" } as any;
+      }
+
+      if (args[0] === "run" && args.includes("orch-todo-write")) {
+        // restartSession's todo-writer call
+        return { code: 0, stdout: "" } as any;
+      }
+
+      if (args[0] === "session" && args[1] === "list") {
+        // findSessionIdByTitle during restartSession
+        const sessions = [
+          { id: "sess-restarted", title: "orchestrator-loop test-task" },
+        ];
+        return { code: 0, stdout: JSON.stringify(sessions) } as any;
+      }
+
+      return { code: 0, stdout: "" } as any;
+    });
+
+    let restartCount = 0;
+    let sessionId = "sess-1";
+
+    for (let step = 1; step <= 3; step += 1) {
+      const res = await runExecutorAndAuditorStep(
+        baseOpts,
+        step,
+        sessionId,
+        [],
+        `/tmp/logs/orch_step_${String(step).padStart(3, "0")}.txt`,
+        `/tmp/logs/audit_step_${String(step).padStart(3, "0")}.jsonl`,
+        status,
+        statusPath,
+        restartCount,
+        false,
+        "/tmp/logs",
+      );
+
+      if (step < 3) {
+        expect(res.sessionId).toBe("sess-1");
+        expect(res.restartCount).toBe(0);
+        expect(res.abortLoop).toBe(false);
+        expect(res.skipAuditorThisStep).toBe(true);
+      } else {
+        expect(res.sessionId).toBe("sess-restarted");
+        expect(res.restartCount).toBe(1);
+        expect(res.abortLoop).toBe(false);
+        expect(res.skipAuditorThisStep).toBe(true);
+      }
+
+      sessionId = res.sessionId;
+      restartCount = res.restartCount;
+    }
+
+    const saved = JSON.parse(
+      fs.readFileSync(statusPath, "utf8"),
+    ) as OrchestratorStatus;
+    expect(saved.last_session_id).toBe("sess-restarted");
+    expect(
+      saved.failure_budget?.executor_opencode_error_consecutive_in_session,
+    ).toBe(0);
+    expect(saved.failure_budget?.executor_opencode_error_last_session_id).toBe(
+      "sess-restarted",
+    );
+    expect(saved.failure_budget?.last_failure_kind).toBe(
+      "executor_opencode_error",
+    );
+    expect(saved.failure_budget?.last_failure_summary).toContain("reasoning");
+    expect(execCallCount).toBe(3);
+  });
+
   it("requests replanning when STEP_BLOCKER general need_replan appears", async () => {
     const status = createStatus();
     const stdout = [

@@ -213,6 +213,21 @@ export const messagesJa = {
   "cli.status.summary.next_action.unknown":
     "[opencode-orchestrator] 次のステップ: 計画フェーズや環境チェックが完了していることを確認したうえで 'ococ status --task {task}' を再実行するか、'ococ fix --task {task}' で詳細を確認してください。",
 
+  "loop.executor.error.opencode_retry":
+    "[opencode-orchestrator] executor ステップで OpenCode 実行エラーを検出しました ({kind}); 同一セッション内で {current}/{max} 回目の失敗のため、このステップでは auditor をスキップし、次のステップで同じセッションのまま再試行します。",
+
+  "loop.executor.error.opencode_restart":
+    "[opencode-orchestrator] executor ステップで OpenCode 実行エラーが同一セッション内で {current} 回連続したため、新しいセッションを開始します。",
+
+  "loop.executor.error.opencode_restart_limit_reached":
+    "[opencode-orchestrator] OpenCode 実行エラーに対するセッション再起動を試みましたが、MAX_RESTARTS={maxRestarts} に到達したため、ループを中断します。",
+
+  "loop.executor.failure.opencode_unexpected_summary":
+    "executor で OpenCode の Unexpected error が発生した: {message}",
+
+  "loop.executor.failure.opencode_reasoning_summary":
+    "executor で OpenCode の reasoning item フォーマットエラーが発生した: {message}",
+
   "cli.fix.error.no_tasks_found":
     "[opencode-orchestrator] 実行可能な orchestrator タスクが見つかりません。まず Refiner/Todo-Writer で少なくとも 1 つタスクを用意してから fix を使ってください。",
 
