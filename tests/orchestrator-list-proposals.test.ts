@@ -10,16 +10,32 @@ describe("runList --task --proposals", () => {
   const originalXdg = process.env.XDG_STATE_HOME;
   const originalConsoleError = console.error;
   const originalConsoleLog = console.log;
+  let prevLC_ALL: string | undefined;
+  let prevLANG: string | undefined;
 
   beforeEach(() => {
     console.error = vi.fn();
     console.log = vi.fn();
+    prevLC_ALL = process.env.LC_ALL;
+    prevLANG = process.env.LANG;
+    process.env.LC_ALL = "ja_JP.UTF-8";
+    process.env.LANG = "ja_JP.UTF-8";
   });
 
   afterEach(() => {
     console.error = originalConsoleError;
     console.log = originalConsoleLog;
     process.env.XDG_STATE_HOME = originalXdg;
+    if (prevLC_ALL === undefined) {
+      delete process.env.LC_ALL;
+    } else {
+      process.env.LC_ALL = prevLC_ALL;
+    }
+    if (prevLANG === undefined) {
+      delete process.env.LANG;
+    } else {
+      process.env.LANG = prevLANG;
+    }
   });
 
   it("prints a formatted proposal list in text mode", async () => {

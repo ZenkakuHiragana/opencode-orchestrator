@@ -11,9 +11,15 @@ declare const process: { env: Record<string, string | undefined> };
 
 describe("runDoctorCommand", () => {
   let prevXdg: string | undefined;
+  let prevLC_ALL: string | undefined;
+  let prevLANG: string | undefined;
 
   beforeEach(() => {
     prevXdg = process.env.XDG_STATE_HOME;
+    prevLC_ALL = process.env.LC_ALL;
+    prevLANG = process.env.LANG;
+    process.env.LC_ALL = "ja_JP.UTF-8";
+    process.env.LANG = "ja_JP.UTF-8";
   });
 
   afterEach(() => {
@@ -21,6 +27,16 @@ describe("runDoctorCommand", () => {
       delete process.env.XDG_STATE_HOME;
     } else {
       process.env.XDG_STATE_HOME = prevXdg;
+    }
+    if (prevLC_ALL === undefined) {
+      delete process.env.LC_ALL;
+    } else {
+      process.env.LC_ALL = prevLC_ALL;
+    }
+    if (prevLANG === undefined) {
+      delete process.env.LANG;
+    } else {
+      process.env.LANG = prevLANG;
     }
     vi.restoreAllMocks();
   });
