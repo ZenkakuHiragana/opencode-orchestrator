@@ -690,6 +690,59 @@ describe("runExecutorAndAuditorStep", () => {
     );
   });
 
+  it("retries Todo-Writer in the same session when a generic OpenCode Error occurs", async () => {
+    const status = createStatus();
+    const tmpState = fs.mkdtempSync(
+      path.join(os.tmpdir(), "orch-steps-state-todowriter-generic-error-"),
+    );
+    const tmpLogs = fs.mkdtempSync(
+      path.join(os.tmpdir(), "orch-steps-logs-todowriter-generic-error-"),
+    );
+    const acceptancePath = path.join(tmpState, "acceptance-index.json");
+    const statusPath = path.join(tmpState, "status.json");
+    fs.writeFileSync(acceptancePath, "{}", "utf8");
+
+    mockRunOpencode.mockResolvedValueOnce({
+      code: 1,
+      stdout: "",
+      stderr: "Error: Input exceeds context window of this model\n",
+    } as any);
+
+    const res = await maybeRunTodoWriterStep(
+      baseOpts,
+      1,
+      "001",
+      tmpState,
+      tmpLogs,
+      acceptancePath,
+      "sess-1",
+      [],
+      status,
+      statusPath,
+      0,
+      false,
+    );
+
+    expect(res.abortLoop).toBe(false);
+    expect(res.skipExecutorThisStep).toBe(true);
+    expect(res.forceTodoWriterNextStep).toBe(true);
+    expect(res.sessionId).toBe("sess-1");
+    expect(res.restartCount).toBe(0);
+
+    const saved = JSON.parse(
+      fs.readFileSync(statusPath, "utf8"),
+    ) as OrchestratorStatus;
+    expect(
+      saved.failure_budget?.executor_opencode_error_consecutive_in_session,
+    ).toBe(1);
+    expect(saved.failure_budget?.last_failure_kind).toBe(
+      "todo_writer_opencode_error",
+    );
+    expect(saved.failure_budget?.last_failure_summary).toContain(
+      "Input exceeds context window of this model",
+    );
+  });
+
   it("detects OpenCode Unexpected error and retries within the same session", async () => {
     const status = createStatus();
     const tmpState = fs.mkdtempSync(
@@ -734,6 +787,52 @@ describe("runExecutorAndAuditorStep", () => {
     );
     expect(saved.failure_budget?.last_failure_summary).toContain(
       "Unexpected error",
+    );
+  });
+
+  it("detects generic OpenCode Error output and retries within the same session", async () => {
+    const status = createStatus();
+    const tmpState = fs.mkdtempSync(
+      path.join(os.tmpdir(), "orch-steps-state-opencode-generic-error-"),
+    );
+    const statusPath = path.join(tmpState, "status.json");
+
+    mockRunOpencode.mockResolvedValueOnce({
+      code: 1,
+      stdout: "",
+      stderr: "Error: Input exceeds context window of this model\n",
+    } as any);
+
+    const res = await runExecutorAndAuditorStep(
+      baseOpts,
+      1,
+      "sess-1",
+      [],
+      "/tmp/logs/orch_step_001.txt",
+      "/tmp/logs/audit_step_001.jsonl",
+      status,
+      statusPath,
+      0,
+      false,
+      "/tmp/logs",
+    );
+
+    expect(res.abortLoop).toBe(false);
+    expect(res.skipAuditorThisStep).toBe(true);
+    expect(res.sessionId).toBe("sess-1");
+    expect(res.restartCount).toBe(0);
+
+    const saved = JSON.parse(
+      fs.readFileSync(statusPath, "utf8"),
+    ) as OrchestratorStatus;
+    expect(
+      saved.failure_budget?.executor_opencode_error_consecutive_in_session,
+    ).toBe(1);
+    expect(saved.failure_budget?.last_failure_kind).toBe(
+      "executor_opencode_error",
+    );
+    expect(saved.failure_budget?.last_failure_summary).toContain(
+      "Input exceeds context window of this model",
     );
   });
 

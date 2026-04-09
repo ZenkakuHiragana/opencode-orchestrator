@@ -126,6 +126,7 @@ export async function maybeRunTodoWriterStep(
   const infraError = detectExecutorOpencodeInfraError(
     planRes.stdout,
     planRes.stderr,
+    planRes.code,
   );
   if (infraError) {
     if (failureBudget.executor_opencode_error_last_session_id === sessionId) {
@@ -466,6 +467,7 @@ export async function runExecutorAndAuditorStep(
   const infraError = detectExecutorOpencodeInfraError(
     execRes.stdout,
     execRes.stderr,
+    execRes.code,
   );
   if (infraError) {
     if (failureBudget.executor_opencode_error_last_session_id === sessionId) {
@@ -953,6 +955,17 @@ export async function runExecutorAndAuditorStep(
           ];
 
       const auditRes = await runOpencode(args, auditRaw, false);
+
+      const auditInfraError = detectExecutorOpencodeInfraError(
+        auditRes.stdout,
+        auditRes.stderr,
+        auditRes.code,
+      );
+      if (auditInfraError) {
+        console.error(
+          `[opencode-orchestrator] auditor 実行中に OpenCode 実行エラーが発生しました: ${auditInfraError.message}`,
+        );
+      }
 
       auditSafety = auditRes.stdout.includes(
         "I'm sorry, but I cannot assist with that request.",
@@ -1585,12 +1598,14 @@ type ExecutorOpencodeInfraError = {
 function detectExecutorOpencodeInfraError(
   stdout: string,
   stderr?: string,
+  code?: number | null,
 ): ExecutorOpencodeInfraError | null {
   const combinedRaw = `${stdout ?? ""}\n${stderr ?? ""}`;
   // Strip common ANSI color codes so that we can reliably search for error
   // phrases even when the terminal renders "Error:" in red, etc.
   const combined = combinedRaw.replace(/\u001b\[[0-9;]*m/g, "");
 
+  // 1) Keep explicit pattern matching for known opencode CLI failures.
   if (combined.includes("Error: Unexpected error, check log file at ")) {
     const line = combined
       .split(/\r?\n/)
@@ -1617,6 +1632,21 @@ function detectExecutorOpencodeInfraError(
     return {
       kind: "reasoning_item_missing",
       message: line,
+    };
+  }
+
+  // 2) Generic fallback: treat any non-zero exit code with an "Error:" line
+  // as an opencode infrastructure error. This intentionally does NOT match
+  // session-level errors that only surface as JSON events (which currently
+  // leave the CLI exit code as 0).
+  const hasNonZeroExit = typeof code === "number" ? code !== 0 : code == null;
+  if (hasNonZeroExit && combined.includes("Error:")) {
+    const line = combined.split(/\r?\n/).find((l) => l.includes("Error:"));
+    return {
+      // Map generic infra failures onto the existing "unexpected_error" kind
+      // so that existing summary / i18n keys continue to apply.
+      kind: "unexpected_error",
+      message: (line || "Error: <unknown opencode CLI error>").trim(),
     };
   }
 
