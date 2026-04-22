@@ -68,6 +68,85 @@ export type PreflightProbeResult = {
   stderr_excerpt: string;
 };
 
+function refreshCommandPolicySummary(
+  task: string,
+  results: PreflightProbeResult[],
+): void {
+  const stateDir = getOrchestratorStateDir(task);
+  const policyPath = path.join(stateDir, "command-policy.json");
+  if (!fs.existsSync(policyPath)) {
+    return;
+  }
+
+  const rawPolicy = fs.readFileSync(policyPath, "utf8");
+  const policyJson = JSON.parse(rawPolicy) as {
+    version?: number;
+    summary?: {
+      loop_status?: string;
+      available_helper_commands?: string[];
+    };
+    commands?: {
+      id?: string;
+      usage?: CommandUsage | string;
+      availability?: "available" | "unavailable";
+      [key: string]: unknown;
+    }[];
+  };
+
+  if (policyJson.version !== 1 || !Array.isArray(policyJson.commands)) {
+    return;
+  }
+
+  const resultById = new Map<string, PreflightProbeResult>();
+  for (const r of results) {
+    resultById.set(r.id, r);
+  }
+
+  const availableHelperCommands = helperCommandsData.helper_commands
+    .filter((helper) => {
+      const r = resultById.get(helper.id);
+      return r && r.available;
+    })
+    .map((helper) => helper.command);
+
+  if (!policyJson.summary) {
+    policyJson.summary = {};
+  }
+  policyJson.summary.available_helper_commands = availableHelperCommands;
+
+  for (const cmd of policyJson.commands) {
+    if (!cmd.id || cmd.id.startsWith("helper:")) continue;
+    const r = resultById.get(cmd.id);
+    if (!r) continue;
+    cmd.availability = r.available ? "available" : "unavailable";
+  }
+
+  const mustExecUnavailable = policyJson.commands.some((cmd) => {
+    if (!cmd) return false;
+    const usage = String(cmd.usage);
+    return usage === "must_exec" && cmd.availability !== "available";
+  });
+
+  const currentLoopStatus = policyJson.summary.loop_status;
+
+  if (mustExecUnavailable) {
+    const hasSpecError = results.some(
+      (r) =>
+        r.usage === "must_exec" &&
+        !r.available &&
+        typeof r.stderr_excerpt === "string" &&
+        r.stderr_excerpt.startsWith("SPEC_ERROR:"),
+    );
+    policyJson.summary.loop_status = hasSpecError
+      ? "needs_refinement"
+      : "blocked_by_environment";
+  } else if (typeof currentLoopStatus === "string") {
+    policyJson.summary.loop_status = currentLoopStatus;
+  }
+
+  fs.writeFileSync(policyPath, JSON.stringify(policyJson, null, 2), "utf8");
+}
+
 function isBashPermissionDecision(
   value: unknown,
 ): value is CommandPermissionDecision {
@@ -447,86 +526,7 @@ const preflightCliTool: ToolDefinition = tool({
     // Best-effort command-policy.json update: reflect helper availability,
     // per-command availability, and loop_status based on preflight results.
     try {
-      const stateDir = getOrchestratorStateDir(args.task);
-      const policyPath = path.join(stateDir, "command-policy.json");
-      if (fs.existsSync(policyPath)) {
-        const rawPolicy = fs.readFileSync(policyPath, "utf8");
-        const policyJson = JSON.parse(rawPolicy) as {
-          version?: number;
-          summary?: {
-            loop_status?: string;
-            available_helper_commands?: string[];
-          };
-          commands?: {
-            id?: string;
-            usage?: CommandUsage | string;
-            availability?: "available" | "unavailable";
-            [key: string]: unknown;
-          }[];
-        };
-
-        if (policyJson.version === 1 && Array.isArray(policyJson.commands)) {
-          const resultById = new Map<string, PreflightProbeResult>();
-          for (const r of results) {
-            resultById.set(r.id, r);
-          }
-
-          // Update available_helper_commands as list of base command names
-          const availableHelperCommands = helperCommandsData.helper_commands
-            .filter((helper) => {
-              const r = resultById.get(helper.id);
-              return r && r.available;
-            })
-            .map((helper) => helper.command);
-
-          if (!policyJson.summary) {
-            policyJson.summary = {};
-          }
-          policyJson.summary.available_helper_commands =
-            availableHelperCommands;
-
-          // Update availability for non-helper commands
-          for (const cmd of policyJson.commands) {
-            if (!cmd.id || cmd.id.startsWith("helper:")) continue;
-            const r = resultById.get(cmd.id);
-            if (!r) continue;
-            cmd.availability = r.available ? "available" : "unavailable";
-          }
-
-          // Compute loop_status based on must_exec availability and error kinds.
-          const mustExecUnavailable = policyJson.commands.some((cmd) => {
-            if (!cmd) return false;
-            const usage = String(cmd.usage);
-            return usage === "must_exec" && cmd.availability !== "available";
-          });
-
-          let loopStatus:
-            | "ready_for_loop"
-            | "needs_refinement"
-            | "blocked_by_environment" = "ready_for_loop";
-
-          if (mustExecUnavailable) {
-            const hasSpecError = results.some(
-              (r) =>
-                r.usage === "must_exec" &&
-                !r.available &&
-                typeof r.stderr_excerpt === "string" &&
-                r.stderr_excerpt.startsWith("SPEC_ERROR:"),
-            );
-            loopStatus = hasSpecError
-              ? "needs_refinement"
-              : "blocked_by_environment";
-          }
-
-          policyJson.summary.loop_status = loopStatus;
-
-          fs.writeFileSync(
-            policyPath,
-            JSON.stringify(policyJson, null, 2),
-            "utf8",
-          );
-        }
-      }
+      refreshCommandPolicySummary(args.task, results);
     } catch (err) {
       log({
         event: "command_policy_update_error",

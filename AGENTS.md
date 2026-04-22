@@ -80,6 +80,7 @@
 - Orchestrator ループ
   - 旧シェル版 `orchestrator-loop.sh` は Orchestrator / Auditor のハングや安全装置トリップを検出し、ウォッチドッグ + timeout で保護します。
   - 新 CLI 版 `opencode-orchestrator loop` でも同様に `MAX_LOOP` / `MAX_RESTARTS` 相当の制御を行います。デフォルト値を変える場合は README とコメントを更新してください。
+  - planning gate のソース・オブ・トゥルースは `command-policy.json.summary` です。`status.json` は Executor / Auditor の進捗スナップショットであり、計画 readiness の最終判定を保持する場所ではありません。Planner が `status.json` を触る場合も、proposal 解消や failure-budget cleanup に結びつく保守的な更新に限ります。
   - `status.json` には `failure_budget` も保存されます。`consecutive_verification_gaps` は `STEP_AUDIT: ready` に `STEP_VERIFY: ready` が伴わないケースのみ連続カウントし、通常の非監査ステップではリセットされます。
   - Executor プロトコルでは各 step で `STEP_INTENT:` と `STEP_VERIFY:` を必ず出力する前提です。ID 列はカンマ区切りで、`R1,R2` / `R1, R2` の両方を許容します。
 
@@ -121,15 +122,22 @@ system prompt を編集する際は、ここから外れる権限を勝手に与
 #### orch-planner（Planner）
 
 - 主な読み取り対象
+  - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/discovery-packet.md`
   - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/acceptance-index.json`
   - 同 `spec.md` / `command-policy.json` / `status.json`
   - リポジトリ内のコード／ドキュメント（`read` / `glob` / `grep`）
   - Spec-Checker / Preflight の結果 JSON（`task` ツール / `preflight-cli` 経由）
 - 主な書き込み対象
-  - 原則 **書かない**。唯一の例外として、`proposals.json` の整理だけが許可されている（`src/orchestrator-agents.ts` の permission を参照）。
+  - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/discovery-packet.md`
+  - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/command-policy.json`
+    - `summary` 配下の strict readiness metadata を最終化する。
+  - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/proposals.json`
+    - live proposal queue 自体は loop actors が populate し、Planner は replanning 時のクリア／調整だけを行う。
+  - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/status.json`
+    - planning gate 用ではなく、proposal 解消や failure-budget cleanup に伴う保守的な更新だけを行いうる。
 - 呼べるもの
   - `task` → `orch-refiner`, `orch-spec-checker`
-  - `preflight-cli` ツール → Refiner が定義した command descriptors と helper commands について、permission.bash ルールをローカル評価し、`command-policy.json` の `availability` と `available_helper_commands`、`loop_status` を更新する。
+  - `preflight-cli` ツール → Refiner が定義した command descriptors と helper commands について、permission.bash ルールをローカル評価し、`command-policy.json.commands[].availability` と `command-policy.json.summary.available_helper_commands` を更新する。Planner はその結果を読んで `command-policy.json.summary` の strict readiness を最終化する。
   - `bash` → `npx opencode-orchestrator loop ...` のような CLI の起動のみ
 - プロンプトで **やってはいけない指示**
   - `acceptance-index.json` / `spec.md` / `command-policy.json.commands[]` の内容を直接編集させる
@@ -146,6 +154,7 @@ system prompt を編集する際は、ここから外れる権限を勝手に与
   - `acceptance-index.json`
   - `spec.md`
   - `command-policy.json.commands[]`（コマンド定義そのもの）
+  - fresh/current policy を書くときに必要な `command-policy.json.summary` フィールドの初期化
 - プロンプトで **してはいけない指示**
   - コードやテスト、設定ファイルの編集（Refiner に `edit` / `bash` 権限は無い）
   - 他エージェント（Planner / Executor / Todo-Writer）のプロトコルや出力フォーマットを上書きするような指示
@@ -197,8 +206,9 @@ system prompt を編集する際は、ここから外れる権限を勝手に与
 #### preflight-cli（Preflight）
 
 - preflight-cli ツール（TypeScript 実装）
-  - Planner 専用ツール。Refiner が定義した command descriptors と helper commands について、OpenCode 設定から得られる `permission.bash` の実効ルールをローカル評価し、その結果を `command-policy.json` の `availability` と `available_helper_commands`、`loop_status` に反映する。
-  - system prompt には **preflight-cli 自身の実装詳細**（ログファイルのパスなど）を書かない。Planner から見えるのは「preflight-cli を呼ぶと per-command の availability が分かり、command-policy.json が更新される」というレベルまで。
+  - Planner 専用ツール。Refiner が定義した command descriptors と helper commands について、OpenCode 設定から得られる `permission.bash` の実効ルールをローカル評価し、その結果を `command-policy.json.commands[].availability` と `command-policy.json.summary.available_helper_commands` に反映する。
+  - strict readiness の最終判定は Planner が `command-policy.json.summary` に書く。`status.json` は planning gate のソース・オブ・トゥルースではない。
+  - system prompt には **preflight-cli 自身の実装詳細**（ログファイルのパスなど）を書かない。Planner から見えるのは「preflight-cli を呼ぶと per-command の availability が分かり、Planner が readiness summary を確定できる」というレベルまで。
 
 ### 8.3 「この repo の事情」と「配布先での視野」を混同しない
 

@@ -30,7 +30,7 @@
           },
           "description": {
             "type": "string",
-            "description": "Natural-language description of the requirement (written in English by agents)."
+            "description": "Natural-language description of the requirement (written in the same language as the user-facing task unless higher-priority instructions override it)."
           },
           "acceptance": {
             "type": "object",

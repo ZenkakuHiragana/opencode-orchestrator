@@ -10,7 +10,14 @@ import preflightCliTool, {
 import { getOrchestratorStateDir } from "../src/orchestrator-paths.js";
 import { setPreflightRunnerBashPermissionSource } from "../src/preflight-permission-store.js";
 
-function prepareState(task: string, withCommand = false): void {
+function prepareState(
+  task: string,
+  withCommand = false,
+  loopStatus:
+    | "ready_for_loop"
+    | "needs_refinement"
+    | "blocked_by_environment" = "ready_for_loop",
+): void {
   const stateDir = getOrchestratorStateDir(task);
   fs.mkdirSync(stateDir, { recursive: true });
   fs.writeFileSync(path.join(stateDir, "acceptance-index.json"), "{}", "utf8");
@@ -18,7 +25,7 @@ function prepareState(task: string, withCommand = false): void {
   const basePolicy = {
     version: 1 as const,
     summary: {
-      loop_status: "ready_for_loop" as const,
+      loop_status: loopStatus,
       available_helper_commands: [
         "grep",
         "rg",
@@ -115,7 +122,7 @@ describe("preflight-cli short-circuit with effective permission", () => {
 
     try {
       const task = "short-circuit-all-allow";
-      prepareState(task);
+      prepareState(task, false, "needs_refinement");
       setPreflightRunnerBashPermissionSource({
         globalBash: undefined,
         agentBash: undefined,
@@ -154,8 +161,8 @@ describe("preflight-cli short-circuit with effective permission", () => {
       );
 
       // Command-policy should be updated by preflight-cli: available_helper_commands
-      // should reflect the short-circuit result and loop_status should remain
-      // ready_for_loop because must_exec command is allowed.
+      // should reflect the short-circuit result, but preflight must not promote
+      // loop_status to ready_for_loop on its own.
       const stateDir = getOrchestratorStateDir(task);
       const policyPath = path.join(stateDir, "command-policy.json");
       const policy = JSON.parse(fs.readFileSync(policyPath, "utf8")) as {
@@ -166,7 +173,7 @@ describe("preflight-cli short-circuit with effective permission", () => {
         commands: { id: string; availability: string }[];
       };
 
-      expect(policy.summary.loop_status).toBe("ready_for_loop");
+      expect(policy.summary.loop_status).toBe("needs_refinement");
       expect(policy.summary.available_helper_commands).toContain("grep");
       const cmdPolicy = policy.commands.find((c) => c.id === "cmd-missing");
       // commands[] was initially empty, so we do not expect an entry here yet.
@@ -241,6 +248,73 @@ describe("preflight-cli short-circuit with effective permission", () => {
       };
 
       expect(policy.summary.loop_status).toBe("blocked_by_environment");
+    } finally {
+      setPreflightRunnerBashPermissionSource({
+        globalBash: undefined,
+        agentBash: undefined,
+      });
+      process.env.XDG_STATE_HOME = prevXdg;
+    }
+  });
+
+  it("treats placeholder-looking commands mechanically when permissions allow", async () => {
+    const prevXdg = process.env.XDG_STATE_HOME;
+    const xdg = fs.mkdtempSync(
+      path.join(os.tmpdir(), "preflight-short-placeholder-"),
+    );
+    process.env.XDG_STATE_HOME = xdg;
+
+    try {
+      const task = "short-circuit-placeholder-mechanical";
+      prepareState(task, true, "needs_refinement");
+      setPreflightRunnerBashPermissionSource({
+        globalBash: undefined,
+        agentBash: undefined,
+      });
+
+      const raw = await preflightCliTool.execute(
+        {
+          task,
+          commands: [
+            {
+              id: "cmd-ls",
+              command: "ls {{name}}",
+              role: "test",
+              usage: "must_exec",
+            },
+          ],
+        },
+        { agent: "orch-planner", worktree: process.cwd() } as any,
+      );
+
+      const parsed = JSON.parse(raw) as {
+        status: "ok" | "failed";
+        results: {
+          id: string;
+          available: boolean;
+          stderr_excerpt: string;
+        }[];
+      };
+
+      expect(parsed.status).toBe("ok");
+      const cmd = parsed.results.find((r) => r.id === "cmd-ls");
+      expect(cmd).toBeTruthy();
+      expect(cmd!.available).toBe(true);
+      expect(cmd!.stderr_excerpt).toContain(
+        "short-circuit: permission.bash=allow",
+      );
+
+      const stateDir = getOrchestratorStateDir(task);
+      const policyPath = path.join(stateDir, "command-policy.json");
+      const policy = JSON.parse(fs.readFileSync(policyPath, "utf8")) as {
+        summary: { loop_status: string };
+        commands: { id: string; availability: string }[];
+      };
+
+      expect(policy.summary.loop_status).toBe("needs_refinement");
+      expect(policy.commands.find((c) => c.id === "cmd-ls")?.availability).toBe(
+        "available",
+      );
     } finally {
       setPreflightRunnerBashPermissionSource({
         globalBash: undefined,

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect } from "vitest";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -39,6 +39,27 @@ function makeCommandPolicyCommand(availability: "available" | "unavailable") {
   };
 }
 
+function makeReadyForLoopSummary(
+  overrides: Partial<{
+    loop_status: string;
+    available_helper_commands: readonly string[];
+    last_spec_check_status: string;
+    last_spec_check_feasible_for_loop: boolean;
+    blocking_failure_types: string[];
+    blocking_issue_ids: string[];
+  }> = {},
+) {
+  return {
+    loop_status: "ready_for_loop",
+    available_helper_commands: availableHelperCommands.slice(),
+    last_spec_check_status: "ok",
+    last_spec_check_feasible_for_loop: true,
+    blocking_failure_types: [],
+    blocking_issue_ids: [],
+    ...overrides,
+  };
+}
+
 function withTempDir(fn: (dir: string) => void) {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), "policy-test-"));
   try {
@@ -59,10 +80,7 @@ describe("enforceCommandPolicyGate", () => {
       }) as never;
       const policy = {
         version: 1,
-        summary: {
-          loop_status: "ready_for_loop",
-          available_helper_commands: availableHelperCommands.slice(),
-        },
+        summary: makeReadyForLoopSummary(),
         commands: [makeCommandPolicyCommand("available")],
       };
       const file = path.join(dir, "command-policy.json");
@@ -87,10 +105,7 @@ describe("enforceCommandPolicyGate", () => {
       }) as never;
       const policy = {
         version: 1,
-        summary: {
-          loop_status: "ready_for_loop",
-          available_helper_commands: availableHelperCommands.slice(),
-        },
+        summary: makeReadyForLoopSummary(),
         commands: [makeCommandPolicyCommand("unavailable")],
       };
       const file = path.join(dir, "command-policy.json");
@@ -239,7 +254,7 @@ describe("enforceCommandPolicyGate", () => {
     });
   });
 
-  it("exits when a command entry is missing required fields", () => {
+  it("exits when ready_for_loop is missing planner-finalized spec-check summary fields", () => {
     withTempDir((dir) => {
       const originalExit = process.exit;
       (process as any).exit = ((code?: number) => {
@@ -256,6 +271,68 @@ describe("enforceCommandPolicyGate", () => {
             loop_status: "ready_for_loop",
             available_helper_commands: availableHelperCommands.slice(),
           },
+          commands: [],
+        }),
+        "utf8",
+      );
+
+      try {
+        expect(() => enforceCommandPolicyGate(dir)).toThrow(
+          /process\.exit\(1\) called/,
+        );
+      } finally {
+        (process as any).exit = originalExit;
+      }
+    });
+  });
+
+  it("exits when ready_for_loop contradicts planner-finalized spec-check summary", () => {
+    withTempDir((dir) => {
+      const originalExit = process.exit;
+      (process as any).exit = ((code?: number) => {
+        const err = new Error(`process.exit(${code ?? 0}) called`);
+        (err as any).code = code ?? 0;
+        throw err;
+      }) as never;
+
+      fs.writeFileSync(
+        path.join(dir, "command-policy.json"),
+        JSON.stringify({
+          version: 1,
+          summary: makeReadyForLoopSummary({
+            last_spec_check_feasible_for_loop: false,
+            blocking_failure_types: ["missing_commands"],
+            blocking_issue_ids: ["I-001"],
+          }),
+          commands: [],
+        }),
+        "utf8",
+      );
+
+      try {
+        expect(() => enforceCommandPolicyGate(dir)).toThrow(
+          /process\.exit\(1\) called/,
+        );
+      } finally {
+        (process as any).exit = originalExit;
+      }
+    });
+  });
+
+  it("exits when a command entry is missing required fields", () => {
+    withTempDir((dir) => {
+      const originalExit = process.exit;
+      (process as any).exit = ((code?: number) => {
+        const err = new Error(`process.exit(${code ?? 0}) called`);
+        (err as any).code = code ?? 0;
+        throw err;
+      }) as never;
+
+      fs.writeFileSync(
+        path.join(dir, "command-policy.json"),
+        JSON.stringify({
+          version: 1,
+          summary: makeReadyForLoopSummary(),
           commands: [
             {
               id: "cmd-npm-test",
