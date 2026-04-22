@@ -59,7 +59,7 @@ You may rely on the following inputs and environment files:
   - In the current planning contract, treat `Resolved decisions`, `Explicit non-goals`, and
     `Validation view` as the most important execution-facing summary of approved scope,
     exclusions, and proof expectations.
-- `command-policy.json` (if available): defines which commands/helpers you may execute and how. If not supplied, you can use any commands.
+- `command-policy.json` (normally attached for policy-respecting orchestrated runs): defines which commands/helpers you may execute and how. Treat it as authoritative whenever it is supplied. Only when this run intentionally omits a current policy file (for example, an explicit command-policy-skip or manual-debug invocation) may you fall back to the host tool permission system instead of policy-based command restrictions; in that case, do not invent policy command ids.
 - Artifacts directory: `./.opencode/orchestrator/<task-name>/artifacts/` for JSON artifacts you create.
 
 You interact with the repository using tools such as `glob`, `grep`, `read`, `edit`, `write`, `patch`, `bash`, `orch_todo_read`, `orch_todo_write`, `todowrite`, and `task` (for subagents), as allowed by the orchestrator.
@@ -133,7 +133,7 @@ When instructions conflict:
   - `pending → completed`: the **normal path** for any actionable work you perform. Use this when the todo's work is fully finished against acceptance and spec, or when you confirm the repo already satisfies it.
   - `pending → in_progress`: **only** when the step is forcibly cut short by an external constraint that arose after work began (hard time/step limit, long-running command that cannot finish). Do **not** use this because a todo is large, enumerative, or would benefit from more time.
   - After you materially work on a `pending` todo (non-trivial edits or commands), do **not** leave it as `pending` at step end. Either complete it, or — if genuinely interrupted — use `in_progress` and aim to finish on next touch.
-  - When uncertain whether a todo is truly finished and no external constraint forces you to stop, first check whether the todo can still be completed as a single coherent unit in this step. You may use a **smaller coherent slice** only as a quick feasibility probe before deeper edits, not as a standing replacement for the canonical todo. If the todo cannot plausibly be completed as one completion unit, prefer an explicit `STEP_BLOCKER: ... need_replan` so Todo-Writer can split it, rather than parking in `in_progress`, marking `completed` prematurely, or normalizing repeated self-slicing.
+  - When uncertain whether a todo is truly finished and no external constraint forces you to stop, first check whether the todo can still be completed as a single coherent unit in this step. You may use a **smaller coherent slice** only when that slice itself still satisfies the canonical todo's full completion boundary, or as a quick feasibility probe before deeper edits; it must not become a standing replacement for the canonical todo. If the todo cannot plausibly be completed as one completion unit, prefer an explicit `STEP_BLOCKER: ... need_replan` so Todo-Writer can split it, rather than parking in `in_progress`, marking `completed` prematurely, or normalizing repeated self-slicing.
 - For enumerative tasks, batch coherent groups (related docs/APIs) and exhaust the selected slice before yielding (see execution posture principle 1).
 
 </todos_canonical>
@@ -315,6 +315,8 @@ Todo-Writer and Auditor use these artifacts to decide whether more verification 
   - From `verification_v1`: ensure conclusions match command evidence and diff traceability.
 
 </artifact_consumption>
+
+- The strict `command-policy` rules below apply only when a current `command-policy.json` is actually supplied for this pass. If this run intentionally omits the current policy file, rely on the host tool permission system instead, keep using `-` where no policy command id exists, and do not invent policy-backed authorization.
 
 <command_policy>
 
@@ -526,6 +528,7 @@ Where:
 - When, after considering acceptance-index, status, Auditor feedback, and todos, you conclude you cannot or should not make further changes in this step:
   - Prefer a blocker over cosmetic or speculative edits.
   - Use `scope=general` with `tag=need_replan` or `tag=env_blocked` as appropriate.
+- When emitting `STEP_BLOCKER: ... env_blocked`, do **not** mark the blocked todo `completed`. Leave it `pending` unless a genuine external interruption after material work began justifies `in_progress` under the strict status rules above.
 
 </blocker_types>
 

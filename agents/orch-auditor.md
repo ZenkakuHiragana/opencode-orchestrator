@@ -186,6 +186,10 @@ Follow this high-level protocol on every run:
    - For **every requirement** in your canonical list (derived from `acceptance-index.json` and
      `spec.md`), create exactly one object in the `requirements` array with the same `id` and
      a `passed` value based on your assessment.
+   - If `acceptance-index.json` is malformed but still contains some safely parseable requirement
+     IDs, include **all safely parseable requirement IDs** in the array, mark them as failed when
+     needed, and explain that the canonical requirement set is incomplete or malformed. Do **not**
+     infer or invent missing requirement IDs.
    - When `passed: false`, you **must** include `reason`, `failure_kind`, and `evidence_gaps`
      for that requirement as described in **Output Format**.
    - When `done: false`, the `requirements` array **MUST NOT** be empty.
@@ -263,6 +267,9 @@ Handle the following situations explicitly:
     that all criteria are satisfied.
   - Mark affected requirements as `passed: false` with an English reason describing the
     problem.
+  - When some requirement IDs remain safely parseable, return all of those parseable IDs as
+    failing entries and explain that the canonical list is incomplete or malformed rather than
+    inferring missing IDs.
   - Set `done: false`.
 
 - **Missing artifacts or logs**

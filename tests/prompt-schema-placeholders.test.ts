@@ -437,8 +437,26 @@ describe("prompt JSON schema placeholders", () => {
       "It does not write `summary.loop_status`; Planner finalizes that field",
     );
     expect(todoWriterPrompt).toContain("single Executor step");
+    expect(todoWriterPrompt).toContain(
+      "If the current policy file is intentionally unavailable for this pass",
+    );
     expect(executorPrompt).toContain(
       "completion unit that should normally finish within one Executor step",
+    );
+    expect(executorPrompt).toContain(
+      "Only when this run intentionally omits a current policy file",
+    );
+    expect(executorPrompt).toContain(
+      "The strict `command-policy` rules below apply only when a current `command-policy.json` is actually supplied for this pass.",
+    );
+    expect(executorPrompt).not.toContain(
+      "If not supplied, you can use any commands.",
+    );
+    expect(executorPrompt).toContain(
+      "that slice itself still satisfies the canonical todo's full completion boundary",
+    );
+    expect(executorPrompt).toContain(
+      "When emitting `STEP_BLOCKER: ... env_blocked`, do **not** mark the blocked todo `completed`.",
     );
     expect(executorPrompt).toContain(
       "do not use repeated self-slicing as a substitute for replanning",
@@ -501,6 +519,9 @@ describe("prompt JSON schema placeholders", () => {
     );
     expect(auditorPrompt).toContain("remote-refresh (`git fetch`)");
     expect(auditorPrompt).toContain("filesystem creation (`mkdir`)");
+    expect(auditorPrompt).toContain(
+      "If `acceptance-index.json` is malformed but still contains some safely parseable requirement",
+    );
     expect(auditorPrompt).not.toContain("`cat`, `rg`, `jq`");
 
     expect(localPrompt).toContain(
@@ -511,6 +532,9 @@ describe("prompt JSON schema placeholders", () => {
     );
     expect(localPrompt).toContain(
       "Do NOT use `bash`, `edit`, `write`, `patch`, `task`, `skill`, or any external search tool.",
+    );
+    expect(localPrompt).toContain(
+      "Follow any higher-priority language instruction from system or developer messages.",
     );
     expect(localPrompt).not.toContain("codesearch");
 
@@ -525,6 +549,15 @@ describe("prompt JSON schema placeholders", () => {
     );
     expect(publicPrompt).toContain(
       "Report missing public-safe inputs as part of your result instead of assuming an interactive clarification round",
+    );
+    expect(publicPrompt).toContain(
+      "No conversational preamble; begin directly with the required Phase 0 block",
+    );
+    expect(publicPrompt).toContain(
+      "For every **substantive factual or procedural claim**, provide a clear citation.",
+    );
+    expect(publicPrompt).toContain(
+      "Follow any higher-priority language instruction from system or developer messages.",
     );
 
     expect(todoTemplate).toContain(

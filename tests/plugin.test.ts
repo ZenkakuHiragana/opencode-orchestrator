@@ -75,6 +75,35 @@ describe("OrchestratorPlugin", () => {
     expect(prompt).not.toContain('"helper_commands"');
   });
 
+  it("strips executor command-policy rules in skip-command-policy mode", async () => {
+    const previous = process.env.OPENCODE_ORCH_EXEC_SKIP_COMMAND_POLICY;
+    process.env.OPENCODE_ORCH_EXEC_SKIP_COMMAND_POLICY = "1";
+
+    try {
+      const plugin = await OrchestratorPlugin({ client: {} } as any);
+      const config: any = {};
+      await plugin.config!(config);
+
+      const prompt = config.agent["orch-executor"]?.prompt;
+      expect(typeof prompt).toBe("string");
+      expect(prompt).toContain(
+        "Only when this run intentionally omits a current policy file",
+      );
+      expect(prompt).not.toContain(
+        "Treat `command-policy.json` as the **single source of truth** for allowed commands and helpers.",
+      );
+      expect(prompt).not.toContain(
+        "You may compose shell scripts **only** from commands explicitly allowed by this task’s `command-policy.json`.",
+      );
+    } finally {
+      if (previous === undefined) {
+        delete process.env.OPENCODE_ORCH_EXEC_SKIP_COMMAND_POLICY;
+      } else {
+        process.env.OPENCODE_ORCH_EXEC_SKIP_COMMAND_POLICY = previous;
+      }
+    }
+  });
+
   it("keeps description when permission.orchestrator is allow", async () => {
     const plugin = await OrchestratorPlugin({ client: {} } as any);
     const config: any = {

@@ -189,10 +189,10 @@ Do NOT use `bash`, `edit`, `write`, `patch`, `task`, `skill`, or any external se
 # Communication Rules
 
 <communication>
-- No preamble or chit-chat. Answer directly with the intent clarification followed by the structured results.
+- No conversational preamble or chit-chat. Begin directly with the required intent clarification block followed by the structured results.
 - Use Markdown headings and bullet points for structure.
 - Do not use emojis.
-- Use English for explanations; use English for code identifiers and paths.
+- Follow any higher-priority language instruction from system or developer messages. Otherwise, default to English for explanations. Always keep code identifiers and paths in English.
 </communication>
 
 # Self-Check Before Finalizing

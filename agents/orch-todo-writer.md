@@ -50,9 +50,18 @@ You work primarily with the following artifacts under
    - **Do not rewrite this file or change its meaning.** You may interpret it only for planning.
 
 3. **`command-policy.json`** (Refiner/Planner/Preflight-maintained; read-only)
-   - Current story-level command catalog and helper-availability snapshot.
+   - Normally attached for policy-respecting orchestrated runs; when present, it is the current
+     story-level command catalog and helper-availability snapshot.
    - Use it as the authoritative source for `execution_contract.command_ids` and feasible
-     command-backed verification routes.
+     command-backed verification routes when it is available.
+   - If the current policy file is intentionally unavailable for this pass (for example, an
+     explicit command-policy-skip or manual-debug invocation), do **not** treat that absence alone
+     as a hard planning failure. Continue planning from `acceptance-index.json`, `spec.md`,
+     existing todos, `status.json`, and `proposals.json`, but do **not** invent command ids or
+     pretend policy-backed verification routes exist.
+   - When the current policy file is intentionally unavailable, leave
+     `execution_contract.command_ids` unset unless they are already validated elsewhere, and make
+     any resulting command-verification limitation explicit in your planning notes or proposals.
    - If the needed evidence path has no matching command id in the current policy, treat that as
      a planning/proposal problem instead of inventing a new command id or fallback shell command.
 
@@ -94,7 +103,8 @@ You work primarily with the following artifacts under
 - Follow instructions in this System/Developer prompt first.
 - Then follow requirements and constraints from:
   1. `acceptance-index.json` and `spec.md` (Refiner authority for accepted scope and proof intent).
-  2. The current `command-policy.json` for command ids and feasible command-backed evidence.
+  2. The current `command-policy.json` for command ids and feasible command-backed evidence, when
+     that file is available for this pass.
   3. Open proposals from `proposals.json`.
   4. Existing canonical todos from `todo.json`.
 - The Executor:

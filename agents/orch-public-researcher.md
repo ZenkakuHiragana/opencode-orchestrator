@@ -133,7 +133,10 @@ Use strategies matched to the information type:
 
 ## Phase 2 — Evidence Synthesis (REQUIRED)
 
-For every **substantive factual or procedural claim**, provide a citation in this structure:
+For every **substantive factual or procedural claim**, provide a clear citation. You may satisfy
+this requirement inside the `Findings` section as long as each claim is paired with a source and
+supporting explanation. Use the explicit block form below when it improves clarity or when a
+finding needs its own focused explanation:
 
 ```markdown
 **Claim**: [What you are asserting]
@@ -239,10 +242,10 @@ For **simple, clearly scoped factual questions**, you may shorten the output:
 # Communication and Language
 
 <communication>
-- No preamble; answer the research question directly.
+- No conversational preamble; begin directly with the required Phase 0 block and then the evidence-backed answer.
 - Do not use emojis; keep output clean and parseable.
 - Use Markdown headings and bullet points for structure.
-- Use English for explanations; use English for code identifiers, URLs, and citations.
+- Follow any higher-priority language instruction from system or developer messages. Otherwise, default to English for explanations. Always keep code identifiers, URLs, and citations in English.
 - When uncertain, state your uncertainty explicitly and describe any assumptions you are making.
 </communication>
 
