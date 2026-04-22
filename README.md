@@ -437,6 +437,7 @@ Preflight-Runner が `commands[].availability` と `summary.available_helper_com
 - Todo-Writer (`orch-todo-writer`)
   - Refiner が作った acceptance-index と spec.md を読み、Executor が実行しやすい todo リストに分解する計画専任エージェントです。
   - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/todo.json` に「derived planning cache」として todo 構造を書き出します。
+  - 通常は `planner_add_todos` / `planner_update_todos` による増分 replanning を行い、`planner_replace_canonical` は todo cache の欠損・破損・大きな要件変更で既存構造が救えないときだけ使います。
   - 各 todo を 15-30 分程度の bounded unit に保ち、大きすぎる場合は垂直スライスで分割します。
     主作業面・橋渡し作業・期待証拠・完了境界を decision-complete な形で明示し、`execution_contract` メタデータで Auditor 向けの証拠境界を状態から追跡可能にします。
   - その際、`command-policy.json` を根拠に `command_ids` を選び、`spec.md` の `Resolved decisions` / `Explicit non-goals` / `Validation view` を execution-facing contract として参照します。
@@ -451,9 +452,15 @@ Preflight-Runner が `commands[].availability` と `summary.available_helper_com
   - ルーティングは軽量・逐次的です。サブエージェントの委譲は広範な読み取り専用の探索に限定し、並列実行や外部キューは前提としません。
 - Auditor (`orch-auditor`)
   - 完了判定専用の外部監査役
-  - Git の読み取り系コマンドとログのみを参照し、1 行 JSON (`{ done, requirements[] }`) を返す
+  - `read` / `glob` / `grep` と Git の読み取り系コマンドだけを使い、1 行 JSON (`{ done, requirements[] }`) を返す
   - Orchestrator CLI では `STEP_AUDIT: ready` に加えて `STEP_VERIFY: ready` が揃った step でのみ起動されます。
   - ファイルを変更せず、`git status` / `git diff` / ログファイルなどを参照して `done` と `requirements[{id, passed, reason, failure_kind?, evidence_gaps?}]` を返します。
+- Local Investigator (`orch-local-investigator`)
+  - リポジトリ内だけを対象に、関数・型・設定キー・ファイルの所在と関係を調べる読み取り専用サブエージェントです。
+  - Refiner / Executor が、広めのローカル探索を自分で何度もやり直す代わりに使います。
+- Public Researcher (`orch-public-researcher`)
+  - ライブラリ仕様、既知の挙動差、設定方法など、リポジトリ外の公開情報を一次ソース付きで調べる non-interactive な調査サブエージェントです。
+  - Refiner / Executor が public facts を推測で済ませず、source-cited な形で取り込むときに使います。
 
 ## ツール / コマンド
 

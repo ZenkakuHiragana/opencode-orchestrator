@@ -91,4 +91,34 @@ describe("OrchestratorPlugin", () => {
       "string",
     );
   });
+
+  it("wires updated todo-writer command text and agent descriptions into config", async () => {
+    const plugin = await OrchestratorPlugin({ client: {} } as any);
+    const config: any = {
+      permission: {
+        orchestrator: {
+          "orch-auditor": "allow",
+          "orch-local-investigator": "allow",
+          "orch-public-researcher": "allow",
+        },
+      },
+    };
+    await plugin.config!(config);
+
+    expect(config.command["orch-todo-write"].template).toContain(
+      "Prefer incremental replanning over full regeneration",
+    );
+    expect(config.command["orch-todo-write"].description).toBe(
+      "Orchestrator todo planning/replanning step",
+    );
+    expect(config.agent["orch-auditor"].description).toBe(
+      "Strict read-only verifier for orchestrator runs",
+    );
+    expect(config.agent["orch-local-investigator"].description).toContain(
+      "Repository-local investigation specialist",
+    );
+    expect(config.agent["orch-public-researcher"].description).toContain(
+      "Non-interactive public information research specialist",
+    );
+  });
 });

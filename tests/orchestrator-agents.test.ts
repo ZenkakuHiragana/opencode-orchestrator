@@ -63,12 +63,14 @@ describe("orchestratorAgents", () => {
 
   it("orch-auditor bash permission denies dangerous git commands", () => {
     const bash = orchestratorAgents["orch-auditor"].permission.bash;
+    expect(bash).toEqual(expect.objectContaining({ "git fetch": "deny" }));
     expect(bash).toEqual(expect.objectContaining({ "git add *": "deny" }));
     expect(bash).toEqual(expect.objectContaining({ "git commit *": "deny" }));
     expect(bash).toEqual(
       expect.objectContaining({ "git reset --hard": "deny" }),
     );
     expect(bash).toEqual(expect.objectContaining({ "git push *": "deny" }));
+    expect(bash).toEqual(expect.objectContaining({ "mkdir *": "deny" }));
   });
 
   it("orch-auditor bash permission allows safe git read commands", () => {
@@ -144,6 +146,26 @@ describe("orchestratorAgents", () => {
     expect(names).toContain("orch-planner");
     expect(names).toContain("orch-local-investigator");
     expect(names).toContain("orch-public-researcher");
+  });
+
+  it("updated agent descriptions reflect current non-interactive and local-only roles", () => {
+    expect(orchestratorAgents["orch-todo-writer"].description).toContain(
+      "Todo planning/replanning agent",
+    );
+    expect(orchestratorAgents["orch-auditor"].description).toContain(
+      "Strict read-only verifier",
+    );
+    expect(orchestratorAgents["orch-local-investigator"].description).toContain(
+      "Repository-local investigation specialist",
+    );
+    expect(orchestratorAgents["orch-public-researcher"].description).toContain(
+      "Non-interactive public information research specialist",
+    );
+  });
+
+  it("orch-local-investigator disables external codesearch", () => {
+    const investigator = orchestratorAgents["orch-local-investigator"];
+    expect(investigator.tools.codesearch).toBe(false);
   });
 
   it("OrchestratorAgentKey type covers all keys", () => {

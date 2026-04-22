@@ -113,7 +113,7 @@ export const orchestratorAgents: Record<string, OrchestratorAgentConfig> = {
   },
   "orch-todo-writer": {
     description:
-      "Planner/Todo aggregator for the multi-agent orchestrator pipeline",
+      "Todo planning/replanning agent for the multi-agent orchestrator pipeline",
     mode: "subagent",
     hidden: true,
     temperature: 0.2,
@@ -188,7 +188,7 @@ export const orchestratorAgents: Record<string, OrchestratorAgentConfig> = {
     },
   },
   "orch-auditor": {
-    description: "Strict external verifier for orchestrator runs",
+    description: "Strict read-only verifier for orchestrator runs",
     mode: "subagent",
     hidden: true,
     reasoningEffort: "high",
@@ -215,7 +215,7 @@ export const orchestratorAgents: Record<string, OrchestratorAgentConfig> = {
     permission: {
       bash: {
         "*": "ask",
-        "### git read-only commands ###": "allow",
+        "### git inspection commands ###": "allow",
         "git status": "allow",
         "git status *": "allow",
         "git diff": "allow",
@@ -235,9 +235,9 @@ export const orchestratorAgents: Record<string, OrchestratorAgentConfig> = {
         "git ls-files *": "allow",
         "git cat-file *": "allow",
         "git describe *": "allow",
-        "git fetch": "allow",
-        "git fetch *": "allow",
-        "### git dangerous commands ###": "deny",
+        "### git remote-refresh and dangerous commands ###": "deny",
+        "git fetch": "deny",
+        "git fetch *": "deny",
         "git add *": "deny",
         "git commit": "deny",
         "git commit *": "deny",
@@ -268,15 +268,15 @@ export const orchestratorAgents: Record<string, OrchestratorAgentConfig> = {
         "git filter-branch *": "deny",
         "git push": "deny",
         "git push *": "deny",
-        "### removing files & modifying permissions ###": "deny",
+        "### filesystem mutation and permission changes ###": "deny",
         "rm *": "deny",
         "mv *": "deny",
+        "mkdir *": "deny",
         "chmod *": "deny",
         "chown *": "deny",
         "### manipulating stdin/stdout & investigating files ###": "allow",
         ls: "allow",
         "ls *": "allow",
-        "mkdir *": "allow",
         "jq *": "allow",
         rg: "allow",
         "rg *": "allow",
@@ -380,13 +380,13 @@ export const orchestratorAgents: Record<string, OrchestratorAgentConfig> = {
   },
   "orch-local-investigator": {
     description:
-      "Local repository investigation specialist. Use this when you need to find where a function, type, config key, or file is defined and how it connects to the rest of the project. Returns absolute paths, call chains, existing patterns to follow, and uncertainties — so you can act without further exploration. Prefer this over doing broad searches yourself when the answer requires mapping multiple files or symbols.",
+      "Repository-local investigation specialist. Use this when you need to find where a function, type, config key, or file is defined and how it connects within the current repository. Returns absolute paths, call chains, existing local patterns to follow, and uncertainties grounded in local evidence.",
     mode: "subagent",
     hidden: false,
     temperature: 0.1,
     tools: {
       bash: false,
-      codesearch: true,
+      codesearch: false,
       edit: false,
       glob: true,
       grep: true,
@@ -430,7 +430,7 @@ export const orchestratorAgents: Record<string, OrchestratorAgentConfig> = {
   },
   "orch-public-researcher": {
     description:
-      "Public information research specialist. Use this when you need to look up facts, how-tos, or context that lives outside the codebase — library APIs, error codes, configuration options, protocol specs, version differences, known issues, or general knowledge. Returns answers with source citations so you can trust the result. Prefer this over guessing or relying on training data cutoff when freshness or accuracy matters.",
+      "Non-interactive public information research specialist. Use this when you need to look up facts, how-tos, or context that lives outside the codebase — library APIs, error codes, configuration options, protocol specs, version differences, known issues, or general knowledge. Returns source-cited answers you can trust without relying on unstated follow-up questions.",
     mode: "subagent",
     hidden: false,
     temperature: 0.1,

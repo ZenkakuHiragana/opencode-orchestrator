@@ -44,7 +44,7 @@
 
 > **前提：コマンドとツールの違い**
 >
-> - **カスタムコマンド**（例：`orch-todo-write`）は OpenCode TUI や Planner（LLM）が `opencode run --command orch-todo-write` で呼び出すもの。引数の概念はない。対応するプロンプトは `commands/orch-todo-write.md`（「plan your tasks\n$ARGUMENTS」のみ）。
+> - **カスタムコマンド**（例：`orch-todo-write`）は OpenCode TUI や Planner（LLM）が `opencode run --command orch-todo-write` で呼び出すもの。引数の概念はない。対応するプロンプトは `commands/orch-todo-write.md` にあり、増分 replanning を優先しつつ、必要時のみ全置換する方針を brief に与える。
 > - **カスタムツール**（例：`orch_todo_write`）は LLM が内部的に使うツールで、`mode` などの引数を持つ。対応する実装は `src/orchestrator-todo.ts`。
 > - Orchestrator-loop は**コマンド**を呼び出してサブエージェントを起動し、サブエージェントが**ツール**を内部的に使って state を読み書きする。
 
@@ -158,7 +158,7 @@ sequenceDiagram
         alt step === 1 の場合、または open proposal がある場合
             CLI->>TWCommand: orch-todo-write コマンドを呼び出し
             TWCommand-->>TWAgent: orch-todo-writer サブエージェントとして起動
-            TWAgent->>TWTool: orch_todo_write ツール\n（mode=planner_replace_canonical）
+            TWAgent->>TWTool: orch_todo_write ツール\n（通常は planner_add/update、必要時のみ replace）
             TWTool->>StateDir: todo.json（canonical todos）を書き込み
             TWTool-->>TWAgent: { ok: true }
             TWAgent-->>CLI: 完了通知・restart_count 等を返す
@@ -213,13 +213,13 @@ sequenceDiagram
 
 コマンド層とツール層の区別：
 
-| 呼び出し元                           | 呼び出し先      | 種類         | 備考                                                        |
-| ------------------------------------ | --------------- | ------------ | ----------------------------------------------------------- |
-| CLI（orchestrator-loop）             | orch-todo-write | **コマンド** | `runOpencode(["run", "--command", "orch-todo-write", ...])` |
-| CLI（orchestrator-loop）             | orch-exec       | **コマンド** | 同上                                                        |
-| CLI（orchestrator-loop）             | orch-audit      | **コマンド** | JSON 出力で Auditor を起動                                  |
-| orch-todo-writer（サブエージェント） | orch_todo_write | **ツール**   | `mode=planner_replace_canonical`                            |
-| orch-executor（サブエージェント）    | orch_todo_write | **ツール**   | `mode=executor_update_statuses`                             |
+| 呼び出し元                           | 呼び出し先      | 種類         | 備考                                                                                        |
+| ------------------------------------ | --------------- | ------------ | ------------------------------------------------------------------------------------------- |
+| CLI（orchestrator-loop）             | orch-todo-write | **コマンド** | `runOpencode(["run", "--command", "orch-todo-write", ...])`                                 |
+| CLI（orchestrator-loop）             | orch-exec       | **コマンド** | 同上                                                                                        |
+| CLI（orchestrator-loop）             | orch-audit      | **コマンド** | JSON 出力で Auditor を起動                                                                  |
+| orch-todo-writer（サブエージェント） | orch_todo_write | **ツール**   | 通常は `planner_add_todos` / `planner_update_todos`、必要時のみ `planner_replace_canonical` |
+| orch-executor（サブエージェント）    | orch_todo_write | **ツール**   | `mode=executor_update_statuses`                                                             |
 
 各ステップで `status.json` に書き込まれる主なデータ:
 
@@ -416,6 +416,7 @@ sequenceDiagram
   - Refiner が作成した受け入れ要件から「Executor が実行する Todo」を構造化して作る。
   - Todo は `id` / `summary` / `status` / `related_requirement_ids[]` を持ち、
     acceptance-index 内の要件とのトレーサビリティを確保する。
+  - 既存の canonical todo が有効な限りは、増分 replanning（`planner_add_todos` / `planner_update_todos`）を通常経路とし、全置換（`planner_replace_canonical`）は todo cache 欠損・破損・要件変更による salvage 不可ケースの fallback に限定する。
   - 各 Todo を 15-30 分程度で完了する bounded unit に保ち、
     主作業面・橋渡し作業・期待証拠・完了境界を decision-complete な形で明示する。
   - `execution_contract` メタデータ (`intent`, `expected_evidence`, `command_ids`, `audit_ready_when`)
@@ -437,8 +438,10 @@ sequenceDiagram
 
 - (C) 主な出力
   - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/todo.json`
-    - `orch_todo_write` ツール (`mode=planner_replace_canonical`) を通じて上書きされる
-      canonical todo 一覧。型定義は `src/orchestrator-todo.ts` の `CanonicalTodo`。
+    - `orch_todo_write` ツールを通じて保守される canonical todo 一覧。通常は
+      `planner_add_todos` / `planner_update_todos` による増分更新で、必要時のみ
+      `planner_replace_canonical` による全再生成を行う。型定義は
+      `src/orchestrator-todo.ts` の `CanonicalTodo`。
   - OpenCode セッション Todo（`todowrite` 経由）
     - UI 表示用に、フィルタ済みの一部 Todo をセッション Todo としてミラーする。
 
@@ -514,7 +517,7 @@ sequenceDiagram
 - (A) 役割
   - 開発ストーリーが受け入れ条件とプロジェクトゲート（テスト／ビルド／Lint／Docs）を
     全て満たしているかを、外部監査の立場から判定する。
-  - 自身はコードやファイルを編集せず、Git やログの読み取りだけを行う。
+  - 自身はコードやファイルを編集せず、`read` / `glob` / `grep` と Git の読み取り系コマンド、ログの確認だけを行う。
 
 - (B) 主な入力
   - 高レベルゴール（オリジナルのプロンプト）
@@ -545,6 +548,17 @@ sequenceDiagram
         記述する 1-3 個の英語文字列配列。
 
 ## 9. その他の補助エージェント
+
+### 9.0 読み取り専用の補助サブエージェント
+
+- `orch-local-investigator`
+  - 役割: 現在のリポジトリ内だけを対象に、関数・型・設定キー・ファイルの所在と関係を調べる。
+  - 主な利用者: Refiner / Executor。
+  - 特徴: `glob` / `grep` / `read` / `lsp` / `list` を使う repository-local investigator であり、外部検索サービスには出ない。
+- `orch-public-researcher`
+  - 役割: ライブラリ仕様、既知の挙動差、設定方法など、リポジトリ外の公開情報を一次ソース付きで調査する。
+  - 主な利用者: Refiner / Executor。
+  - 特徴: non-interactive な leaf researcher として `websearch` / `webfetch` / `codesearch` を使い、追加質問前提ではなく「不足している public-safe input」を結果として返す。
 
 ### 9.1 orch-todo-writer / orch-executor 用ツール (`src/orchestrator-todo.ts`)
 
@@ -707,7 +721,7 @@ sequenceDiagram
 
 - パス: `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/todo.json`
 - オーナー:
-  - 構造生成・置換: `orch-todo-writer`（`mode=planner_replace_canonical`）
+  - 構造生成・維持: `orch-todo-writer`（通常は `mode=planner_add_todos` / `mode=planner_update_todos`、必要時のみ `mode=planner_replace_canonical`）
   - `status` 更新のみ: `orch-executor`（`mode=executor_update_statuses`）
 - 型定義: `src/orchestrator-todo.ts` の `CanonicalTodo` / `CanonicalTodoFile`。
 - 実際に書き出される形（`saveCanonicalTodos`）:

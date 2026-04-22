@@ -62,6 +62,12 @@ describe("orchestratorCommands", () => {
     );
   });
 
+  it("orch-todo-write description reflects replanning role", () => {
+    expect(orchestratorCommands["orch-todo-write"].description).toBe(
+      "Orchestrator todo planning/replanning step",
+    );
+  });
+
   it("OrchestratorCommandKey type covers all keys", () => {
     const key: OrchestratorCommandKey = "orch-exec";
     expect(orchestratorCommands[key]).toBeDefined();

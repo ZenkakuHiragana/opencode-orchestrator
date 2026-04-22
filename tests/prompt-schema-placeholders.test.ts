@@ -472,4 +472,69 @@ describe("prompt JSON schema placeholders", () => {
       "whether or not Planner mentioned Section E separately",
     );
   });
+
+  it("keeps auditor, local-investigator, public-researcher, and todo-write command wording aligned with current roles", async () => {
+    const plugin = await OrchestratorPlugin({ client: {} } as any);
+    const config: any = {};
+    await plugin.config!(config);
+
+    const auditorPrompt = config.agent["orch-auditor"]?.prompt as
+      | string
+      | undefined;
+    const localPrompt = config.agent["orch-local-investigator"]?.prompt as
+      | string
+      | undefined;
+    const publicPrompt = config.agent["orch-public-researcher"]?.prompt as
+      | string
+      | undefined;
+    const todoTemplate = config.command["orch-todo-write"]?.template as
+      | string
+      | undefined;
+
+    expect(typeof auditorPrompt).toBe("string");
+    expect(typeof localPrompt).toBe("string");
+    expect(typeof publicPrompt).toBe("string");
+    expect(typeof todoTemplate).toBe("string");
+
+    expect(auditorPrompt).toContain(
+      "Prefer the dedicated `read`, `glob`, and `grep` tools",
+    );
+    expect(auditorPrompt).toContain("remote-refresh (`git fetch`)");
+    expect(auditorPrompt).toContain("filesystem creation (`mkdir`)");
+    expect(auditorPrompt).not.toContain("`cat`, `rg`, `jq`");
+
+    expect(localPrompt).toContain(
+      "Access to read-only repository tools (`glob`, `grep`, `read`, `lsp`, `list`)",
+    );
+    expect(localPrompt).toContain(
+      "Contains only factual statements supported by evidence from the local repository.",
+    );
+    expect(localPrompt).toContain(
+      "Do NOT use `bash`, `edit`, `write`, `patch`, `task`, `skill`, or any external search tool.",
+    );
+    expect(localPrompt).not.toContain("codesearch");
+
+    expect(publicPrompt).toContain(
+      "Do **not** assume an interactive clarification round will occur",
+    );
+    expect(publicPrompt).toContain(
+      "reliable research cannot proceed until those public facts are supplied",
+    );
+    expect(publicPrompt).toContain(
+      "name the kind of public equivalent that would be needed, and stop rather than guessing",
+    );
+    expect(publicPrompt).toContain(
+      "Report missing public-safe inputs as part of your result instead of assuming an interactive clarification round",
+    );
+
+    expect(todoTemplate).toContain(
+      "Prefer incremental replanning over full regeneration",
+    );
+    expect(todoTemplate).toContain(
+      "add new todos when only new work is needed",
+    );
+    expect(todoTemplate).toContain(
+      "replace the full canonical set only when the todo cache is missing, invalid, or unsalvageable",
+    );
+  });
 });

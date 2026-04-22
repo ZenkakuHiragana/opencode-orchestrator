@@ -12,7 +12,7 @@ export interface OrchestratorCommandConfig {
 
 export const orchestratorCommands: Record<string, OrchestratorCommandConfig> = {
   "orch-todo-write": {
-    description: "Orchestrator planner step",
+    description: "Orchestrator todo planning/replanning step",
     agent: "orch-todo-writer",
     subtask: false,
   },
