@@ -121,28 +121,10 @@ function refreshCommandPolicySummary(
     cmd.availability = r.available ? "available" : "unavailable";
   }
 
-  const mustExecUnavailable = policyJson.commands.some((cmd) => {
-    if (!cmd) return false;
-    const usage = String(cmd.usage);
-    return usage === "must_exec" && cmd.availability !== "available";
-  });
-
-  const currentLoopStatus = policyJson.summary.loop_status;
-
-  if (mustExecUnavailable) {
-    const hasSpecError = results.some(
-      (r) =>
-        r.usage === "must_exec" &&
-        !r.available &&
-        typeof r.stderr_excerpt === "string" &&
-        r.stderr_excerpt.startsWith("SPEC_ERROR:"),
-    );
-    policyJson.summary.loop_status = hasSpecError
-      ? "needs_refinement"
-      : "blocked_by_environment";
-  } else if (typeof currentLoopStatus === "string") {
-    policyJson.summary.loop_status = currentLoopStatus;
-  }
+  // Preserve summary.loop_status as-is.
+  // Refiner initializes it for new/rewritten policies and Planner finalizes it
+  // after consuming current preflight + spec-check results. Preflight only
+  // refreshes mechanical availability fields.
 
   fs.writeFileSync(policyPath, JSON.stringify(policyJson, null, 2), "utf8");
 }
@@ -523,8 +505,8 @@ const preflightCliTool: ToolDefinition = tool({
       results,
     };
 
-    // Best-effort command-policy.json update: reflect helper availability,
-    // per-command availability, and loop_status based on preflight results.
+    // Best-effort command-policy.json update: reflect helper availability and
+    // per-command availability based on preflight results.
     try {
       refreshCommandPolicySummary(args.task, results);
     } catch (err) {

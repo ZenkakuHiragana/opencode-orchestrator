@@ -36,7 +36,7 @@ OpenCode + GPT 系モデルで長期の計画を要するタスクをさせる�
 3. 実行フェーズに入ると、Orchestrator CLI は `todo.json`、`status.json`、`logs/` 配下の step ログ、  
     Auditor の結果を自動更新しながら Todo-Writer / Executor / Auditor を順番に回します。
    - planning gate は引き続き `command-policy.json.summary` を参照し、`status.json` は進捗スナップショットとして扱います。
-   - `command-policy.json.summary.loop_status` が loop 開始可否の strict readiness gate であり、Preflight 単独では `ready_for_loop` を確定しません。
+   - `command-policy.json.summary.loop_status` が loop 開始可否の strict readiness gate であり、Preflight はこの field を更新せず、Planner のみが最終化します。
 
 ---
 
@@ -383,7 +383,7 @@ Preflight-Runner が `commands[].availability` と `summary.available_helper_com
   - `needs_refinement` : 受け入れ条件やコマンドがまだ曖昧
   - `blocked_by_environment` : 必須コマンドが環境に存在しない
     などの場合もループ開始を拒否
-- `summary.loop_status` は strict readiness gate であり、Preflight の mechanical result だけでは `ready_for_loop` に確定しない
+- `summary.loop_status` は strict readiness gate であり、Preflight はこの field を更新せず、Planner のみが最終化する
 - Spec-Checker の `severity` は説明用であり、機械 gate は `status` / `feasible_for_loop` / routed failures を使う
 
 これにより、Executor が「存在しないテストコマンド」や

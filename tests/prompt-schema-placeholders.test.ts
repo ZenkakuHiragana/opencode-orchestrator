@@ -44,6 +44,7 @@ describe("prompt JSON schema placeholders", () => {
         expect(prompt).toContain("Planner-finalized strict readiness gate");
         expect(prompt).toContain("single machine-readable readiness summary");
         expect(prompt).toContain("Refiner must initialize this field");
+        expect(prompt).toContain("Preflight must not overwrite this field");
         expect(prompt).toContain(
           "Planner has consumed current preflight and spec-check results",
         );
@@ -85,6 +86,7 @@ describe("prompt JSON schema placeholders", () => {
         expect(prompt).toContain("Planner-finalized strict readiness gate");
         expect(prompt).toContain("single machine-readable readiness summary");
         expect(prompt).toContain("Refiner must initialize this field");
+        expect(prompt).toContain("Preflight must not overwrite this field");
         expect(prompt).toContain(
           "Planner has consumed current preflight and spec-check results",
         );
@@ -181,7 +183,7 @@ describe("prompt JSON schema placeholders", () => {
       "command-policy.json` is required for readiness in all stories",
       "current preflight result is required whenever that file exists",
       "Preflight still runs when the current `command-policy.json` has no `must_exec` commands",
-      "refresh helper availability and finalize summary metadata",
+      "refresh helper availability and command availability metadata",
       "Resolved decisions",
       "Explicit non-goals",
       "Validation view",
@@ -402,5 +404,72 @@ describe("prompt JSON schema placeholders", () => {
     expect(checkerPrompt).toContain("`acceptance_gap`");
     expect(checkerPrompt).toContain("`command_policy_gap`");
     expect(checkerPrompt).toContain("`document_runtime_mismatch`");
+  });
+
+  it("keeps loop-status ownership, todo completion-unit wording, and north_star terminology aligned", async () => {
+    const plugin = await OrchestratorPlugin({ client: {} } as any);
+    const config: any = {};
+    await plugin.config!(config);
+
+    const refinerPrompt = config.agent["orch-refiner"]?.prompt as
+      | string
+      | undefined;
+    const plannerPrompt = config.agent["orch-planner"]?.prompt as
+      | string
+      | undefined;
+    const todoWriterPrompt = config.agent["orch-todo-writer"]?.prompt as
+      | string
+      | undefined;
+    const executorPrompt = config.agent["orch-executor"]?.prompt as
+      | string
+      | undefined;
+
+    expect(typeof refinerPrompt).toBe("string");
+    expect(typeof plannerPrompt).toBe("string");
+    expect(typeof todoWriterPrompt).toBe("string");
+    expect(typeof executorPrompt).toBe("string");
+
+    expect(refinerPrompt).toContain(
+      "After that initialization, treat `summary.loop_status` as Planner-owned",
+    );
+    expect(refinerPrompt).toContain("it does not write `summary.loop_status`");
+    expect(plannerPrompt).toContain(
+      "It does not write `summary.loop_status`; Planner finalizes that field",
+    );
+    expect(todoWriterPrompt).toContain("single Executor step");
+    expect(executorPrompt).toContain(
+      "completion unit that should normally finish within one Executor step",
+    );
+    expect(executorPrompt).toContain(
+      "do not use repeated self-slicing as a substitute for replanning",
+    );
+    expect(executorPrompt).toContain("`north_star` section in `spec.md`");
+    expect(executorPrompt).not.toContain("`north_star` field in `spec.md`");
+  });
+
+  it("keeps Section E trigger wording aligned between planner and spec-checker", async () => {
+    const plugin = await OrchestratorPlugin({ client: {} } as any);
+    const config: any = {};
+    await plugin.config!(config);
+
+    const plannerPrompt = config.agent["orch-planner"]?.prompt as
+      | string
+      | undefined;
+    const checkerPrompt = config.agent["orch-spec-checker"]?.prompt as
+      | string
+      | undefined;
+
+    expect(typeof plannerPrompt).toBe("string");
+    expect(typeof checkerPrompt).toBe("string");
+
+    expect(plannerPrompt).toContain(
+      "Section E (`live_surface_consistency`) is not optional once the current spec/content meets that condition",
+    );
+    expect(checkerPrompt).toContain(
+      "Planner may call out this analysis explicitly, but the trigger is substantive",
+    );
+    expect(checkerPrompt).toContain(
+      "whether or not Planner mentioned Section E separately",
+    );
   });
 });

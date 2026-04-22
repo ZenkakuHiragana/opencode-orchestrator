@@ -161,8 +161,8 @@ describe("preflight-cli short-circuit with effective permission", () => {
       );
 
       // Command-policy should be updated by preflight-cli: available_helper_commands
-      // should reflect the short-circuit result, but preflight must not promote
-      // loop_status to ready_for_loop on its own.
+      // should reflect the short-circuit result, while summary.loop_status
+      // remains Planner-owned and therefore untouched by preflight.
       const stateDir = getOrchestratorStateDir(task);
       const policyPath = path.join(stateDir, "command-policy.json");
       const policy = JSON.parse(fs.readFileSync(policyPath, "utf8")) as {
@@ -237,9 +237,10 @@ describe("preflight-cli short-circuit with effective permission", () => {
       );
 
       // For a must_exec command that is unavailable due to permission=ask,
-      // loop_status should be downgraded by preflight-cli to
-      // blocked_by_environment (since this is an environment/permission issue,
-      // not a SPEC_ERROR).
+      // preflight should still update per-command availability, but must leave
+      // summary.loop_status untouched because Planner owns readiness finalization.
+      // The executor loop remains safe because must_exec availability is gated
+      // separately from the summary field.
       const stateDir = getOrchestratorStateDir(task);
       const policyPath = path.join(stateDir, "command-policy.json");
       const policy = JSON.parse(fs.readFileSync(policyPath, "utf8")) as {
@@ -247,7 +248,10 @@ describe("preflight-cli short-circuit with effective permission", () => {
         commands: { id: string; availability: string }[];
       };
 
-      expect(policy.summary.loop_status).toBe("blocked_by_environment");
+      expect(policy.summary.loop_status).toBe("ready_for_loop");
+      expect(policy.commands.find((c) => c.id === "cmd-ls")?.availability).toBe(
+        "unavailable",
+      );
     } finally {
       setPreflightRunnerBashPermissionSource({
         globalBash: undefined,

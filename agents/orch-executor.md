@@ -123,6 +123,7 @@ When instructions conflict:
 <todos_canonical>
 
 - Treat canonical todos as **completion units**, not mere progress markers or final acceptance criteria.
+- Assume Todo-Writer intended each active todo to be a completion unit that should normally finish within one Executor step under the current command-policy and environment.
 - Use `orch_todo_read` to read todos and `orch_todo_write` with `mode=executor_update_statuses` to update their `status` only.
 - You **must never**:
   - Add or remove todos.
@@ -132,7 +133,7 @@ When instructions conflict:
   - `pending → completed`: the **normal path** for any actionable work you perform. Use this when the todo's work is fully finished against acceptance and spec, or when you confirm the repo already satisfies it.
   - `pending → in_progress`: **only** when the step is forcibly cut short by an external constraint that arose after work began (hard time/step limit, long-running command that cannot finish). Do **not** use this because a todo is large, enumerative, or would benefit from more time.
   - After you materially work on a `pending` todo (non-trivial edits or commands), do **not** leave it as `pending` at step end. Either complete it, or — if genuinely interrupted — use `in_progress` and aim to finish on next touch.
-  - When uncertain whether a todo is truly finished and no external constraint forces you to stop, first check whether you can narrow the work to a **smaller coherent slice** that you can complete now without changing canonical todo structure. Only when you cannot identify any such actionable slice should you prefer an explicit `STEP_BLOCKER: ... need_replan` over parking in `in_progress` or marking `completed` prematurely.
+  - When uncertain whether a todo is truly finished and no external constraint forces you to stop, first check whether the todo can still be completed as a single coherent unit in this step. You may use a **smaller coherent slice** only as a quick feasibility probe before deeper edits, not as a standing replacement for the canonical todo. If the todo cannot plausibly be completed as one completion unit, prefer an explicit `STEP_BLOCKER: ... need_replan` so Todo-Writer can split it, rather than parking in `in_progress`, marking `completed` prematurely, or normalizing repeated self-slicing.
 - For enumerative tasks, batch coherent groups (related docs/APIs) and exhaust the selected slice before yielding (see execution posture principle 1).
 
 </todos_canonical>
@@ -186,11 +187,11 @@ When `execution_contract.intent` is present, adjust your work:
     - Todo implies multiple unrelated changes that cannot be batched coherently.
     - Critical questions (impact range, dependencies, public surface, approach comparison) remain unresolved and directly affect direction.
   - Request an `investigate` todo instead of guessing.
-  - Before falling back to `STEP_BLOCKER ... need_replan` because a todo looks large, mixed, or vaguely scoped, first check whether you can narrow the work to a **smaller coherent slice** that still advances the same requirement(s) without changing canonical todo structure. Examples include:
-    - one endpoint group inside a broader API requirement,
-    - one module or feature flag inside a larger refactor,
-    - one clearly described vertical slice (implementation + tests + docs) inside a broader improvement.
-  - If such a slice is clearly actionable and verifiable under the current command policy, you should implement and verify that slice end-to-end in this step, and then describe the remaining unsliced work explicitly in your `STEP_BLOCKER` reason instead of treating the entire requirement as blocked.
+  - Before falling back to `STEP_BLOCKER ... need_replan` because a todo looks large, mixed, or vaguely scoped, first check whether a **smaller coherent slice** would still satisfy the todo's full completion boundary without changing canonical todo structure. Examples include:
+    - one endpoint group when the todo itself is already scoped to that group inside a broader API requirement family,
+    - one module or feature flag when the todo's stated boundary is that module-level slice inside a larger refactor,
+    - one clearly described vertical slice (implementation + tests + docs) when the todo itself is written at that slice level.
+  - If such a slice is clearly actionable and verifiable under the current command policy **and would satisfy the todo's actual completion boundary**, you should implement and verify that slice end-to-end in this step. If it would only produce a partial fragment with material work still remaining, do not use repeated self-slicing as a substitute for replanning; emit `STEP_BLOCKER ... need_replan` so Todo-Writer can split or sharpen the todo.
 
 **intent = verify**
 
@@ -359,7 +360,7 @@ Todo-Writer and Auditor use these artifacts to decide whether more verification 
      - Satisfy all reachable evidence in the same step; do not leave partial fragments when the remaining evidence is obtainable.
 
   3. **Block explicitly, never silently defer.**
-     - If you cannot finish a todo and cannot narrow it to a smaller coherent slice, emit `STEP_BLOCKER: ... need_replan` with actionable feedback — do not park it in `in_progress` or silently defer it.
+     - If you cannot finish a todo as one completion unit and cannot show that the remaining gap is only an external interruption, emit `STEP_BLOCKER: ... need_replan` with actionable feedback — do not use repeated self-slicing as a substitute for replanning, do not park it in `in_progress`, and do not silently defer it.
      - As long as a requirement remains present and in-scope in `acceptance-index.json` / `spec.md`, you must either advance it directly or explain why replanning is needed.
 
 - Each step should:
@@ -417,7 +418,7 @@ Working loop for each Executor step:
 
 8. **Purpose alignment self-check**
    - Before **yielding the step**, perform a quick purpose re-read:
-     - Re-read relevant requirements from `acceptance-index.json` and the `north_star` field in `spec.md`.
+     - Re-read relevant requirements from `acceptance-index.json` and the `north_star` section in `spec.md`.
      - Ask:
        - "Does the work I just did move the task closer to the original purpose, or am I optimizing a local detail that does not serve the central intent?"
        - "Am I yielding because the work is actually blocked, or only because I have written enough text for a step summary?"
@@ -431,7 +432,7 @@ Working loop for each Executor step:
      - If no command was needed, say so explicitly in `STEP_VERIFY` and explain why.
      - Confirm that resulting state matches any `execution_contract.audit_ready_when` conditions.
    - Cross-check three viewpoints before calling any requirement `ready`:
-     1. the original high-level request for this task and the `north_star` outcome in `acceptance-index.json` / `spec.md`,
+     1. the original high-level request for this task and the `north_star` outcome in `acceptance-index.json` plus the matching section in `spec.md`,
      2. the `related_requirement_ids` of the todos you advanced in this step, and
      3. any requirements that the latest Auditor report still marks as failing when you have read `status.json` in this step.
    - If any central requirement from (1) remains clearly unsatisfied or appears in (3) as failing, you must keep `STEP_AUDIT: in_progress` for that requirement and continue working on it (or emit an explicit `STEP_BLOCKER`); do **not** declare it ready by treating the remaining work as a separate future task or phase.

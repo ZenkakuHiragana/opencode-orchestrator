@@ -270,7 +270,7 @@ When `discovery-packet.md` is present, treat `Resolved decisions`, `Explicit non
 
 <live_surface_consistency>
 
-- When the spec, acceptance criteria, or `command-policy.json` describe **state channels, agent-visible inputs/outputs, CLI surfaces, or runtime data flows**, do not stop at document-to-document consistency. Verify that the claimed active model matches the live repository surfaces that define it.
+- Planner may call out this analysis explicitly, but the trigger is substantive: whenever the spec, acceptance criteria, or `command-policy.json` describe **state channels, agent-visible inputs/outputs, CLI surfaces, or runtime data flows**, do not stop at document-to-document consistency. Verify that the claimed active model matches the live repository surfaces that define it, whether or not Planner mentioned Section E separately.
 - **Live repository surfaces** include (at minimum):
   - `README.md` and other top-level project documentation.
   - Agent role documentation (e.g. `agent-roles.md` or equivalent files that define actor boundaries).

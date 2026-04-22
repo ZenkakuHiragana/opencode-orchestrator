@@ -121,7 +121,7 @@ sequenceDiagram
 - Planner（LLM）は discovery の主担当として `question` ツールで不足決定を埋め、**orch-refine / orch-spec-check** の**カスタムコマンド**でサブエージェントを起動する。
 - Planner は discovery のオーナーとして `discovery-packet.md` を保持し、共有契約として必須なのは承認済みの discovery decisions / non-goals / validation view の 3 項目である。その他の見出しは Planner 側の discovery 補助構造として扱う。
 - Preflight の可否判定は `preflight-cli` **ツール**が担当し、Refiner が定義したコマンドと helper コマンドに対して permission.bash ルールをローカル評価する。
-- Preflight は `commands[].availability` と `summary.available_helper_commands` の mechanical refresh までを担い、`summary.loop_status` の最終確定はしない。
+- Preflight は `commands[].availability` と `summary.available_helper_commands` の mechanical refresh までを担い、`summary.loop_status` は更新しない。最終確定は Planner が行う。
 - Refiner は Discovery Packet を reopening せず canonical state へ正規化し、Planner は `command-policy.json` が存在する story では常に preflight を挟んでから Spec-Checker に監査させる。
 - Refiner / Preflight / Spec-Checker のサイクルは、少なくとも `status === "ok"` かつ `feasible_for_loop === true` になるまで何度でも回る。これらは readiness の必要条件ではあるが十分条件ではなく、Planner は unresolved な blocking proposal / blocking decision も解消したうえで最終判定する。
 - Spec-Checker の routed failure は `return_to` に従って Planner 自身の discovery 修正か Refiner への差し戻しかを分岐させる。
@@ -695,7 +695,7 @@ sequenceDiagram
 - `summary.loop_status` は Planner が最終化する strict readiness gate であり、planning gate のソース・オブ・トゥルースになる。
 - `summary.last_spec_check_status` と `summary.last_spec_check_feasible_for_loop` は、Planner が最後に採用した Spec-Checker top-level 判定を保持する。
 - `summary.blocking_failure_types` と `summary.blocking_issue_ids` は、Planner が gate で blocking とみなした routed failure の要約を保持する。
-- Preflight は `summary.available_helper_commands` と `commands[].availability` を更新するが、`summary.loop_status` を単独で `ready_for_loop` に確定しない。
+- Preflight は `summary.available_helper_commands` と `commands[].availability` を更新するが、`summary.loop_status` は更新しない。
 - Spec-Checker の `severity` は説明用であり、機械 gate は `status` / `feasible_for_loop` / routed failures を使う。
 - `commands[]` の各オブジェクトは上記すべてのフィールドを必須で持つ。値がない場合も `[]` / `{}` / `""` で明示する。
 

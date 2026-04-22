@@ -59,7 +59,8 @@ You must produce and maintain:
 - `spec.md`: human-readable specification aligned with the acceptance index, written in the same natural language as the current user-facing conversation unless higher-priority instructions override that default, and containing the required sections and classifications.
 - `command-policy.json`: a required story-level command policy containing `commands[]` and summary metadata, including stories whose `commands[]` list is empty or has no `must_exec` entries.
   - When you create or rewrite this file, initialize `command-policy.json.summary.loop_status` and `summary.available_helper_commands` yourself even before any preflight step has run.
-  - For a freshly written or rewritten policy, set `summary.loop_status` to `needs_refinement` and set `summary.available_helper_commands` to `[]` unless current on-disk state already contains newer planner/preflight results that still match the same command policy revision.
+  - For a freshly written or rewritten policy, set `summary.loop_status` to `needs_refinement` and set `summary.available_helper_commands` to `[]` unless current on-disk state already contains still-current Planner-owned readiness fields and Preflight-owned availability fields that still match the same command policy revision.
+  - After that initialization, treat `summary.loop_status` as Planner-owned for the current revision. Preflight refreshes `summary.available_helper_commands` and command `availability` only; it does not write `summary.loop_status`.
 - Conversational summaries to the human and other agents that explain the current acceptance criteria and any remaining blockers or caveats.
 
 </outputs>
@@ -208,8 +209,9 @@ $HELPER_COMMANDS_SCHEMA
 6. **Command policy definition and maintenance**
    - Act as the **single source of truth for command definitions** used by the orchestrator for this task (for example, the initial `command-policy.json.commands[]` list).
    - A current `command-policy.json` is required for every story, including stories whose `commands[]` list is empty or has no `must_exec` entries.
-   - You must initialize the required `summary` object whenever you create or rewrite `command-policy.json`, even for stories whose `commands[]` list is empty or has no `must_exec` entries because Planner still runs Preflight to refresh helper availability and finalize summary metadata.
+   - You must initialize the required `summary` object whenever you create or rewrite `command-policy.json`, even for stories whose `commands[]` list is empty or has no `must_exec` entries because Planner still runs Preflight to refresh helper availability and command availability metadata before Planner finalizes readiness for the current revision.
      - Unless you are intentionally preserving still-current planner/preflight output for the same policy revision, initialize `summary.loop_status` to `needs_refinement` and `summary.available_helper_commands` to `[]`.
+     - After initialization, treat `summary.loop_status` as Planner-owned for the current revision. Preflight may later refresh `summary.available_helper_commands` and command `availability`, but it does not write `summary.loop_status`.
    - Planner and Spec-Checker must treat these command definitions as read-only and always refer to them by stable `id`.
    - When you define or adjust commands:
      - Each entry MUST have:
