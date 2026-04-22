@@ -314,4 +314,16 @@ describe("orchestrator resources migration", () => {
       content.properties?.summary?.properties?.available_helper_commands,
     ).toBeDefined();
   });
+
+  it("status.json should allow investigate as an executor intent", () => {
+    const statusSchemaPath = path.resolve(
+      __dirname,
+      "../resources/status.json",
+    );
+    const content = JSON.parse(fs.readFileSync(statusSchemaPath, "utf8"));
+
+    expect(
+      content.definitions?.ExecutorIntentSnapshot?.properties?.intent?.enum,
+    ).toContain("investigate");
+  });
 });

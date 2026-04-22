@@ -612,7 +612,10 @@ export function enforceCommandPolicyGate(stateDir: string): void {
       process.exit(1);
     }
 
-    if (!Array.isArray(blockingFailureTypes) || !Array.isArray(blockingIssueIds)) {
+    if (
+      !Array.isArray(blockingFailureTypes) ||
+      !Array.isArray(blockingIssueIds)
+    ) {
       throw new Error("unreachable: ready_for_loop summary arrays must exist");
     }
 

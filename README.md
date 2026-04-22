@@ -439,6 +439,7 @@ Preflight-Runner が `commands[].availability` と `summary.available_helper_com
   - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/todo.json` に「derived planning cache」として todo 構造を書き出します。
   - 各 todo を 15-30 分程度の bounded unit に保ち、大きすぎる場合は垂直スライスで分割します。
     主作業面・橋渡し作業・期待証拠・完了境界を decision-complete な形で明示し、`execution_contract` メタデータで Auditor 向けの証拠境界を状態から追跡可能にします。
+  - その際、`command-policy.json` を根拠に `command_ids` を選び、`spec.md` の `Resolved decisions` / `Explicit non-goals` / `Validation view` を execution-facing contract として参照します。
   - `orch_todo_read` / `orch_todo_write` ツールを使ってタスクリストを管理します。
 - Executor (`orch-executor`)
   - 実装とローカル検証専任エージェントです。Todo-Writer/Refiner が用意した acceptance-index や todo を読み取り、コード・テスト・ドキュメント変更とローカル検証を担当します。
@@ -446,12 +447,13 @@ Preflight-Runner が `commands[].availability` と `summary.available_helper_com
   - 各 step の最終出力では `STEP_INTENT` / `STEP_VERIFY` / `STEP_AUDIT` を必須で返し、`STEP_INTENT` / `STEP_VERIFY` の ID はカンマ区切り (`R1,R2` または `R1, R2`) で出力します。
   - `STEP_VERIFY: ready` は command IDs・明示的に再確認した diffs・no-command 理由のうち少なくとも 1 つの根拠を要求します。根拠なしで `STEP_AUDIT: ready` をemit しても Auditor は起動されません。
   - 主要 requirement の作業では requirement-to-diff トレーサビリティ（`requirement_traceability`）を残します。
+  - `status.json.last_auditor_report.requirements[]` に `failure_kind` / `evidence_gaps` がある場合は、それを次 step の structured remediation input として扱います。
   - ルーティングは軽量・逐次的です。サブエージェントの委譲は広範な読み取り専用の探索に限定し、並列実行や外部キューは前提としません。
 - Auditor (`orch-auditor`)
   - 完了判定専用の外部監査役
   - Git の読み取り系コマンドとログのみを参照し、1 行 JSON (`{ done, requirements[] }`) を返す
   - Orchestrator CLI では `STEP_AUDIT: ready` に加えて `STEP_VERIFY: ready` が揃った step でのみ起動されます。
-  - ファイルを変更せず、`git status` / `git diff` / ログファイルなどを参照して `done` と `requirements[{id, passed, reason}]` を返します。
+  - ファイルを変更せず、`git status` / `git diff` / ログファイルなどを参照して `done` と `requirements[{id, passed, reason, failure_kind?, evidence_gaps?}]` を返します。
 
 ## ツール / コマンド
 

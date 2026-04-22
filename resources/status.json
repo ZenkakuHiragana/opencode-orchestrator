@@ -128,7 +128,7 @@
       "properties": {
         "intent": {
           "type": "string",
-          "enum": ["implement", "verify", "replan", "blocked"]
+          "enum": ["implement", "verify", "investigate", "replan", "blocked"]
         },
         "requirement_ids": {
           "type": "array",

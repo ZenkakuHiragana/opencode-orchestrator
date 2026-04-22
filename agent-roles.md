@@ -426,6 +426,9 @@ sequenceDiagram
 - (B) 主な入力
   - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/acceptance-index.json`
   - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/spec.md`
+    - 特に `Resolved decisions` / `Explicit non-goals` / `Validation view` を execution-facing contract として参照する。
+  - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/command-policy.json`
+    - `execution_contract.command_ids` の正本。Todo-Writer はここに存在しない command id を invent しない。
   - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/status.json`
   - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/proposals.json`
     - open な提案がある場合は、Todo-Writer にとっての第一級の再計画入力として扱う。
@@ -477,8 +480,11 @@ sequenceDiagram
 - (C) 主な出力（ファイル）
   - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/todo.json`
     - `orch_todo_write(mode=executor_update_statuses)` により Todo の `status` を更新。
+    - `result_artifacts[].path` は `.opencode/orchestrator/<task-name>/artifacts/` 配下の workspace-relative path を保持する。
   - リポジトリ内のソースコード・テストコード・ドキュメント
     - `edit`/`patch`/`write` ツールで直接更新。
+  - `.opencode/orchestrator/<task-name>/artifacts/`
+    - `investigation_v1` / `verification_v1` などの JSON artifact を保存する workspace-local artifacts directory。
   - OpenCode セッション Todo（`todowrite`）
     - 現在の作業セットを UI にミラー。
 
@@ -517,6 +523,7 @@ sequenceDiagram
   - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/status.json`
     - `last_executor_step`、`last_auditor_report`、`failure_budget` など。参考情報であり、
       それ自体を証拠とは見なさない。Proposal queue は別ファイル (`proposals.json`) にある。
+    - `last_auditor_report.requirements[]` は `{ id, passed, reason?, failure_kind?, evidence_gaps? }` を持ち、後続 replanning の structured failure input になる。
   - Git 差分・ログ・テストログなど（添付ファイルや `bash` 読み取り系コマンド経由）。
 
 - (C) 主な出力（ファイル）
@@ -713,24 +720,24 @@ sequenceDiagram
       "summary": "Create the API endpoint for R1", // natural-language description in the current user-facing language
       "status": "pending" | "in_progress" | "completed" | "cancelled",
       "related_requirement_ids": ["R1", "R2-ui"],
-       "execution_contract": {                    // 任意・監査向け証拠境界
-         "intent": "implement" | "verify" | "investigate",
-         "expected_evidence": ["... 具体的な証拠の文字列 ..."],
-         "command_ids": ["cmd-npm-test"],         // 任意・最も関連するコマンド policy ID
-         "audit_ready_when": ["..."],             // 任意・監査 ready 条件
-         "artifact_schema": "...",                // 任意・成果物のスキーマ名
-         "artifact_filename": "..."               // 任意・成果物のファイル名
-       },
-       "result_artifacts": [                      // 任意・成果物のメタデータ
-         {
-           "kind": "investigation_v1",
-           "path": "artifacts/investigation.md",
-           "summary": "調査結果ドキュメント"
-         }
-       ]
-     }
-   ]
- }
+      "execution_contract": {                    // 任意・監査向け証拠境界
+        "intent": "implement" | "verify" | "investigate",
+        "expected_evidence": ["... 具体的な証拠の文字列 ..."],
+        "command_ids": ["cmd-npm-test"],         // 任意・最も関連するコマンド policy ID
+        "audit_ready_when": ["..."],             // 任意・監査 ready 条件
+        "artifact_schema": "...",                // 任意・成果物のスキーマ名
+        "artifact_filename": "..."               // 任意・成果物のファイル名
+      },
+      "result_artifacts": [                       // 任意・成果物のメタデータ
+        {
+          "kind": "investigation_v1",
+          "path": ".opencode/orchestrator/<task-name>/artifacts/T1-sample-survey.json",
+          "summary": "One-line English summary of the investigation artifact"
+        }
+      ]
+    }
+  ]
+}
 ```
 
 - 互換性のため、Reader 側は `CanonicalTodo[]` だけがトップにある配列形式も許容しているが、

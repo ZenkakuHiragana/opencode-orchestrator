@@ -21,6 +21,31 @@ describe("buildExecutorPrompt", () => {
     );
   });
 
+  it("includes structured auditor failure details for executor remediation", () => {
+    const prompt = buildExecutorPrompt(false, {
+      version: 1,
+      last_auditor_report: {
+        cycle: 2,
+        done: false,
+        requirements: [
+          {
+            id: "R6",
+            passed: false,
+            failure_kind: "missing_verification",
+            evidence_gaps: ["No regression command covers the auth flow"],
+          },
+        ],
+      },
+    });
+
+    expect(prompt).toContain("Latest auditor failure details:");
+    expect(prompt).toContain("R6: kind=missing_verification");
+    expect(prompt).toContain(
+      "gaps=[No regression command covers the auth flow]",
+    );
+    expect(prompt).toContain("failure_kind and evidence_gaps");
+  });
+
   it("warns about verification gaps when consecutive_verification_gaps > 0", () => {
     const prompt = buildExecutorPrompt(false, {
       version: 1,

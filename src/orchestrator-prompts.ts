@@ -1,6 +1,27 @@
 import type { OrchestratorStatus } from "./orchestrator-status.js";
 import type { ProposalEntry } from "./orchestrator-proposals.js";
 
+type FailedRequirementPromptInfo = {
+  id: string;
+  failure_kind?: string;
+  evidence_gaps?: string[];
+};
+
+function formatFailedRequirementDetails(
+  failedRequirements: FailedRequirementPromptInfo[],
+): string {
+  return failedRequirements
+    .map((req) => {
+      const kind = req.failure_kind ? ` kind=${req.failure_kind}` : "";
+      const gaps =
+        req.evidence_gaps && req.evidence_gaps.length > 0
+          ? ` gaps=[${req.evidence_gaps.join("; ")}]`
+          : "";
+      return kind || gaps ? `${req.id}:${kind}${gaps}` : req.id;
+    })
+    .join(", ");
+}
+
 // For todo-writer/executor/auditor, the true behavior and role instructions live in
 // agents/*.md as system prompts. Here we keep per-step "user" prompts as thin
 // as possible to avoid poisoning the conversation history with redundant role
@@ -49,16 +70,7 @@ export function buildTodoWriterPrompt(
       (req) => req.passed === false,
     ) ?? [];
   if (failedRequirements.length > 0) {
-    const failureDetails = failedRequirements
-      .map((req) => {
-        const kind = req.failure_kind ? ` kind=${req.failure_kind}` : "";
-        const gaps =
-          req.evidence_gaps && req.evidence_gaps.length > 0
-            ? ` gaps=[${req.evidence_gaps.join("; ")}]`
-            : "";
-        return `${req.id}:${kind}${gaps}`;
-      })
-      .join(", ");
+    const failureDetails = formatFailedRequirementDetails(failedRequirements);
     parts.push(
       `The auditor reported failed requirements with structured failure information: ${failureDetails}. ` +
         "Use failure_kind to determine what type of todo to add (investigate, verify, or implement), " +
@@ -82,13 +94,21 @@ export function buildExecutorPrompt(
   }
 
   const failedRequirements =
-    status?.last_auditor_report?.requirements
-      ?.filter((req) => req.passed === false)
-      .map((req) => req.id) ?? [];
+    status?.last_auditor_report?.requirements?.filter(
+      (req) => req.passed === false,
+    ) ?? [];
   if (failedRequirements.length > 0) {
     parts.push(
-      `The main open work items are those linked to auditor requirements ${failedRequirements.join(", ")}. When choosing the next tasks, focus on Todos that contribute to satisfying these requirements.`,
+      `The main open work items are those linked to auditor requirements ${failedRequirements.map((req) => req.id).join(", ")}. When choosing the next tasks, focus on Todos that contribute to satisfying these requirements.`,
     );
+
+    const structuredFailureDetails =
+      formatFailedRequirementDetails(failedRequirements);
+    if (structuredFailureDetails.length > 0) {
+      parts.push(
+        `Latest auditor failure details: ${structuredFailureDetails}. Use failure_kind and evidence_gaps to decide whether this step should primarily implement missing behavior, add missing verification, or gather missing investigation evidence.`,
+      );
+    }
   }
 
   if ((status?.failure_budget?.consecutive_verification_gaps ?? 0) > 0) {
@@ -111,7 +131,8 @@ export function buildAuditPrompt(
     "\n---\n\n" +
     "Decide whether the current story is fully completed according to its acceptance criteria and the verification gates relevant to the changes.\n" +
     "Respond ONLY with a single JSON object on one line with the following shape:\n" +
-    '{\n  "done": true | false,\n  "requirements": [ { "id": "R1-some-requirement", "passed": true | false } ]\n}\n' +
+    '{\n  "done": true | false,\n  "requirements": [ { "id": "R1-some-requirement", "passed": true | false, "reason"?: "...", "failure_kind"?: "...", "evidence_gaps"?: ["..."] } ]\n}\n' +
+    "When a requirement fails, include `reason`, `failure_kind`, and `evidence_gaps` in that requirement object.\n" +
     "If you are not certain that a requirement is fully satisfied, set its passed field to false.\n" +
     `This run is tracked under task: ${taskName}.`
   );

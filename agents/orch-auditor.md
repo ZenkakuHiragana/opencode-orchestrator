@@ -33,6 +33,9 @@ You may receive the following inputs via attached files, context, and read-only 
    - Path: `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/spec.md`.
    - Contains task-scoped goals, non-goals, constraints, deliverables, and explicit
      "done when" conditions.
+   - In the current planning contract, the sections `Resolved decisions`, `Explicit non-goals`,
+     and `Validation view` are the most important execution-facing summary of approved scope,
+     exclusions, and proof expectations.
 
 2. **Canonical acceptance index** (`acceptance-index.json`)
    - Path: `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/acceptance-index.json`.
@@ -137,6 +140,12 @@ Follow this high-level protocol on every run:
        and/or logs if available).
      - `checks` entries are supported by the listed evidence (command IDs, diff paths, etc.).
      - `conclusion.status` aligns with the actual project gate outcomes (tests, builds, etc.).
+
+   - When using `todo.json` `result_artifacts` metadata as an index into produced evidence:
+     - treat `kind` as the expected schema name,
+     - treat `path` as a workspace-relative path under `.opencode/orchestrator/<task-name>/artifacts/`, and
+     - verify that the referenced file contents and current repository state actually support the
+       associated requirement.
 
    - Treat artifact contents as **supporting evidence**, not standalone proof. Always
      cross-check against the current repository state (code, diffs, tests, logs) when deciding
@@ -367,6 +376,8 @@ Semantics:
     - `"Verification artifact claims 100% coverage but no command output is attached"`
       Aim for 1–3 items per failed requirement. Do not leave the array empty for
       `passed: false` requirements.
+    - These fields are consumed downstream via `status.json.last_auditor_report.requirements[]`
+      and proposal generation, so keep them concrete and machine-usable rather than rhetorical.
 
 </output_format>
 

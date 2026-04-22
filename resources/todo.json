@@ -71,11 +71,11 @@
             },
             "artifact_schema": {
               "type": "string",
-              "description": "Schema name for the artifact produced by this todo (if any)."
+              "description": "Schema name for the artifact produced by this todo (if any). Leave unset for implement todos unless the task contract explicitly defines an implementation artifact schema."
             },
             "artifact_filename": {
               "type": "string",
-              "description": "Filename for the artifact produced by this todo (if any)."
+              "description": "Filename for the artifact produced by this todo under .opencode/orchestrator/<task-name>/artifacts/ (if any)."
             }
           },
           "additionalProperties": true
@@ -93,7 +93,7 @@
               },
               "path": {
                 "type": "string",
-                "description": "Relative path under the artifacts directory."
+                "description": "Workspace-relative path under .opencode/orchestrator/<task-name>/artifacts/."
               },
               "summary": {
                 "type": "string",

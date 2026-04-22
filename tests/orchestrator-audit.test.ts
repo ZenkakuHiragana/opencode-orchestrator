@@ -45,6 +45,43 @@ describe("parseAuditResult", () => {
     ]);
   });
 
+  it("preserves structured failure metadata from auditor output", () => {
+    const stdout = JSON.stringify({
+      part: {
+        type: "text",
+        text: JSON.stringify({
+          done: false,
+          requirements: [
+            {
+              id: "R7",
+              passed: false,
+              reason: "No verification evidence exists for the API branch",
+              failure_kind: "missing_verification",
+              evidence_gaps: [
+                "No test command output for the API branch",
+                "No diff anchor tied to the API branch behavior",
+              ],
+            },
+          ],
+        }),
+      },
+    });
+
+    const res = parseAuditResult(stdout);
+    expect(res.done).toBe(false);
+    expect(res.failed).toEqual([
+      {
+        id: "R7",
+        reason: "No verification evidence exists for the API branch",
+        failure_kind: "missing_verification",
+        evidence_gaps: [
+          "No test command output for the API branch",
+          "No diff anchor tied to the API branch behavior",
+        ],
+      },
+    ]);
+  });
+
   it("tolerates malformed payload JSON", () => {
     const stdout = JSON.stringify({
       part: { type: "text", text: "not-json" },

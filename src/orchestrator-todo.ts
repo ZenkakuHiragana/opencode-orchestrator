@@ -343,7 +343,7 @@ export const orchTodoWriteTool: ToolDefinition = tool({
     "- Each entry must have an 'id' and 'status'.\n" +
     "- 'result_artifacts' may only be provided when status is 'completed'. If result_artifacts is provided with any other status, SPEC_ERROR is returned.\n" +
     "- result_artifacts is an array; you may record multiple artifacts in a single update.\n" +
-    "- Each artifact requires 'kind' (schema version, e.g. investigation_v1), 'path' (full path under artifacts/), and 'summary' (one-line English description).\n" +
+    "- Each artifact requires 'kind' (schema version, e.g. investigation_v1), 'path' (workspace-relative path under .opencode/orchestrator/<task-name>/artifacts/), and 'summary' (one-line English description).\n" +
     "Misuse will return SPEC_ERROR.",
   args: {
     task: z
@@ -389,13 +389,13 @@ export const orchTodoWriteTool: ToolDefinition = tool({
               artifact_schema: z
                 .string()
                 .describe(
-                  "Schema version for the artifact (e.g., investigation_v1, verification_v1).",
+                  "Schema version for the artifact (e.g., investigation_v1, verification_v1). Leave unset for implement todos unless the task contract explicitly defines an implementation artifact schema.",
                 )
                 .optional(),
               artifact_filename: z
                 .string()
                 .describe(
-                  "Filename under artifacts/ directory (e.g., T12-sample-survey.json).",
+                  "Filename under .opencode/orchestrator/<task-name>/artifacts/ (e.g., T12-sample-survey.json).",
                 )
                 .optional(),
             })
@@ -411,7 +411,11 @@ export const orchTodoWriteTool: ToolDefinition = tool({
                   .describe(
                     "Schema version of the artifact (e.g., investigation_v1).",
                   ),
-                path: z.string().describe("Full path to the artifact file."),
+                path: z
+                  .string()
+                  .describe(
+                    "Workspace-relative path to the artifact file under .opencode/orchestrator/<task-name>/artifacts/.",
+                  ),
                 summary: z
                   .string()
                   .describe(
@@ -450,13 +454,13 @@ export const orchTodoWriteTool: ToolDefinition = tool({
               artifact_schema: z
                 .string()
                 .describe(
-                  "Schema version for the artifact (e.g., investigation_v1, verification_v1).",
+                  "Schema version for the artifact (e.g., investigation_v1, verification_v1). Leave unset for implement todos unless the task contract explicitly defines an implementation artifact schema.",
                 )
                 .optional(),
               artifact_filename: z
                 .string()
                 .describe(
-                  "Filename under artifacts/ directory (e.g., T12-sample-survey.json).",
+                  "Filename under .opencode/orchestrator/<task-name>/artifacts/ (e.g., T12-sample-survey.json).",
                 )
                 .optional(),
             })
@@ -503,7 +507,11 @@ export const orchTodoWriteTool: ToolDefinition = tool({
                   .describe(
                     "Schema version of the artifact (e.g., investigation_v1).",
                   ),
-                path: z.string().describe("Full path to the artifact file."),
+                path: z
+                  .string()
+                  .describe(
+                    "Workspace-relative path to the artifact file under .opencode/orchestrator/<task-name>/artifacts/.",
+                  ),
                 summary: z
                   .string()
                   .describe(
@@ -587,13 +595,13 @@ export const orchTodoWriteTool: ToolDefinition = tool({
                   artifact_schema: z
                     .string()
                     .describe(
-                      "Schema version for the artifact (e.g., investigation_v1, verification_v1).",
+                      "Schema version for the artifact (e.g., investigation_v1, verification_v1). Leave unset for implement todos unless the task contract explicitly defines an implementation artifact schema.",
                     )
                     .optional(),
                   artifact_filename: z
                     .string()
                     .describe(
-                      "Filename under artifacts/ directory (e.g., T12-sample-survey.json).",
+                      "Filename under .opencode/orchestrator/<task-name>/artifacts/ (e.g., T12-sample-survey.json).",
                     )
                     .optional(),
                 })
