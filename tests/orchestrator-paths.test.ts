@@ -6,6 +6,7 @@ import {
   getOrchestratorBaseDir,
   getOrchestratorRoot,
   getOrchestratorStateDir,
+  getOrchestratorDiscoveryPacketPath,
   getOrchestratorProposalsPath,
   getOrchestratorLogsDir,
   rewritePromptPaths,
@@ -28,6 +29,9 @@ describe("orchestrator-paths", () => {
       );
       expect(getOrchestratorProposalsPath("task1")).toBe(
         path.join(base, "task1", "state", "proposals.json"),
+      );
+      expect(getOrchestratorDiscoveryPacketPath("task1")).toBe(
+        path.join(base, "task1", "state", "discovery-packet.md"),
       );
       expect(getOrchestratorLogsDir("task1")).toBe(
         path.join(base, "task1", "logs"),

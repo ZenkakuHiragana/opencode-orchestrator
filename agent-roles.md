@@ -28,12 +28,13 @@
   - ベースパス: `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/`
   - 主なファイル:
     - `acceptance-index.json` … 要件一覧（Refiner オーナー）
-    - `spec.md` … story spec (Refiner-owned / English)
+    - `spec.md` … story spec (Refiner-owned)
     - `todo.json` … Todo-Writer が生成する canonical todo 一覧
-    - `command-policy.json` … Planner が合成するコマンドポリシー
-    - `status.json` … `orchestrator-loop` が更新するループ状態
+    - `command-policy.json` … Refiner-owned `commands[]` と Planner-owned `summary` を持つ planning gate のソース・オブ・トゥルース
+    - `status.json` … `orchestrator-loop` が更新する Executor / Auditor 進捗スナップショット
       - 直近の executor / auditor スナップショットに加えて
         failure budget を保持する。
+      - Planner が触るとしても、proposal 解消や failure-budget cleanup に伴う保守的な maintenance 更新に限る。
       - proposal queue は別ファイル (`proposals.json`) に格納される。
 
 以下、エージェント／コマンドごとに、(A) 役割, (B) 主な入力ファイル, (C) 主な出力ファイル,
@@ -61,34 +62,23 @@ sequenceDiagram
     participant StateDir as state/<task-name>/
 
     rect rgba(200, 220, 240, 0.15)
-        Note over Human,StateDir: 計画フェーズ：Refiner → Preflight → Spec-Checker を繰り返す
+        Note over Human,StateDir: 計画フェーズ：Planner-led discovery → Refiner normalization → Preflight/Spec-Checker gate を繰り返す
     end
 
     Human->>Planner: 高レベルゴールを提示
     Planner->>Planner: 既存の state ファイルを走査
 
     alt 新規タスクまたは既存の state が古すぎる場合
-        Planner->>RefinerAgent: orch-refine コマンドで高レベルゴールを転送
-        RefinerAgent-->>Human: question ツールで質問
-        Human-->>RefinerAgent: 質問への回答
+        Planner-->>Human: question ツールで Discovery Packet の不足を確認
+        Human-->>Planner: 質問への回答
+        Planner->>StateDir: discovery-packet.md を維持・更新
+        Planner->>RefinerAgent: orch-refine コマンドで高レベルゴールと Discovery Packet を転送
         RefinerAgent->>StateDir: acceptance-index.json を書き込み
         RefinerAgent->>StateDir: spec.md を書き込み
         RefinerAgent->>StateDir: command-policy.json（初期版）を書き込み
         RefinerAgent-->>Planner: 要件 ID 一覧とコマンド定義を返す
     else 既存の state を再利用する場合
-        Note over Planner: 既存の acceptance-index.json と spec.md をそのまま使う
-    end
-
-    Planner->>SpecCheckerAgent: orch-spec-check コマンドで spec の分析を依頼
-    SpecCheckerAgent-->>Planner: JSON: { status, feasible_for_loop, issues[] }
-
-    alt status が "needs_revision" または feasible_for_loop が false の場合
-        Planner-->>Human: issues[] を要約して提示
-        Planner->>RefinerAgent: orch-refine コマンドで修正依頼
-        RefinerAgent->>StateDir: 修正した acceptance-index.json と spec.md を上書き
-        RefinerAgent-->>Planner: 修正結果を返す
-        Planner->>SpecCheckerAgent: orch-spec-check コマンドで再分析を依頼
-        SpecCheckerAgent-->>Planner: { status, feasible_for_loop, issues[] }
+        Note over Planner: 既存の discovery-packet.md / acceptance-index.json / spec.md / command-policy.json を確認して再利用可否を判断
     end
 
     alt コマンド一覧に実質的な変更がある場合
@@ -97,20 +87,46 @@ sequenceDiagram
     else 同一コマンド一覧での preflight 再実行の場合
         Note over Planner: 確認不要。直接 preflight に進む
     end
-
     Planner->>PreflightTool: preflight-cli ツールで各コマンドを非対話チェック
     PreflightTool-->>Planner: JSON: { results[]: { id, available, exit_code, stderr_excerpt } }
+    PreflightTool->>StateDir: command-policy.json を更新（commands[].availability / summary.available_helper_commands）
 
-    Planner->>StateDir: command-policy.json を更新（availability 付与・loop_status 設定）
+    Planner->>SpecCheckerAgent: orch-spec-check コマンドで spec と live surface の分析を依頼
+    SpecCheckerAgent-->>Planner: JSON: { status, feasible_for_loop, issues[{ failure_type, return_to, missing_trace, validation_gap }] }
+    Planner->>StateDir: command-policy.json.summary を最終化（loop_status / last_spec_check_status / last_spec_check_feasible_for_loop / blocking_failure_types / blocking_issue_ids）
+
+    alt status が "needs_revision" または feasible_for_loop が false の場合
+        Planner-->>Human: issues[] を要約して提示
+        alt return_to が planner の issue がある場合
+            Planner->>StateDir: discovery-packet.md / proposals.json を更新
+            Planner->>StateDir: status.json を保守更新（proposal 解消 / failure-budget cleanup のみ）
+        else return_to が refiner の issue がある場合
+            Planner->>RefinerAgent: orch-refine コマンドで修正依頼
+        end
+        RefinerAgent->>StateDir: 修正した acceptance-index.json と spec.md を上書き
+        RefinerAgent-->>Planner: 修正結果を返す
+        Planner->>PreflightTool: preflight-cli ツールで更新後のコマンドを再チェック
+        PreflightTool-->>Planner: JSON: { results[]: { id, available, exit_code, stderr_excerpt } }
+        PreflightTool->>StateDir: command-policy.json を更新（commands[].availability / summary.available_helper_commands）
+        Planner->>SpecCheckerAgent: orch-spec-check コマンドで再分析を依頼
+        SpecCheckerAgent-->>Planner: { status, feasible_for_loop, issues[{ failure_type, return_to, missing_trace, validation_gap }] }
+        Planner->>StateDir: command-policy.json.summary を再最終化（loop_status / last_spec_check_status / last_spec_check_feasible_for_loop / blocking_failure_types / blocking_issue_ids）
+    end
+
     Planner-->>Human: 計画サマリを提示（Execution readiness / command-policy status / Next actions）
 ```
 
 **図 1.5.1 補足：TUI 計画フェーズのポイント**
 
-- Planner（LLM）は主に **orch-refine / orch-spec-check** の**カスタムコマンド**でサブエージェントを起動する。
+- Planner（LLM）は discovery の主担当として `question` ツールで不足決定を埋め、**orch-refine / orch-spec-check** の**カスタムコマンド**でサブエージェントを起動する。
+- Planner は discovery のオーナーとして `discovery-packet.md` を保持し、共有契約として必須なのは承認済みの discovery decisions / non-goals / validation view の 3 項目である。その他の見出しは Planner 側の discovery 補助構造として扱う。
 - Preflight の可否判定は `preflight-cli` **ツール**が担当し、Refiner が定義したコマンドと helper コマンドに対して permission.bash ルールをローカル評価する。
-- Refiner / Preflight / Spec-Checker のサイクルは、`status === "ok"` かつ `feasible_for_loop === true` になるまで何度でも回る。
-- `command-policy.json` を更新できるのは、Planner が担当するこのフェーズだけである。
+- Preflight は `commands[].availability` と `summary.available_helper_commands` の mechanical refresh までを担い、`summary.loop_status` の最終確定はしない。
+- Refiner は Discovery Packet を reopening せず canonical state へ正規化し、Planner は `command-policy.json` が存在する story では常に preflight を挟んでから Spec-Checker に監査させる。
+- Refiner / Preflight / Spec-Checker のサイクルは、少なくとも `status === "ok"` かつ `feasible_for_loop === true` になるまで何度でも回る。これらは readiness の必要条件ではあるが十分条件ではなく、Planner は unresolved な blocking proposal / blocking decision も解消したうえで最終判定する。
+- Spec-Checker の routed failure は `return_to` に従って Planner 自身の discovery 修正か Refiner への差し戻しかを分岐させる。
+- `command-policy.json.commands[]` の定義は Refiner が保持し、preflight-cli が `summary.available_helper_commands` と `commands[].availability` を更新する。Planner はその結果を集約して `command-policy.json.summary.loop_status` を strict readiness gate として最終化し、人間に readiness を伝える。
+- Spec-Checker の `severity` は人間向けの説明順序づけ専用であり、機械 gate には使わない。機械 gate は `status` / `feasible_for_loop` / routed failures に基づく。
 
 ---
 
@@ -207,13 +223,13 @@ sequenceDiagram
 
 各ステップで `status.json` に書き込まれる主なデータ:
 
-| フィールド            | 内容                                                                                                               |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `last_executor_step`  | `step_todo` / `step_diff` / `step_cmd` / `step_intent` / `step_verify` / `step_audit` / `requirement_traceability` |
-| `last_auditor_report` | `{ done, requirements[{id, passed, reason?, failure_kind?, evidence_gaps?}] }`                                     |
-| `proposals.json`      | Executor / Auditor / Todo-Writer からの再計画・ブロック提案の永続キュー                                            |
-| `failure_budget`      | verification_gap・audit_failed 等の連続カウント                                                                    |
-| `current_cycle`       | ステップ番号（1 始まり）                                                                                           |
+| フィールド            | 内容                                                                                                                                 |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `last_executor_step`  | `step_todo` / `step_diff` / `step_cmd` / `step_intent` / `step_verify` / `step_audit` / `requirement_traceability`                   |
+| `last_auditor_report` | `{ done, requirements[{id, passed, reason?, failure_kind?, evidence_gaps?}] }`                                                       |
+| `proposals.json`      | Executor / Auditor / Todo-Writer などの loop actors が populate する live proposal queue。Planner は replanning 時にクリア／調整する |
+| `failure_budget`      | verification_gap・audit_failed 等の連続カウント                                                                                      |
+| `current_cycle`       | ステップ番号（1 始まり）                                                                                                             |
 
 `requirement_traceability` は `parseExecutorStepSnapshot()` の中で `buildRequirementDiffTrace()` により `step_todo` / `step_diff` / `step_intent` / `step_audit` から自動導出される。各ステップで Auditor が requirement から代表ファイルへ追跡できる道筋が確保されている。
 
@@ -230,22 +246,31 @@ sequenceDiagram
 - (A) 役割
   - 高レベルのゴールから、Executor ループ実行前に必要な「オーケストレータ状態」を整備する
     プランニングコーディネータ。
+  - Planner-owned discovery artifact として `discovery-packet.md` を維持し、共有契約として必須な `resolved decisions` / `explicit non-goals` / `validation view` を current task の planning contract として保持する。
   - `orch-refiner` / `orch-spec-checker` を呼び分け、preflight 用には `preflight-cli` ツールを使用して
     `acceptance-index.json`, `spec.md`, `command-policy.json`, spec-check レポート、preflight 結果
     などを揃える。
-  - `command-policy.json` の `summary.loop_status` と `commands[]` を最終的に更新する唯一の
-    エージェント（コマンド定義自体は Refiner の責務）。
+  - Refiner が `command-policy.json.commands[]` の定義を保持し、preflight-cli が
+    `summary.available_helper_commands` / `commands[].availability` を更新する。Planner はその結果を集約して
+    `command-policy.json.summary.loop_status` の strict readiness gate を最終化する。
 
 - (B) 主な入力（読むファイル）
+  - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/discovery-packet.md`
   - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/acceptance-index.json`
   - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/spec.md`
   - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/command-policy.json`
   - リポジトリ内コード／ドキュメント（必要に応じて `read`/`glob`/`grep`）
 
 - (C) 主な出力（書くファイル）
+  - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/discovery-packet.md`
+    - Planner-owned discovery artifact。現在の承認済み decision / non-goal / validation view を保持。
   - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/command-policy.json`
-    - `summary.loop_status`
-    - `commands[]`（Refiner 定義のコマンドに preflight 結果を付与）
+    - `summary` 配下の strict readiness metadata を Planner が最終化する。
+  - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/proposals.json`
+    - live proposal queue は loop actors が populate し、Planner は replanning 時のクリア／調整だけを行う。
+  - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/status.json`
+    - Planner の gate 判定を書き込む場所ではなく、Executor / Auditor の進捗スナップショットとして主に CLI が更新する。
+    - Planner が触るとしても、proposal 解消や failure-budget cleanup に伴う保守的な maintenance 更新に限る。
 
 - (D) 出力内容（プロンプト上の仕様）
   - 人間向けには、次のようなサマリを短いセクションで返す（`agents/orch-planner.md` 末尾参照）：
@@ -264,8 +289,9 @@ sequenceDiagram
 
 - (A) 役割
   - 要件の精査エージェント。高レベルゴールを「受け入れ条件付きの要求一覧」に落とし込む。
+  - Planner-owned `discovery-packet.md` を入力契約として受け取り、承認済み discovery decisions を正規化して `acceptance-index.json` / `spec.md` / `command-policy.json.commands[]` に落とし込む。
   - `acceptance-index.json` と `spec.md` を **唯一** 書き換える権限を持つエージェント。
-  - 追加で `command-policy.json` 初期版を担当し、
+  - `command-policy.json.commands[]` の定義を担当し、
     コマンド ID やテンプレートの単一のソース・オブ・トゥルースになる。
   - `command-policy.json` の `commands[]` に含まれるコマンド定義は Refiner が唯一のオーナーであり、
     Planner や Spec-Checker はこれを読み取り専用で扱う。
@@ -283,11 +309,12 @@ sequenceDiagram
     - **user-stated requirement**: ユーザーが明示した要求
     - **repo-derived constraint**: リポジトリから読める制約や既存慣行
     - **public best-practice candidate**: 公開情報から得た候補や推奨（ユーザー確認後に要件化可能）
-    - **open decision**: まだユーザー確認や trade-off 判断が必要な点
-  - `spec.md` には調査結果を専用セクション（Confirmed from repository / Relevant public guidance /
-    Candidate approaches / Decisions requiring user confirmation）に分離して記録する。
+    - **planner-owned discovery gap**: Planner 側の discovery packet に残る未解決事項や確認待ち事項
+  - `spec.md` には、Planner が確定した discovery packet を正規化した結果として
+    goal / scope / non-goals / constraints / validation view などを分離して記録する。
 
 - (B) 主な入力
+  - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/discovery-packet.md`
   - 高レベルゴール（CLI 引数 / 添付ファイルで渡される）
   - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/acceptance-index.json`（既存があれば）
   - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/spec.md`（既存があれば）
@@ -299,11 +326,13 @@ sequenceDiagram
 
 - (C) 主な出力
   - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/acceptance-index.json`
-    - `version`, `requirements[]` などの構造化された受け入れ条件（説明文は英語）。
+    - `version`, `requirements[]` などの構造化された受け入れ条件
+      （説明文は user-facing task と同じ自然言語。高優先度指示があればそれに従う）。
   - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/spec.md`
-    - タスクのゴール、非ゴール、制約、期待成果物、Done 条件など（英語）。
+    - タスクのゴール、非ゴール、制約、期待成果物、Done 条件など
+      （user-facing task と同じ自然言語。高優先度指示があればそれに従う）。
   - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/command-policy.json`
-    - 初期の `commands[]` リストを定義。
+    - 初期の `commands[]` リストと、Planner が後続で最終化できる `summary` の初期値を定義。
 
 - (D) 出力内容
   - エージェントの通常応答としては、
@@ -324,6 +353,8 @@ sequenceDiagram
   - acceptance-index / spec / command-policy.json の構造問題・抜け・矛盾を検査し、
     JSON レポートの `issues[]` にコマンド候補の不足・過剰・安全性・テンプレート化の
     観点を含めて返す。
+  - `discovery-packet.md` と acceptance/spec/command-policy のトレースも確認し、Planner-owned discovery の欠落、unauthorized scope reduction、validation gap を routed failure として Planner または Refiner に返す。
+  - `severity` は説明優先度の付与にのみ使い、machine gating は `status` / `feasible_for_loop` / routed failure fields に委ねる。
   - 以下の追加観点も検出する:
     - spec.md 内で指示ソース（goal / non-goals / confirmed facts / defaults / プロジェクト指示）
       が曖昧にブレンドされている構造的問題
@@ -332,6 +363,7 @@ sequenceDiagram
     - command-policy 変更時の Planner 確認ルールの曖昧さ
 
 - (B) 主な入力
+  - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/discovery-packet.md`
   - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/acceptance-index.json`
   - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/spec.md`
   - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/command-policy.json`
@@ -343,6 +375,7 @@ sequenceDiagram
     - `status`: `"ok"` / `"needs_revision"`
     - `feasible_for_loop`: orchestrator ループに載せられるかのブール値
     - `issues[]`: acceptance-index / spec / command-policy に関する問題一覧（`summary`/`suggested_action` は英語）
+      - 各 issue は `failure_type`, `return_to`, `missing_trace`, `validation_gap` を含み、routed failure として Planner か Refiner に返す。
 
 ## 5. Preflight（preflight-cli ツール）
 
@@ -352,6 +385,7 @@ sequenceDiagram
 - (A) 役割
   - Spec-Checker / Refiner が定義した「候補コマンド」が現在の permission.bash ルールの下で実行可能かを、LLM を起動せずにローカルで判定する。
   - Refiner が定義したコマンドに加えて、`resources/helper-commands.json` に定義された helper コマンド群の可用性も併せて評価する。
+  - strict readiness の最終判定は担当せず、Planner が gate 判定に必要な mechanical input を更新するための補助に徹する。
 
 - (B) 主な入力
   - Planner からツール引数として渡される command descriptors 配列:
@@ -359,7 +393,7 @@ sequenceDiagram
   - 各 `command` はテンプレート展開済みの「最終的な 1 行コマンド」。
 
 - (C) 主な出力（ファイル）
-  - `command-policy.json` の更新のみ（`summary.available_helper_commands` / 各 `commands[].availability` / `summary.loop_status`）。
+  - `command-policy.json` の更新のみ（`summary.available_helper_commands` / 各 `commands[].availability`）。
 
 - (D) 出力内容
   - ツール戻り値として 1 行の JSON オブジェクト（`{ status, results[] }`）。
@@ -564,7 +598,8 @@ sequenceDiagram
 
 ## 10. まとめ
 
-- Refiner / Preflight-Runner / Spec-Checker / Planner が「仕様とコマンドポリシー」を整備し、
+- Planner が discovery packet を保持し、Refiner / Preflight-Runner / Spec-Checker / Planner が
+  「仕様とコマンドポリシー」を整備し、
   Todo-Writer が「実行可能な Todo 構造」を生成し、Executor が「実装と検証」を行い、
   Auditor が「最終完了判定」を行う、という明確な責務分担になっている。
 - Orchestrator ループ (`orchestrator-loop.ts`) はこれらのエージェントとコマンドを束ね、
@@ -591,7 +626,7 @@ sequenceDiagram
     {
       "id": "R1-some-requirement", // 安定 ID（文字列）
       "title": "...", // 短い名前（任意）
-      "description": "...", // 英語の受け入れ条件説明
+      "description": "...", // user-facing task と同じ自然言語の受け入れ条件説明
       "acceptance": {
         // 受け入れ判定に関する追加情報（任意）
         "files": ["src/..."],
@@ -615,16 +650,20 @@ sequenceDiagram
 ### 11.2 command-policy.json
 
 - パス: `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/command-policy.json`
-- オーナー: 初期定義は `orch-refiner`、集約と `availability` 付与は `orch-planner`。
+- オーナー: `commands[]` は `orch-refiner`、`commands[].availability` と `summary.available_helper_commands` は preflight、`summary` の strict readiness は `orch-planner`。
 - `enforceCommandPolicyGate`（`src/orchestrator-loop.ts`）で期待されるスキーマ:
 
 ```jsonc
 {
   "version": 1,
-    "summary": {
-      "loop_status": "ready_for_loop" | "needs_refinement" | "blocked_by_environment" | string,
-      "available_helper_commands": string[]
-    },
+  "summary": {
+    "loop_status": "ready_for_loop" | "needs_refinement" | "blocked_by_environment" | string,
+    "available_helper_commands": string[],
+    "last_spec_check_status": "ok" | "needs_revision" | string | null,
+    "last_spec_check_feasible_for_loop": true | false | null,
+    "blocking_failure_types": string[],
+    "blocking_issue_ids": string[]
+  },
   "commands": [
     {
       "id": "cmd-npm-test",                     // 安定 ID（kebab-case）
@@ -637,8 +676,8 @@ sequenceDiagram
         "subdir": { "description": "..." }
       },
       "related_requirements": ["R1", "R2-ui"], // 関連要件。なければ []
-      "usage_notes": "...",                    // English note. Use "" if none.
-      "availability": "available" | "unavailable" // Planner/preflight が付与
+      "usage_notes": "...",                    // user-facing task と同じ自然言語の note。なければ ""
+      "availability": "available" | "unavailable" // preflight が付与
     }
   ]
 }
@@ -646,6 +685,11 @@ sequenceDiagram
 
 - `version` は必須フィールドで、現行値は `1`。
 - `summary.available_helper_commands` は必須フィールドで、このタスクで利用可能な helper ベースコマンド名（例: `"rg"`, `"grep"`, `"wc"`）の一覧を保持する。
+- `summary.loop_status` は Planner が最終化する strict readiness gate であり、planning gate のソース・オブ・トゥルースになる。
+- `summary.last_spec_check_status` と `summary.last_spec_check_feasible_for_loop` は、Planner が最後に採用した Spec-Checker top-level 判定を保持する。
+- `summary.blocking_failure_types` と `summary.blocking_issue_ids` は、Planner が gate で blocking とみなした routed failure の要約を保持する。
+- Preflight は `summary.available_helper_commands` と `commands[].availability` を更新するが、`summary.loop_status` を単独で `ready_for_loop` に確定しない。
+- Spec-Checker の `severity` は説明用であり、機械 gate は `status` / `feasible_for_loop` / routed failures を使う。
 - `commands[]` の各オブジェクトは上記すべてのフィールドを必須で持つ。値がない場合も `[]` / `{}` / `""` で明示する。
 
 - `enforceCommandPolicyGate` は特に `commands[].usage` と `commands[].availability` を見て、
@@ -666,7 +710,7 @@ sequenceDiagram
   "todos": [
     {
       "id": "T1-sample-setup-task",             // 安定 Todo ID
-      "summary": "Create the API endpoint for R1", // natural-language description (English)
+      "summary": "Create the API endpoint for R1", // natural-language description in the current user-facing language
       "status": "pending" | "in_progress" | "completed" | "cancelled",
       "related_requirement_ids": ["R1", "R2-ui"],
        "execution_contract": {                    // 任意・監査向け証拠境界
@@ -695,11 +739,11 @@ sequenceDiagram
 ### 11.4 status.json（orchestrator-loop 状態 / migration context）
 
 - パス: `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/status.json`
-- オーナー: `orchestrator-loop.ts`（`runLoop()` 内からのみ更新）
+- オーナー: 主担当は `orchestrator-loop.ts`。Planner は replanning / proposal cleanup に伴う narrow な maintenance 更新だけを行いうる。
 - 型定義: `src/orchestrator-status.ts` の `OrchestratorStatus`。
 
-`status.json` は、CLI（orchestrator-loop）が機械的に書き込むスナップショットのみを持つ、比較的
-小さな JSON です。ライブの proposal surface は `proposals.json` にあり、この節は loop 状態の
+`status.json` は、CLI（orchestrator-loop）が主に書き込む Executor / Auditor 進捗スナップショットのみを持つ、比較的
+小さな JSON です。planning gate のソース・オブ・トゥルースではありません。Planner が触るとしても、replanning / proposal cleanup に伴う narrow な maintenance 更新に限ります。ライブの proposal surface は `proposals.json` にあり、この節は loop 状態の
 migration context として読むものです。現時点で CLI が書き込んでいるフィールドは、次の通りです。
 
 ```jsonc
@@ -728,7 +772,7 @@ migration context として読むものです。現時点で CLI が書き込ん
         "command": "npm test",
         "command_id": "cmd-npm-test", // `STEP_CMD` の括弧内 / または null
         "status": "success", // 実際の文字列値（例）
-        "outcome": "Test passed", // 英語サマリ
+        "outcome": "Test passed", // current user-facing language のサマリ
       },
     ],
     "step_blocker": [
@@ -782,7 +826,7 @@ migration context として読むものです。現時点で CLI が書き込ん
 #### 11.4.1 proposals.json（live proposal queue）
 
 - パス: `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/proposals.json`
-- オーナー: `orchestrator-loop.ts` と `orch-todo-writer`
+- オーナー: populate は `orchestrator-loop.ts` と loop actors、replanning 時のクリア／調整は Planner
 - 型定義: `src/orchestrator-proposals.ts` の `ProposalsFile` / `ProposalEntry`
 
 ```jsonc
@@ -817,8 +861,8 @@ migration context として読むものです。現時点で CLI が書き込ん
   代表ファイル一覧を抽出し、各 requirement に対して `representative_files` を対応づける。
   Auditor や Planner が「どのファイルがどの requirement を満たすか」を todo だけで追跡できる。
 - `proposals.json` は `last_executor_step.step_blocker` と `last_auditor_report.requirements`
-  から CLI が正規化して構築する「現在の再計画キュー」です。Todo-Writer は、生の履歴スナップショット
-  を直接解釈する前に、まずこのキューを参照する想定です。
+  から CLI と loop actors が正規化して populate する「現在の live proposal queue」です。Todo-Writer は、生の履歴スナップショット
+  を直接解釈する前に、まずこのキューを参照する想定です。Planner は replanning 時に解決済み提案のクリア／調整を行えます。
 - `failure_budget.consecutive_verification_gaps` は `STEP_AUDIT: ready` なのに
   `STEP_VERIFY: ready` が伴わなかったステップだけを連続カウントし、通常の
   `STEP_AUDIT: in_progress` / 未監査ステップではリセットされます。
@@ -837,6 +881,10 @@ migration context として読むものです。現時点で CLI が書き込ん
       "id": "I1-missing-requirements",
       "severity": "info" | "warning" | "error",
       "target": "acceptance-index" | "commands" | "command-policy" | "structure" | string,
+      "failure_type": "missing_trace" | "validation_gap" | "unauthorized_scope_reduction" | string,
+      "return_to": "planner" | "refiner",
+      "missing_trace": ["discovery-packet.md: resolved decision for R3"],
+      "validation_gap": "",
       "summary": "...",           // English short description
       "suggested_action": "..."   // English improvement suggestion
     }

@@ -5,6 +5,7 @@
 !.opencode/agents/**
 !.opencode/commands/**
 !.opencode/tools/**
+.worktrees/
 coverage/
 dist/
 docs/diagrams/

@@ -92,6 +92,28 @@ describe("orchestratorAgents", () => {
     expect(executor.tools.websearch).toBe(true);
   });
 
+  it("orch-planner may write planning state plus narrow maintenance fields for status and proposals", () => {
+    const write = orchestratorAgents["orch-planner"].permission.write;
+    expect(write).toEqual(
+      expect.objectContaining({
+        "$XDG_STATE_HOME/opencode/orchestrator/*/state/status.json": "allow",
+        "$XDG_STATE_HOME/opencode/orchestrator/*/state/discovery-packet.md":
+          "allow",
+        "$XDG_STATE_HOME/opencode/orchestrator/*/state/proposals.json": "allow",
+        "$XDG_STATE_HOME/opencode/orchestrator/*/state/command-policy.json":
+          "allow",
+      }),
+    );
+    expect(
+      write[
+        "$XDG_STATE_HOME/opencode/orchestrator/*/state/acceptance-index.json"
+      ],
+    ).not.toBe("allow");
+    expect(
+      write["$XDG_STATE_HOME/opencode/orchestrator/*/state/spec.md"],
+    ).not.toBe("allow");
+  });
+
   it("orch-spec-checker has read-only tools", () => {
     const checker = orchestratorAgents["orch-spec-checker"];
     expect(checker.tools.bash).toBe(false);

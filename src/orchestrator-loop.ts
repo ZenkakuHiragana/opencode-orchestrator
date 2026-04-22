@@ -435,6 +435,10 @@ export function enforceCommandPolicyGate(stateDir: string): void {
   let version: number | undefined;
   let status: string | undefined;
   let availableHelperCommands: string[] | undefined;
+  let lastSpecCheckStatus: string | undefined;
+  let lastSpecCheckFeasibleForLoop: boolean | undefined;
+  let blockingFailureTypes: string[] | undefined;
+  let blockingIssueIds: string[] | undefined;
   let commands:
     | {
         id?: string;
@@ -454,6 +458,10 @@ export function enforceCommandPolicyGate(stateDir: string): void {
       summary?: {
         loop_status?: string;
         available_helper_commands?: string[];
+        last_spec_check_status?: string;
+        last_spec_check_feasible_for_loop?: boolean;
+        blocking_failure_types?: string[];
+        blocking_issue_ids?: string[];
       };
       commands?: {
         id?: string;
@@ -473,6 +481,16 @@ export function enforceCommandPolicyGate(stateDir: string): void {
       json && json.summary && json.summary.available_helper_commands
         ? json.summary.available_helper_commands
         : undefined;
+    lastSpecCheckStatus =
+      json && json.summary ? json.summary.last_spec_check_status : undefined;
+    lastSpecCheckFeasibleForLoop =
+      json && json.summary
+        ? json.summary.last_spec_check_feasible_for_loop
+        : undefined;
+    blockingFailureTypes =
+      json && json.summary ? json.summary.blocking_failure_types : undefined;
+    blockingIssueIds =
+      json && json.summary ? json.summary.blocking_issue_ids : undefined;
     commands = Array.isArray(json.commands) ? json.commands : undefined;
   } catch (err) {
     console.error(
@@ -572,6 +590,84 @@ export function enforceCommandPolicyGate(stateDir: string): void {
   }
 
   if (status === "ready_for_loop") {
+    const missingSpecSummaryFields: string[] = [];
+    if (typeof lastSpecCheckStatus !== "string") {
+      missingSpecSummaryFields.push("last_spec_check_status");
+    }
+    if (typeof lastSpecCheckFeasibleForLoop !== "boolean") {
+      missingSpecSummaryFields.push("last_spec_check_feasible_for_loop");
+    }
+    if (!Array.isArray(blockingFailureTypes)) {
+      missingSpecSummaryFields.push("blocking_failure_types");
+    }
+    if (!Array.isArray(blockingIssueIds)) {
+      missingSpecSummaryFields.push("blocking_issue_ids");
+    }
+
+    if (missingSpecSummaryFields.length > 0) {
+      console.error(
+        "[opencode-orchestrator] planning gate: command-policy.summary.loop_status=ready_for_loop ですが、planner-finalized spec-check summary が不足しています:" +
+          ` ${missingSpecSummaryFields.join(", ")}. Planner/Spec-Checker/Preflight を再実行して command-policy.json.summary を更新してください。`,
+      );
+      process.exit(1);
+    }
+
+    if (!Array.isArray(blockingFailureTypes) || !Array.isArray(blockingIssueIds)) {
+      throw new Error("unreachable: ready_for_loop summary arrays must exist");
+    }
+
+    const hasValidBlockingFailureTypes = blockingFailureTypes.every(
+      (item) => typeof item === "string",
+    );
+    const hasValidBlockingIssueIds = blockingIssueIds.every(
+      (item) => typeof item === "string",
+    );
+    if (!hasValidBlockingFailureTypes || !hasValidBlockingIssueIds) {
+      const invalidFields = [
+        !hasValidBlockingFailureTypes ? "blocking_failure_types" : null,
+        !hasValidBlockingIssueIds ? "blocking_issue_ids" : null,
+      ].filter((item): item is string => item !== null);
+      console.error(
+        "[opencode-orchestrator] planning gate: command-policy.summary.loop_status=ready_for_loop ですが、planner-finalized spec-check summary に不正な型があります:" +
+          ` ${invalidFields.join(", ")}. command-policy.json.summary を再生成してください。`,
+      );
+      process.exit(1);
+    }
+
+    if (
+      lastSpecCheckStatus !== "ok" ||
+      lastSpecCheckFeasibleForLoop !== true ||
+      blockingFailureTypes.length > 0 ||
+      blockingIssueIds.length > 0
+    ) {
+      const contradictionReasons: string[] = [];
+      if (lastSpecCheckStatus !== "ok") {
+        contradictionReasons.push(
+          `last_spec_check_status=${String(lastSpecCheckStatus)}`,
+        );
+      }
+      if (lastSpecCheckFeasibleForLoop !== true) {
+        contradictionReasons.push(
+          `last_spec_check_feasible_for_loop=${String(lastSpecCheckFeasibleForLoop)}`,
+        );
+      }
+      if (blockingFailureTypes.length > 0) {
+        contradictionReasons.push(
+          `blocking_failure_types=${blockingFailureTypes.join(",")}`,
+        );
+      }
+      if (blockingIssueIds.length > 0) {
+        contradictionReasons.push(
+          `blocking_issue_ids=${blockingIssueIds.join(",")}`,
+        );
+      }
+      console.error(
+        "[opencode-orchestrator] planning gate: command-policy.summary.loop_status=ready_for_loop ですが、planner-finalized spec-check summary が矛盾しています:" +
+          ` ${contradictionReasons.join("; ")}. Planner/Spec-Checker/Preflight の結果を見直して command-policy.json を更新してください。`,
+      );
+      process.exit(1);
+    }
+
     return;
   }
 

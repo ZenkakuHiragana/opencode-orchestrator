@@ -7,7 +7,8 @@
 npm プラグインおよび CLI アプリケーションとして提供するためのコードと
 エージェント定義をまとめたものです。
 
-「1 つの大きな開発ストーリー」を、Refiner/Todo-Writer/Executor/Auditor などの
+「1 つの大きな開発ストーリー」を、Planner/Refiner/Todo-Writer/Executor/Auditor
+などの
 エージェントに分担させて自動で前進させるための、制御ロジックと状態管理を担当します。
 
 ## 背景
@@ -22,8 +23,10 @@ OpenCode + GPT 系モデルで長期の計画を要するタスクをさせる�
 
 このマルチエージェント・オーケストレーターは計画と実行の2段階に分けて使います。
 
-1. OpenCode TUI で計画を立てましょう。すると計画の内容が
-   `acceptance-index.json` / `spec.md` / `command-policy.json` に保存されます。
+1. OpenCode TUI で Planner と対話し、まず `discovery-packet.md` を完成させます。
+   その後 Refiner が Discovery Packet を正規化して
+   `acceptance-index.json` / `spec.md` / `command-policy.json.commands[]` を作成し、
+   Preflight が `commands[].availability` と `summary.available_helper_commands` を埋め、Planner が Spec-Checker の `status` / `feasible_for_loop` と routed failures も合わせて `command-policy.json.summary` の strict readiness を最終化してから、ループ投入可否を判断します。
    - 保存先は `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state` です。
    - デフォルトでは、`~/.local/state/opencode/orchestrator/<task-name>/state` です。
 2. エージェントが実行可能だと返答してきたら、別のターミナルで `npx opencode-orchestrator loop --task <task-name>` を実行します。
@@ -31,7 +34,9 @@ OpenCode + GPT 系モデルで長期の計画を要するタスクをさせる�
    - 計画フェーズが未完了のままでは実行フェーズへ進めません。計画実行に必要なコマンドを `opencode.json` で許可しましょう。
    - ~~最初からなんでも許可しておいても OK です。~~
 3. 実行フェーズに入ると、Orchestrator CLI は `todo.json`、`status.json`、`logs/` 配下の step ログ、  
-   Auditor の結果を自動更新しながら Todo-Writer / Executor / Auditor を順番に回します。
+    Auditor の結果を自動更新しながら Todo-Writer / Executor / Auditor を順番に回します。
+   - planning gate は引き続き `command-policy.json.summary` を参照し、`status.json` は進捗スナップショットとして扱います。
+   - `command-policy.json.summary.loop_status` が loop 開始可否の strict readiness gate であり、Preflight 単独では `ready_for_loop` を確定しません。
 
 ---
 
@@ -40,16 +45,16 @@ flowchart LR
   subgraph Planning["計画フェーズ"]
     direction TB
     Dev{{"開発者"}} --"大きな目標<br/>やりたいこと"-->
-    Planner[("Orch-Planner<br/>(OpenCode TUI)")]
-    Planner --"要件の明確化を指示"-->
-    Refiner["Refiner (Subagent)<br/>厳密な要件の作成<br/>受け入れ条件一覧の作成"]
-    Planner --"要件について<br/>質疑応答"---> Dev
-    Refiner --"要件に矛盾・不明瞭な点が<br/>ないか確認"-->
+    Planner[("Orch-Planner<br/>(OpenCode TUI)<br/>discovery coordinator")]
+    Planner --"対話して<br/>discovery-packet.md を完成"--> Packet["Discovery Packet<br/>discovery-packet.md"]
+    Planner --"不足している決定を<br/>質問して埋める"---> Dev
+    Packet --"承認済み discovery を入力契約として渡す"-->
+    Refiner["Refiner (Subagent)<br/>Discovery Packet を正規化<br/>acceptance-index / spec / command-policy"]
+    Refiner --"要求品質・coverage・feasibility・<br/>scope reduction を監査"-->
     Spec-Checker["Spec-Checker (Subagent)"]
-    Spec-Checker --"差し戻し"--> Planner
-    Spec-Checker --"コマンド実行権限確認"-->
-    Preflight-Runner["Preflight Runner (Subagent)"]
-    Preflight-Runner --"実行可否の通知"--> Planner
+    Refiner --"コマンド定義を提供"--> Preflight-Runner["Preflight Runner<br/>preflight-cli"]
+    Spec-Checker --"routed failure / readiness"--> Planner
+    Preflight-Runner --"availability / helper availability"--> Planner
   end
 
   subgraph Execution["実行フェーズ"]
@@ -369,7 +374,7 @@ npm run build   # dist/cli.js, dist/index.js を生成
 - `getOrchestratorStateDir(<task-name>)/command-policy.json`
 
 このファイルは、Refiner が用意した受け入れ条件とコマンド候補に対して
-Spec-Checker / Preflight-Runner が出した結果を、Planner が集約して作る
+Preflight-Runner が `commands[].availability` と `summary.available_helper_commands` を埋め、Planner が strict readiness を `summary` に最終化して作る
 「どのコマンドを使ってよいか」のポリシーです。主なルール:
 
 - ファイルが存在しない場合は **エラーで即終了**
@@ -378,6 +383,8 @@ Spec-Checker / Preflight-Runner が出した結果を、Planner が集約して�
   - `needs_refinement` : 受け入れ条件やコマンドがまだ曖昧
   - `blocked_by_environment` : 必須コマンドが環境に存在しない
     などの場合もループ開始を拒否
+- `summary.loop_status` は strict readiness gate であり、Preflight の mechanical result だけでは `ready_for_loop` に確定しない
+- Spec-Checker の `severity` は説明用であり、機械 gate は `status` / `feasible_for_loop` / routed failures を使う
 
 これにより、Executor が「存在しないテストコマンド」や
 「使ってはいけないビルドコマンド」を勝手に叩かないようにガードしています。
@@ -387,12 +394,16 @@ Spec-Checker / Preflight-Runner が出した結果を、Planner が集約して�
 タスクキー `my-task` の場合、状態とログは次に保存されます。
 
 - 状態: `$(getOrchestratorBaseDir)/my-task/state`
+  - `discovery-packet.md` : Planner が管理する discovery 契約
   - `acceptance-index.json` : Refiner が管理する受け入れ条件一覧
-  - `spec.md` : 高レベルなゴール / 制約 / 終了条件 / 受け入れ条件の解釈指針
+  - `spec.md` : 高レベルなゴール / 制約 / explicit non-goals / validation view / 受け入れ条件の解釈指針
   - `status.json` : Executor / Auditor の進捗スナップショット、`last_executor_step` / `last_auditor_report` / `failure_budget`
-  - `proposals.json` : Executor / Auditor / Todo-Writer からの再計画・ブロック提案の永続キュー。open な提案は解決または却下されるまで残り、次回の replanning に再投入されます
+    - planning gate のソース・オブ・トゥルースではありません。
+    - Planner が触るとしても、proposal 解消や failure-budget cleanup に伴う保守的な maintenance 更新に限ります。
+  - `proposals.json` : Executor / Auditor / Todo-Writer などの loop actors が populate する live proposal queue。open な提案は解決または却下されるまで残り、次回の replanning に再投入されます
+    - Planner は replanning 時に解決済み提案のクリア／調整を行えます。
   - `todo.json` : Todo-Writer エージェントによるタスクリスト
-  - `command-policy.json` : spec-check + preflight によるコマンド可否
+- `command-policy.json` : planning gate のソース・オブ・トゥルース。Refiner が `commands[]` を定義し、Preflight が availability / helper availability を更新し、Planner が `summary` の strict readiness を最終化
 - ログ: `$(getOrchestratorBaseDir)/my-task/logs`
   - `orch_step_000.txt` : 初回 `orch-todo-write` 出力
   - `orch_step_XXX.txt` : 各ステップ executor の出力
@@ -410,19 +421,19 @@ Spec-Checker / Preflight-Runner が出した結果を、Planner が集約して�
 
 - Orch-Planner (`orch-planner`)
   - モード: `primary`
-  - 役割: Refiner / Spec-Checker / Preflight-Runner をまとめて呼び出す計画フェーズ担当 (TUI からの窓口)。
+  - 役割: TUI からの窓口として discovery を主導し、`discovery-packet.md` を管理したうえで Refiner / Spec-Checker / preflight-cli をまとめて呼び出す計画フェーズ担当です。
   - `npx opencode-orchestrator loop` 実行前に、TUI でこのエージェントと対話します。
-  - acceptance-index と spec.md の作成・更新は Refiner に委譲し、
-    自身は主に Spec-Checker / Preflight-CLI の結果をまとめて「どのコマンドが必須で、どの程度環境が整っているか」を人間に説明します。
-  - Preflight は permission / availability の確認用に行う操作を指します。
+  - current task に効く意思決定を人間と閉じてから Refiner に渡し、未承認の scope reduction や先送りを防ぎます。
+  - `acceptance-index.json` / `spec.md` / `command-policy.json.commands[]` の canonical owner ではなく、主に discovery・preflight・Spec-Checker の結果を集約し、`command-policy.json.summary.loop_status` を strict readiness gate として最終化して人間に説明します。
+  - Preflight は permission / availability の確認用に毎回行う操作で、`must_exec` コマンドの blocking 判定に必要な `commands[].availability` と helper availability の更新だけを担います。Preflight 単独では readiness を最終化しません。
   - 必要に応じて `npx opencode-orchestrator loop ...` で実行ループを開始できます。
 - Refiner (`orch-refiner`)
-  - 高レベルなゴールをテスト可能な受け入れ条件に分解する Requirements Refiner です。
-  - `acceptance-index.json`, `spec.md`, `command-policy.json` を管理し、コマンド定義も含めたメタデータを提案します。
-  - `spec.md` に、タスクのゴール / non-goals / 制約 / 成果物 / 終了条件 / 受け入れ条件の解釈方針などを英語でまとめた仕様を書き出します。
+  - Planner が完成させた Discovery Packet を契約入力として受け取り、要件をテスト可能な canonical state に正規化する Requirements Refiner です。
+  - `acceptance-index.json`, `spec.md`, `command-policy.json.commands[]` を管理し、Planner が後続で strict readiness を確定できる初期 summary も用意します。
+  - `spec.md` には、タスクのゴール / resolved decisions / explicit non-goals / constraints / validation view / 終了条件などを、現在の user-facing 会話と同じ自然言語で書き出します。
 - Spec-Checker (`orch-spec-checker`)
-  - acceptance-index と spec.md、および command-policy.json を解析し、仕様やコマンド定義の抜け・構造的問題・受け入れ条件との対応関係の不整合を指摘する解析専用サブエージェントです。
-  - `issues[]` に acceptance-index / spec / command-policy それぞれに対する指摘を JSON として出力しますが、ファイルの編集・更新は行いません (完全 read-only)。
+  - acceptance-index / spec / command-policy.json と `discovery-packet.md` の整合を解析し、要求品質・coverage・feasibility・unauthorized scope reduction を監査する解析専用サブエージェントです。
+  - `issues[]` に `failure_type`, `return_to`, `missing_trace`, `validation_gap` を含む routed failure を JSON で出力しますが、ファイルの編集・更新は行いません (完全 read-only)。`severity` は説明優先度専用であり、機械 gate は top-level `status` / `feasible_for_loop` と routed failure を使います。
 - Todo-Writer (`orch-todo-writer`)
   - Refiner が作った acceptance-index と spec.md を読み、Executor が実行しやすい todo リストに分解する計画専任エージェントです。
   - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/todo.json` に「derived planning cache」として todo 構造を書き出します。

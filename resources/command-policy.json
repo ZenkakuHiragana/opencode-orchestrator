@@ -10,7 +10,15 @@
     },
     "summary": {
       "type": "object",
-      "required": ["loop_status", "available_helper_commands"],
+      "description": "Planner-owned summary metadata for the current command-policy revision. Treat this object as the strict planning gate snapshot finalized by Planner after Preflight and Spec-Checker have both run for the current story state.",
+      "required": [
+        "loop_status",
+        "available_helper_commands",
+        "last_spec_check_status",
+        "last_spec_check_feasible_for_loop",
+        "blocking_failure_types",
+        "blocking_issue_ids"
+      ],
       "properties": {
         "loop_status": {
           "type": "string",
@@ -19,14 +27,36 @@
             "needs_refinement",
             "blocked_by_environment"
           ],
-          "description": "Mechanical gate for starting the executor loop."
+          "description": "Planner-finalized strict readiness gate for starting the executor loop after the required Refiner → Preflight → Spec-Checker sequence for the current command-policy revision. Treat this as the single machine-readable readiness summary for the story. Refiner must initialize this field in every newly written command-policy.json, including stories with no must_exec commands; use 'needs_refinement' until Planner has consumed current preflight and spec-check results."
         },
         "available_helper_commands": {
           "type": "array",
           "items": {
             "type": "string"
           },
-          "description": "List of base helper command names (for example 'rg', 'grep', 'wc') that are available for this task after preflight. Executor may call these commands directly with appropriate flags and arguments."
+          "description": "List of base helper command names (for example 'rg', 'grep', 'wc') that are available for this task after preflight. Refiner must still initialize this field to [] in every newly written command-policy.json, including stories with no must_exec commands, until Planner/Preflight records available helpers. Executor may call these commands directly with appropriate flags and arguments."
+        },
+        "last_spec_check_status": {
+          "type": "string",
+          "description": "Most recent top-level `status` reported by Spec-Checker for the current command-policy revision. Planner should refresh this field after each current spec-check run."
+        },
+        "last_spec_check_feasible_for_loop": {
+          "type": "boolean",
+          "description": "Most recent top-level `feasible_for_loop` reported by Spec-Checker for the current command-policy revision. Planner should refresh this field after each current spec-check run."
+        },
+        "blocking_failure_types": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Distinct routed `failure_type` values from current blocking Spec-Checker issues for the current story revision. Treat an issue as blocking when it contributes to top-level `status: \"needs_revision\"` or `feasible_for_loop: false`; do not use `severity` as the blocking test. Use [] when there are no current blocking routed failures."
+        },
+        "blocking_issue_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Spec-Checker issue IDs that currently block loop readiness for this command-policy revision. Treat an issue as blocking when it contributes to top-level `status: \"needs_revision\"` or `feasible_for_loop: false`; do not use `severity` as the blocking test. Use [] when there are no current blocking issues."
         }
       },
       "additionalProperties": true
@@ -99,7 +129,7 @@
           },
           "usage_notes": {
             "type": "string",
-            "description": "Human-readable notes about how this command should be used (typically in English). Use an empty string when there is no note."
+            "description": "Human-readable notes about how this command should be used in the same natural language as the current user-facing conversation unless higher-priority instructions override that default. Use an empty string when there is no note."
           }
         },
         "additionalProperties": true
