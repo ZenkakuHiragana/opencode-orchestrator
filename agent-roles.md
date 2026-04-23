@@ -91,7 +91,7 @@ sequenceDiagram
     PreflightTool-->>Planner: JSON: { results[]: { id, available, exit_code, stderr_excerpt } }
     PreflightTool->>StateDir: command-policy.json を更新（commands[].availability / summary.available_helper_commands）
 
-    Planner->>SpecCheckerAgent: orch-spec-check コマンドで spec と live surface の分析を依頼
+    Planner->>SpecCheckerAgent: orch-spec-check コマンドで spec と暗黙要件カバレッジの分析を依頼
     SpecCheckerAgent-->>Planner: JSON: { status, feasible_for_loop, issues[{ failure_type, return_to, missing_trace, validation_gap }] }
     Planner->>StateDir: command-policy.json.summary を最終化（loop_status / last_spec_check_status / last_spec_check_feasible_for_loop / blocking_failure_types / blocking_issue_ids）
 
@@ -352,7 +352,8 @@ sequenceDiagram
   - 受け入れ仕様と command-policy の構造検査を行う読み取り専用エージェント。
   - acceptance-index / spec / command-policy.json の構造問題・抜け・矛盾を検査し、
     JSON レポートの `issues[]` にコマンド候補の不足・過剰・安全性・テンプレート化の
-    観点を含めて返す。
+    観点に加えて、Repo surface から見えてくる暗黙要件が acceptance-index に明示化されているかも含めて返す。
+  - 既知の requirements engineering 文献に沿って、要件の well-formedness を unambiguous / complete / consistent / traceable / verifiable の観点で点検する。
   - `discovery-packet.md` と acceptance/spec/command-policy のトレースも確認し、Planner-owned discovery の欠落、unauthorized scope reduction、validation gap を routed failure として Planner または Refiner に返す。
   - `severity` は説明優先度の付与にのみ使い、machine gating は `status` / `feasible_for_loop` / routed failure fields に委ねる。
   - 以下の追加観点も検出する:
@@ -361,6 +362,7 @@ sequenceDiagram
     - 弱い証拠境界（requirement の完了証明にファイル・コマンド・状態変化の hook がないもの）
     - wrapper script や複合 shell エントリポイントを隠す unsafe なコマンド定義
     - command-policy 変更時の Planner 確認ルールの曖昧さ
+    - 暗黙要件が prose に埋もれていて requirement ID まで昇格していないケース
 
 - (B) 主な入力
   - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/discovery-packet.md`

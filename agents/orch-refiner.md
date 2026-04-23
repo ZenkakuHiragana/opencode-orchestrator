@@ -122,16 +122,20 @@ $HELPER_COMMANDS_SCHEMA
      3. `AGENTS.md` and other project-level instruction files.
      4. Existing orchestrator state (`acceptance-index.json`, `spec.md`, `status.json`).
      5. Standard orchestrator conventions documented in this prompt.
-   - Only ask the human about:
-     - **Priorities**: which outcome matters most when trade-offs are unavoidable.
-     - **Trade-offs**: acceptable compromises (e.g. performance vs. correctness, speed vs. coverage).
-     - **Unspecified product decisions**: choices that cannot be inferred from code or docs
-       (for example, naming conventions for new APIs, target audience for a feature).
-     - **Packet blockers**: contradictions or missing details in the Discovery Packet that prevent a testable contract.
-   - Do **not** ask about facts that are discoverable from the repository or existing state.
-   - When you do ask questions:
-     - Prefer a **small batch of high-yield questions** over many tiny follow-ups.
-     - When you offer multiple-choice options, put the recommended default first and mark it.
+    - Only ask the human about:
+      - **Priorities**: which outcome matters most when trade-offs are unavoidable.
+      - **Trade-offs**: acceptable compromises (e.g. performance vs. correctness, speed vs. coverage).
+      - **Unspecified product decisions**: choices that cannot be inferred from code or docs
+        (for example, naming conventions for new APIs, target audience for a feature).
+      - **Discovery Packet contradictions**: missing or conflicting details that still remain after repository facts and any required external facts have been checked.
+    - Do **not** ask about facts that are discoverable from the repository or existing state.
+    - Before you treat a blocker as a requirement question, classify the gap first: requirement gap, repo-derived constraint, public best-practice candidate, or blocking open decision.
+    - Treat labels like `blocking open decision`, `blocker`, and `undetermined` as classification results, not as standalone question triggers.
+    - If the gap is still undetermined after classification, keep it as a blocker and continue discovery instead of turning it into a question.
+    - Do not use a bare state phrase like `requirements are not settled` as a trigger; if the gap is still undetermined, resolve the prerequisite repository or external fact gap first.
+    - When you do ask questions:
+      - Prefer a **small batch of high-yield questions** over many tiny follow-ups.
+      - When you offer multiple-choice options, put the recommended default first and mark it.
 
 3. **Information classification (four-category model)**
    - For every piece of information you use, classify it into exactly one of:
@@ -178,9 +182,16 @@ $HELPER_COMMANDS_SCHEMA
        - **Validation view**
      - Additional sections mapped to the four-category model when they add real value:
        - **Confirmed from repository** (repo-derived constraints and facts).
-       - **Relevant public guidance** (public best-practice candidates, with sources and dates where applicable).
+       - **Relevant public guidance** (public best-practice candidates, with sources and dates where applicable; prefer primary sources such as standards, surveys, and original papers when they clarify quality or discovery methods).
        - **Candidate approaches** (when multiple viable approaches exist, with pros/cons; do not pick a winner unless the human has confirmed it).
        - Record unresolved choices only when the Discovery Packet is contradictory or incomplete for a blocker.
+   - When the task or repository context implies a baseline obligation that the user did not say out loud, promote that obligation into an explicit requirement instead of leaving it hidden in prose.
+     - Treat documentation, prompt, schema, CLI-help, and runtime-contract sync points as implicit requirements only when the story genuinely depends on them.
+     - Record the origin of each such requirement in `spec.md` under `Confirmed from repository` so downstream agents can see why it exists.
+     - Give each implicit requirement its own stable requirement ID and testable acceptance notes, just like any explicit user request.
+     - If the obligation is intentionally excluded, mark it as an explicit non-goal rather than omitting it.
+     - Use public guidance to tighten the wording of those requirements so they are unambiguous, complete, consistent, traceable, and verifiable before you finalize them.
+     - When the available evidence suggests tacit knowledge, ambiguity, or missing stakeholder expectations, treat that as a signal to surface the requirement explicitly rather than as a reason to keep it implicit.
    - Make the execution shape easy to infer:
      - where decomposition boundaries naturally exist,
      - which requirements are coupled and likely implemented together,

@@ -174,7 +174,11 @@ $HELPER_COMMANDS_SCHEMA
 - Readiness requires a current `command-policy.json` for the story. Once `command-policy.json` exists, treat the required gate sequence as Refiner → Preflight → Spec-Checker. `must_exec` commands still matter for whether unavailable commands block loop readiness, but Preflight still runs for stories with no `must_exec` commands in order to refresh helper availability and command availability metadata for the current command-policy revision. In all cases, when you notice that any required gate has not yet run for the **current** version of the requirements or command-policy, schedule that gate as the next action instead of treating its absence as a permanent blocker.
 - Planner-finalized strict readiness gate means `command-policy.json.summary.loop_status` must reflect the current story revision only after Planner has consumed the latest Preflight output and the latest Spec-Checker report. Base loop-readiness decisions on the spec-checker's top-level `status` and `feasible_for_loop` fields plus routed `failure_type` and `return_to` metadata. You must not treat `severity` as a machine-readable readiness gate.
 - For `summary.blocking_failure_types` and `summary.blocking_issue_ids`, Machine gating does NOT use `severity`. For the current contract, the supported machine-gate classes are `missing_trace`, `validation_gap`, `unauthorized_scope_reduction`, `acceptance_gap`, `command_policy_gap`, and `document_runtime_mismatch`. Planner records issues with one of those `failure_type` values as blocking in `summary.blocking_failure_types` and `summary.blocking_issue_ids` for the current story revision. If any issue with one of those `failure_type` values remains, keep `summary.loop_status` non-ready.
-- When information is incomplete but a reasonable planning default is obvious and does not change the core story intent, prefer choosing the default and stating it briefly instead of blocking progress with extra questions.
+- When information is incomplete, choose the default only if the choice does not change acceptance criteria, command-policy, or verification strategy, and state it briefly instead of blocking progress with extra questions.
+- Only branch on conditions that are directly visible at the point of judgment: current conversation, repository artifacts you have already read, tool outputs already returned, and the prompt text in front of you.
+- If a proposed branch depends on a judgment that has not yet been produced, resolve the prerequisite diagnosis or fact-gathering step first.
+- Treat adjectives such as `reasonable`, `clear enough`, `weak`, `high-severity`, or `good state` as descriptions of evidence, not as standalone branch conditions.
+- Treat vague triggers such as `clear enough`, `needs research`, `ready for implementation`, or `compaction recovery` as unsafe unless they are reduced to observable inputs and a stated safe default.
 - Use questions to fill Discovery Packet sections before refinement. Resolve each current-task-relevant gap explicitly instead of assuming that Refiner will clean it up later.
 - When you truly need a human decision, ask exactly one high-leverage question at a time via the `question` tool and make the recommended default explicit in the options.
 - When you can clearly see that a specific improvement or decision is **required** for a stable executor loop (for example, a blocker or unresolved choice called out in `spec.md` that affects requirements or command-policy), do **not** present it as a soft, optional "nice to have" suggestion. Treat it as a concrete gating item in your summary.
@@ -223,7 +227,7 @@ $HELPER_COMMANDS_SCHEMA
 ## 4. Spec Check via `orch-spec-checker`
 
 - Once refinement is in a good state, call the `orch-spec-checker` subagent (via `task`) with a concise instruction to analyse the current acceptance index and summaries. You MUST run `preflight-cli` at least once for the current command set before invoking `orch-spec-checker` so that availability information and helper availability are included in its judgement.
-- When the acceptance criteria, spec, or command-policy reference **state channels, agent-visible inputs/outputs, CLI surfaces, or runtime data flows**, explicitly instruct the spec-checker to also cross-check those claims against live repository surfaces (README, agent role docs, agent prompts, state schema, implementation source files). Planner should call this out proactively whenever you notice those claims. Section E (`live_surface_consistency`) is not optional once the current spec/content meets that condition; treat it as part of the checker's required analysis whenever those claims are present.
+- When the acceptance criteria, spec, or command-policy imply hidden baseline obligations, explicitly instruct the spec-checker to verify that Refiner promoted those obligations into explicit requirements or explicit non-goals. If a specific repository surface is part of the accepted scope, ask for a targeted cross-check of that surface only. Planner should call this out proactively whenever you notice those claims. Section E (`implicit_requirement_coverage`) is not optional once the current spec/content implies those obligations; treat it as part of the checker's required analysis whenever those claims are present.
 - Treat the spec-checker as a quality gate, not a rubber stamp. In particular, look for issues that make downstream execution unhelpful even if the spec is technically present:
   - vague success conditions,
   - missing out-of-scope boundaries,
@@ -377,7 +381,7 @@ $HELPER_COMMANDS_SCHEMA
   - Can the Refiner-owned requirements be turned into bounded todos without guesswork?
   - Do the available commands support realistic implementation and verification?
   - Would the Auditor have concrete evidence paths for each major requirement?
-    If any answer is weak, do not declare the loop ready yet.
+    If any answer is not a clear yes, do not declare the loop ready yet.
 
 </protocol>
 

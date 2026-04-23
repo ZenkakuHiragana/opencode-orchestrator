@@ -349,6 +349,9 @@ describe("prompt JSON schema placeholders", () => {
     const plannerPrompt = config.agent["orch-planner"]?.prompt as
       | string
       | undefined;
+    const refinerPrompt = config.agent["orch-refiner"]?.prompt as
+      | string
+      | undefined;
     const checkerPrompt = config.agent["orch-spec-checker"]?.prompt as
       | string
       | undefined;
@@ -465,12 +468,15 @@ describe("prompt JSON schema placeholders", () => {
     expect(executorPrompt).not.toContain("`north_star` field in `spec.md`");
   });
 
-  it("keeps Section E trigger wording aligned between planner and spec-checker", async () => {
+  it("keeps implicit requirement coverage wording aligned between planner and spec-checker", async () => {
     const plugin = await OrchestratorPlugin({ client: {} } as any);
     const config: any = {};
     await plugin.config!(config);
 
     const plannerPrompt = config.agent["orch-planner"]?.prompt as
+      | string
+      | undefined;
+    const refinerPrompt = config.agent["orch-refiner"]?.prompt as
       | string
       | undefined;
     const checkerPrompt = config.agent["orch-spec-checker"]?.prompt as
@@ -481,14 +487,40 @@ describe("prompt JSON schema placeholders", () => {
     expect(typeof checkerPrompt).toBe("string");
 
     expect(plannerPrompt).toContain(
-      "Section E (`live_surface_consistency`) is not optional once the current spec/content meets that condition",
+      "Section E (`implicit_requirement_coverage`) is not optional once the current spec/content implies those obligations",
     );
+    expect(plannerPrompt).not.toContain("live_surface_consistency");
+    expect(checkerPrompt).toContain("Implicit Requirement Coverage");
     expect(checkerPrompt).toContain(
-      "Planner may call out this analysis explicitly, but the trigger is substantive",
+      "explicit requirement or an explicit non-goal",
     );
-    expect(checkerPrompt).toContain(
-      "whether or not Planner mentioned Section E separately",
+    expect(checkerPrompt).toContain("implicit requirements");
+    expect(refinerPrompt).toContain("unambiguous");
+    expect(refinerPrompt).toContain("traceable");
+    expect(refinerPrompt).toContain("verifiable");
+    expect(refinerPrompt).toContain(
+      "Do not use a bare state phrase like `requirements are not settled` as a trigger",
     );
+    expect(refinerPrompt).toContain(
+      "Discovery Packet contradictions",
+    );
+    expect(refinerPrompt).toContain(
+      "Treat labels like `blocking open decision`, `blocker`, and `undetermined` as classification results",
+    );
+    expect(plannerPrompt).toContain(
+      "Only branch on conditions that are directly visible at the point of judgment",
+    );
+    expect(plannerPrompt).toContain(
+      "If any answer is not a clear yes, do not declare the loop ready yet",
+    );
+    expect(plannerPrompt).toContain(
+      "Treat adjectives such as `reasonable`, `clear enough`, `weak`, `high-severity`, or `good state` as descriptions of evidence",
+    );
+    expect(checkerPrompt).toContain("unambiguous");
+    expect(checkerPrompt).toContain("complete");
+    expect(checkerPrompt).toContain("consistent");
+    expect(checkerPrompt).toContain("traceable");
+    expect(checkerPrompt).toContain("verifiable");
   });
 
   it("keeps auditor, local-investigator, public-researcher, and todo-write command wording aligned with current roles", async () => {
@@ -540,6 +572,15 @@ describe("prompt JSON schema placeholders", () => {
 
     expect(publicPrompt).toContain(
       "Do **not** assume an interactive clarification round will occur",
+    );
+    expect(publicPrompt).toContain(
+      "concrete external evidence need",
+    );
+    expect(publicPrompt).toContain(
+      "A concrete external evidence need means one or more of",
+    );
+    expect(publicPrompt).toContain(
+      "Treat `concrete` as shorthand for one of those listed evidence classes",
     );
     expect(publicPrompt).toContain(
       "reliable research cannot proceed until those public facts are supplied",

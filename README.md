@@ -432,7 +432,8 @@ Preflight-Runner が `commands[].availability` と `summary.available_helper_com
   - `acceptance-index.json`, `spec.md`, `command-policy.json.commands[]` を管理し、Planner が後続で strict readiness を確定できる初期 summary も用意します。
   - `spec.md` には、タスクのゴール / resolved decisions / explicit non-goals / constraints / validation view / 終了条件などを、現在の user-facing 会話と同じ自然言語で書き出します。
 - Spec-Checker (`orch-spec-checker`)
-  - acceptance-index / spec / command-policy.json と `discovery-packet.md` の整合を解析し、要求品質・coverage・feasibility・unauthorized scope reduction を監査する解析専用サブエージェントです。
+  - acceptance-index / spec / command-policy.json と `discovery-packet.md` の整合を解析し、暗黙要件の明示化漏れも含めて要求品質・coverage・feasibility・unauthorized scope reduction を監査する解析専用サブエージェントです。
+  - 要件の品質判断では、ISO/IEEE 29148 系の well-formedness 特性や tacit knowledge の明示化に関する既知の知見を踏まえて、unambiguous / complete / consistent / traceable / verifiable であることを重視します。
   - `issues[]` に `failure_type`, `return_to`, `missing_trace`, `validation_gap` を含む routed failure を JSON で出力しますが、ファイルの編集・更新は行いません (完全 read-only)。`severity` は説明優先度専用であり、機械 gate は top-level `status` / `feasible_for_loop` と routed failure を使います。
 - Todo-Writer (`orch-todo-writer`)
   - Refiner が作った acceptance-index と spec.md を読み、Executor が実行しやすい todo リストに分解する計画専任エージェントです。
