@@ -83,6 +83,11 @@
   - planning gate のソース・オブ・トゥルースは `command-policy.json.summary` です。`status.json` は Executor / Auditor の進捗スナップショットであり、計画 readiness の最終判定を保持する場所ではありません。Planner が `status.json` を触る場合も、proposal 解消や failure-budget cleanup に結びつく保守的な更新に限ります。
   - `status.json` には `failure_budget` も保存されます。`consecutive_verification_gaps` は `STEP_AUDIT: ready` に `STEP_VERIFY: ready` が伴わないケースのみ連続カウントし、通常の非監査ステップではリセットされます。
   - Executor プロトコルでは各 step で `STEP_INTENT:` と `STEP_VERIFY:` を必ず出力する前提です。ID 列はカンマ区切りで、`R1,R2` / `R1, R2` の両方を許容します。
+  - `--bwrap-skip-command-policy` / `--dangerously-skip-command-policy` では、**execution-phase 向けに `command-policy` という概念自体を露出してはいけません**。
+    - 対象は少なくとも `orch-todo-writer` / `orch-executor` / `orch-exec` command template / それらに添付する state ファイルや per-step prompt です。
+    - skip モードでは `command-policy.json` を添付しないだけでは不十分で、`status.json` / `todo.json` / `spec.md` / `acceptance-index.json` / 追加 `--file` 入力 / proposal summary / failure summary などを経由した **語句・フィールド・要約のリーク** も防いでください。
+    - 具体的には `command-policy`, `command-policy.json`, `command_ids`, `command_id`, policy 由来の stale summary を execution-phase 側へそのまま渡さず、必要なら `explicit command metadata`, `available commands`, `host-permitted commands` のような中立表現へ rewrite / sanitize してください。
+    - skip モードの execution-phase prompt / 添付物 / step prompt を編集するときは、「policy を無視する」のではなく「その概念を見せない」ことを完了条件にしてください。
 
 ## 7. エディタ / 補完ツールルール
 
@@ -221,6 +226,9 @@ system prompt を編集する際は、ここから外れる権限を勝手に与
 - 禁止事項を書くときは、「エージェントから直接測定できる事実」に紐づけてください。
   - 良い例: "You MUST NOT modify acceptance-index.json; it is owned by the Refiner agent and is only exposed read-only to you via the read tool."（実際に `edit` 権限が無い）
   - 良くない例: "Follow the company security policy" のように、実行時にエージェントから参照できない抽象ルールだけを示す。
+- `--bwrap-skip-command-policy` / `--dangerously-skip-command-policy` 用の prompt では、execution-phase 側に `command-policy` の存在を前提とした禁止や条件分岐を書かないでください。
+  - skip モードで必要なのは「policy を見たうえで無視する」指示ではなく、**policy という語や field 名を受け取らなくても成立する中立な command-availability 指示**です。
+  - そのため、skip モード用に prompt / command template / 添付ファイルを変形するときは、block 削除だけでなく、block 外の文言・要約・status/proposal 由来テキスト・添付 JSON field まで含めてリークの有無を確認してください。
 
 この節の目標は、「将来プロンプトをいじるときに、**どこまで書いてよくて、どこから先は危ないか**」を一目で思い出せるリファレンスにすることです。未知の前提を持ち込みそうになったときは、一度ここに立ち返ってから system prompt を編集してください。
 
@@ -231,6 +239,32 @@ system prompt を編集する際は、ここから外れる権限を勝手に与
 - `helps quality`、`clear enough`、`needs research`、`ready for implementation` のような曖昧語は、そのまま条件にせず、観測可能な入力や安全側デフォルトに分解してください。
 - 判定不能な条件は、特殊分岐ではなく「既定の経路に留める」「前提診断を先に行う」のどちらかで安全側に倒してください。
 - `compaction`、hidden state、ファイルの存在だけを根拠にした条件分岐は避けてください。
+
+#### 8.5.1 条件分岐レビューの実務チェックリスト
+
+- 各条件文について、まず「この分岐点で実際に見えている入力」を箇条書きで列挙してください。
+  - 列挙できない入力に依存しているなら、その条件はその場では使えません。
+- 次のどれかに当てはまる条件は、その場の `if` 文に直接書かず、上流に分離してください。
+  - 別スキルの出力を要する診断結果
+  - 他エージェントが所有する state の解釈結果
+  - 継続作業の同一性のような task identity 判定
+  - 「品質向上に寄与するか」のような比較軸未定義の価値判断
+- 条件が価値判断語を含む場合は、そのまま使わず観測可能な代理条件へ分解してください。
+  - 例: `needs research` → 「公開仕様 / 公式推奨 / upstream 慣行 / source-backed evaluation method のいずれかが必要か」
+  - 例: `ready for implementation` → 「要求成果物が存在するか」「未解決事項が acceptance / command-policy / verification strategy を変えるか」
+- task identity や continuation 判定では、ファイルの存在だけを証拠にしないでください。
+  - 現在の会話で task key や高レベル goal が同定できないなら、既存 artifact は候補にとどめ、必要なら先に確認質問や recovery 診断を行ってください。
+- 判定不能時の安全側デフォルトを必ず書いてください。
+  - 既定経路に留まる
+  - 1 問だけ確認する
+  - 先に診断スキルへ送る
+    のどれかに落ちるようにします。
+- レビュー時は最低でも次の 5 問に `yes` と答えられるか確認してください。
+  1. この条件に必要な入力は、この時点で全て可視か。
+  2. この条件は、別スキルや別エージェントの役割を前借りしていないか。
+  3. 判定不能時の安全側デフォルトが明記されているか。
+  4. 誤判定しても安全側に倒れるか。
+  5. 曖昧語や価値判断語を、観測可能な条件または診断工程に分解できているか。
 
 ## 8. システムプロンプト / コマンドテンプレート執筆ガイドライン
 

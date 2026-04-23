@@ -75,7 +75,7 @@ describe("OrchestratorPlugin", () => {
     expect(prompt).not.toContain('"helper_commands"');
   });
 
-  it("strips executor command-policy rules in skip-command-policy mode", async () => {
+  it("removes command-policy concepts from execution-phase prompts in skip-command-policy mode", async () => {
     const previous = process.env.OPENCODE_ORCH_EXEC_SKIP_COMMAND_POLICY;
     process.env.OPENCODE_ORCH_EXEC_SKIP_COMMAND_POLICY = "1";
 
@@ -84,17 +84,29 @@ describe("OrchestratorPlugin", () => {
       const config: any = {};
       await plugin.config!(config);
 
-      const prompt = config.agent["orch-executor"]?.prompt;
-      expect(typeof prompt).toBe("string");
-      expect(prompt).toContain(
-        "Only when this run intentionally omits a current policy file",
+      const executorPrompt = config.agent["orch-executor"]?.prompt;
+      const todoWriterPrompt = config.agent["orch-todo-writer"]?.prompt;
+      const execTemplate = config.command["orch-exec"]?.template;
+
+      expect(typeof executorPrompt).toBe("string");
+      expect(typeof todoWriterPrompt).toBe("string");
+      expect(typeof execTemplate).toBe("string");
+
+      expect(executorPrompt).toContain(
+        "When no explicit command catalog is attached",
       );
-      expect(prompt).not.toContain(
+      expect(executorPrompt).toContain(
+        "report `-` in `STEP_CMD` / `STEP_VERIFY` command-id slots whenever no current command id exists",
+      );
+      expect(executorPrompt).not.toContain(
         "Treat `command-policy.json` as the **single source of truth** for allowed commands and helpers.",
       );
-      expect(prompt).not.toContain(
+      expect(executorPrompt).not.toContain(
         "You may compose shell scripts **only** from commands explicitly allowed by this task’s `command-policy.json`.",
       );
+      expect(executorPrompt).not.toContain("command-policy");
+      expect(todoWriterPrompt).not.toContain("command-policy");
+      expect(execTemplate).not.toContain("command-policy");
     } finally {
       if (previous === undefined) {
         delete process.env.OPENCODE_ORCH_EXEC_SKIP_COMMAND_POLICY;

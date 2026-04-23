@@ -34,6 +34,7 @@ import {
 } from "./orchestrator-proposals.js";
 import {
   appendFileArg,
+  buildSkipSafeJsonAttachment,
   findSessionIdByTitle,
   restartSession,
 } from "./orchestrator-session.js";
@@ -95,7 +96,13 @@ export async function maybeRunTodoWriterStep(
   }
 
   const todowriterLog = path.join(logDir, `todowriter_step_${stepId}.txt`);
-  const todowriterPromptBase = buildTodoWriterPrompt(status, openProposals);
+  const hideCommandPolicyConcept =
+    opts.dangerouslySkipCommandPolicy || opts.bwrapSkipCommandPolicy;
+  const todowriterPromptBase = buildTodoWriterPrompt(
+    status,
+    openProposals,
+    hideCommandPolicyConcept,
+  );
   const todowriterPrompt = withTaskKeyHint(todowriterPromptBase, opts.task);
   // Todo-Writer 用の opencode run 子プロセスにも、危険モード時は
   // command-policy スキップ用のフラグのみを渡す。bwrap サンドボックスは
@@ -107,6 +114,14 @@ export async function maybeRunTodoWriterStep(
     }
     return Object.keys(env).length > 0 ? env : undefined;
   })();
+  const todoStatusAttachment =
+    hideCommandPolicyConcept && fs.existsSync(statusPath)
+      ? buildSkipSafeJsonAttachment(statusPath)
+      : statusPath;
+  const todoFileArgs =
+    hideCommandPolicyConcept && !todoStatusAttachment
+      ? fileArgs
+      : appendFileArg(fileArgs, todoStatusAttachment ?? statusPath);
   const planRes = await runOpencode(
     [
       "run",
@@ -114,7 +129,7 @@ export async function maybeRunTodoWriterStep(
       "orch-todo-write",
       "--session",
       sessionId,
-      ...appendFileArg(fileArgs, statusPath),
+      ...todoFileArgs,
       "--",
       todowriterPrompt,
     ],
@@ -426,10 +441,22 @@ export async function runExecutorAndAuditorStep(
     if (!isNextAfterAudit) {
       return fileArgs;
     }
-    return appendFileArg(fileArgs, statusPath);
+    const hideCommandPolicyConcept =
+      opts.dangerouslySkipCommandPolicy || opts.bwrapSkipCommandPolicy;
+    if (!hideCommandPolicyConcept) {
+      return appendFileArg(fileArgs, statusPath);
+    }
+    const sanitizedStatusPath = buildSkipSafeJsonAttachment(statusPath);
+    return sanitizedStatusPath
+      ? appendFileArg(fileArgs, sanitizedStatusPath)
+      : fileArgs;
   })();
 
-  const execPromptBase = buildExecutorPrompt(isNextAfterAudit, status);
+  const execPromptBase = buildExecutorPrompt(
+    isNextAfterAudit,
+    status,
+    opts.dangerouslySkipCommandPolicy || opts.bwrapSkipCommandPolicy,
+  );
   const execPrompt = withTaskKeyHint(execPromptBase, opts.task);
   // Executor 用の opencode run 子プロセスにのみ、サンドボックス関連の
   // フラグを環境変数として渡す。ループ本体の process.env は変更しない。

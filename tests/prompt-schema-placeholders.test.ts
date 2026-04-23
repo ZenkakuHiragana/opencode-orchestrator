@@ -441,16 +441,16 @@ describe("prompt JSON schema placeholders", () => {
     );
     expect(todoWriterPrompt).toContain("single Executor step");
     expect(todoWriterPrompt).toContain(
-      "If the current policy file is intentionally unavailable for this pass",
+      "If no such metadata is attached for this pass",
     );
     expect(executorPrompt).toContain(
       "completion unit that should normally finish within one Executor step",
     );
     expect(executorPrompt).toContain(
-      "Only when this run intentionally omits a current policy file",
+      "When no explicit command catalog or id mapping is attached for this pass",
     );
     expect(executorPrompt).toContain(
-      "The strict `command-policy` rules below apply only when a current `command-policy.json` is actually supplied for this pass.",
+      "The strict command-catalog rules below apply only when an explicit command catalog is actually supplied for this pass.",
     );
     expect(executorPrompt).not.toContain(
       "If not supplied, you can use any commands.",
@@ -466,6 +466,98 @@ describe("prompt JSON schema placeholders", () => {
     );
     expect(executorPrompt).toContain("`north_star` section in `spec.md`");
     expect(executorPrompt).not.toContain("`north_star` field in `spec.md`");
+  });
+
+  it("keeps execution-phase prompts aligned on observable branching and safe defaults", async () => {
+    const plugin = await OrchestratorPlugin({ client: {} } as any);
+    const config: any = {};
+    await plugin.config!(config);
+
+    const executorPrompt = config.agent["orch-executor"]?.prompt as
+      | string
+      | undefined;
+    const todoWriterPrompt = config.agent["orch-todo-writer"]?.prompt as
+      | string
+      | undefined;
+    const auditorPrompt = config.agent["orch-auditor"]?.prompt as
+      | string
+      | undefined;
+    const execTemplate = config.command["orch-exec"]?.template as
+      | string
+      | undefined;
+
+    expect(typeof executorPrompt).toBe("string");
+    expect(typeof todoWriterPrompt).toBe("string");
+    expect(typeof auditorPrompt).toBe("string");
+    expect(typeof execTemplate).toBe("string");
+
+    expect(executorPrompt).toContain(
+      "Treat a todo as **actionable in the current step** only when the currently visible inputs establish",
+    );
+    expect(executorPrompt).toContain(
+      "Treat multiple todos as a safe same-shaped set only when the visible todo fields show the same intent class",
+    );
+    expect(executorPrompt).toContain(
+      "Choose verification commands using this order of evidence",
+    );
+    expect(executorPrompt).toContain(
+      "If no allowed command can yet be justified as trustworthy evidence for the touched requirement",
+    );
+    expect(executorPrompt).toContain(
+      "Use `not_ready` when the evidence path is still incomplete but could plausibly be completed within the current plan and environment.",
+    );
+    expect(executorPrompt).toContain(
+      "Use `blocked` when the missing evidence path cannot be completed from the currently visible plan, permissions, or environment",
+    );
+    expect(executorPrompt).toContain(
+      "Treat a blocker as `clearly environmental` only when the visible command catalog, tool permissions, or command results show",
+    );
+
+    expect(todoWriterPrompt).toContain(
+      "Only branch on inputs that are already visible in the current planning pass",
+    );
+    expect(todoWriterPrompt).toContain(
+      "one active todo already has a single main work",
+    );
+    expect(todoWriterPrompt).toContain(
+      "existing implementation or investigation todo is already scoped",
+    );
+    expect(todoWriterPrompt).toContain("Split the existing todo");
+    expect(todoWriterPrompt).toContain(
+      "Treat a replanning pass as `no-op` whenever the observable todo structure",
+    );
+    expect(todoWriterPrompt).toContain(
+      "same story revision` means the mapping is supported by the current attached todo state",
+    );
+    expect(todoWriterPrompt).toContain(
+      "Use `## Notes` when the limitation is only an operator-facing caveat",
+    );
+
+    expect(auditorPrompt).toContain(
+      "Treat a test, diff, log, or artifact as `relevant` only when the visible evidence names or",
+    );
+    expect(auditorPrompt).toContain(
+      "A requirement may pass only when the anchor quality is direct enough",
+    );
+    expect(auditorPrompt).toContain(
+      "Do not infer reasonable effort from summaries alone.",
+    );
+
+    expect(execTemplate).toContain(
+      "select only todos whose actionability is established by visible todo fields",
+    );
+    expect(execTemplate).toContain(
+      "if actionability or the evidence path is not established, emit an explicit",
+    );
+    expect(execTemplate).toContain(
+      "if no explicit command-id mapping is supplied for this run, rely only on",
+    );
+    expect(execTemplate).toContain(
+      "Return only the required Executor `STEP_*` lines",
+    );
+    expect(execTemplate).not.toContain(
+      "do your tasks, remember your output format.",
+    );
   });
 
   it("keeps implicit requirement coverage wording aligned between planner and spec-checker", async () => {
@@ -501,14 +593,27 @@ describe("prompt JSON schema placeholders", () => {
     expect(refinerPrompt).toContain(
       "Do not use a bare state phrase like `requirements are not settled` as a trigger",
     );
-    expect(refinerPrompt).toContain(
-      "Discovery Packet contradictions",
-    );
+    expect(refinerPrompt).toContain("Discovery Packet contradictions");
     expect(refinerPrompt).toContain(
       "Treat labels like `blocking open decision`, `blocker`, and `undetermined` as classification results",
     );
+    expect(refinerPrompt).toContain(
+      "Treat the packet as ready to normalize only when those sections are present",
+    );
+    expect(refinerPrompt).toContain(
+      "Do not call Public Researcher only because external research might improve quality",
+    );
     expect(plannerPrompt).toContain(
       "Only branch on conditions that are directly visible at the point of judgment",
+    );
+    expect(plannerPrompt).toContain(
+      "Do not treat file presence, hidden state, or a generic phrase like `continue the previous work` as sufficient proof",
+    );
+    expect(plannerPrompt).toContain(
+      "If task identity is still ambiguous after that check, ask exactly one high-leverage question",
+    );
+    expect(plannerPrompt).toContain(
+      "If the current conversation provides no candidate beyond a generic continuation phrase",
     );
     expect(plannerPrompt).toContain(
       "If any answer is not a clear yes, do not declare the loop ready yet",
@@ -516,11 +621,26 @@ describe("prompt JSON schema placeholders", () => {
     expect(plannerPrompt).toContain(
       "Treat adjectives such as `reasonable`, `clear enough`, `weak`, `high-severity`, or `good state` as descriptions of evidence",
     );
+    expect(plannerPrompt).toContain(
+      "Do not use words like `reasonably complete` or `good state` as the threshold here",
+    );
+    expect(plannerPrompt).toContain(
+      "Only then may you scan matching existing artifacts and prior proposals to infer context",
+    );
+    expect(plannerPrompt).toContain(
+      "then resume the normal gate sequence `preflight-cli → orch-spec-checker` once the required files exist again",
+    );
+    expect(plannerPrompt).toContain(
+      "This does not authorize guessing the task identity, selecting among multiple task artifacts, or changing accepted scope",
+    );
     expect(checkerPrompt).toContain("unambiguous");
     expect(checkerPrompt).toContain("complete");
     expect(checkerPrompt).toContain("consistent");
     expect(checkerPrompt).toContain("traceable");
     expect(checkerPrompt).toContain("verifiable");
+    expect(checkerPrompt).toContain(
+      'Do not use a phrase like `reasonably complete` as the threshold for `status: "ok"`',
+    );
   });
 
   it("keeps auditor, local-investigator, public-researcher, and todo-write command wording aligned with current roles", async () => {
@@ -573,14 +693,18 @@ describe("prompt JSON schema placeholders", () => {
     expect(publicPrompt).toContain(
       "Do **not** assume an interactive clarification round will occur",
     );
-    expect(publicPrompt).toContain(
-      "concrete external evidence need",
-    );
+    expect(publicPrompt).toContain("concrete external evidence need");
     expect(publicPrompt).toContain(
       "A concrete external evidence need means one or more of",
     );
     expect(publicPrompt).toContain(
       "Treat `concrete` as shorthand for one of those listed evidence classes",
+    );
+    expect(publicPrompt).toContain(
+      "If no concrete external evidence need is present at this stage, do **not** start external search just because research might improve quality",
+    );
+    expect(publicPrompt).toContain(
+      "If helpful, you may say that a repository-local investigation would be the safer next route",
     );
     expect(publicPrompt).toContain(
       "reliable research cannot proceed until those public facts are supplied",
@@ -596,6 +720,12 @@ describe("prompt JSON schema placeholders", () => {
     );
     expect(publicPrompt).toContain(
       "For every **substantive factual or procedural claim**, provide a clear citation.",
+    );
+    expect(publicPrompt).toContain(
+      "Use the **full structured block** unless **all** of the following are true",
+    );
+    expect(publicPrompt).toContain(
+      "Do **not** fabricate citations or pretend that an external source was consulted.",
     );
     expect(publicPrompt).toContain(
       "Follow any higher-priority language instruction from system or developer messages.",

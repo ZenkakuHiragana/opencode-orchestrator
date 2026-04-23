@@ -72,6 +72,31 @@ describe("buildExecutorPrompt", () => {
       "MUST read the latest auditor result from the `status.json`",
     );
   });
+
+  it("redacts command-policy terminology from auditor failure details when requested", () => {
+    const prompt = buildExecutorPrompt(
+      false,
+      {
+        version: 1,
+        last_auditor_report: {
+          cycle: 2,
+          done: false,
+          requirements: [
+            {
+              id: "R6",
+              passed: false,
+              failure_kind: "missing_verification",
+              evidence_gaps: ["command-policy.json is missing for this check"],
+            },
+          ],
+        },
+      },
+      true,
+    );
+
+    expect(prompt).not.toContain("command-policy");
+    expect(prompt).toContain("command metadata");
+  });
 });
 
 describe("buildTodoWriterPrompt", () => {
@@ -130,5 +155,43 @@ describe("buildTodoWriterPrompt", () => {
     expect(prompt).toContain("coverage invariants");
     expect(prompt).toContain("Last failure summary from status.json");
     expect(prompt).toContain("R1");
+  });
+
+  it("redacts command-policy terminology when skip-command-policy mode hides the concept", () => {
+    const prompt = buildTodoWriterPrompt(
+      {
+        version: 1,
+        failure_budget: {
+          todo_writer_safety_restarts: 0,
+          executor_safety_restarts: 0,
+          consecutive_env_blocked: 0,
+          consecutive_audit_failures: 0,
+          consecutive_verification_gaps: 0,
+          consecutive_contract_gaps: 0,
+          last_failure_kind: "todo_writer_coverage_invariant_failed",
+          last_failure_summary:
+            "command-policy.json must be refreshed before replanning",
+        },
+      } as any,
+      [
+        {
+          id: "p-2",
+          source: "executor",
+          cycle: 5,
+          kind: "env_blocked",
+          priority: "high",
+          summary: "executor is blocked by command-policy mismatch",
+          related_todo_ids: ["TW-010"],
+          related_requirement_ids: ["R7"],
+          status: "open",
+          auto_resolvable: false,
+          created_at: "2026-03-30T00:00:00.000Z",
+        },
+      ],
+      true,
+    );
+
+    expect(prompt).not.toContain("command-policy");
+    expect(prompt).toContain("command metadata");
   });
 });

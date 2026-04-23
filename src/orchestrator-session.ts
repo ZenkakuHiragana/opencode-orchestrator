@@ -1,4 +1,5 @@
 import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
 
 import type { LoopOptions } from "./cli-args.js";
@@ -110,10 +111,98 @@ export function appendFileArg(fileArgs: string[], filePath: string): string[] {
   return [...fileArgs, "--file", filePath];
 }
 
+function isSkipCommandPolicyMode(opts: LoopOptions): boolean {
+  return !!(opts.dangerouslySkipCommandPolicy || opts.bwrapSkipCommandPolicy);
+}
+
+function sanitizeSkipModeJson(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map((entry) => sanitizeSkipModeJson(entry));
+  }
+
+  if (!value || typeof value !== "object") {
+    if (typeof value === "string") {
+      return value.replace(/command-policy(?:\.json)?/gi, "command metadata");
+    }
+    return value;
+  }
+
+  const out: Record<string, unknown> = {};
+  for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+    if (key === "command_ids" || key === "command_id") {
+      continue;
+    }
+    out[key] = sanitizeSkipModeJson(entry);
+  }
+  return out;
+}
+
+function writeSkipSafeAttachment(
+  filePath: string,
+  content: string,
+): string | null {
+  const tempDir = fs.mkdtempSync(
+    path.join(os.tmpdir(), "opencode-orchestrator-skip-"),
+  );
+  const safeBaseName = path
+    .basename(filePath)
+    .replace(/command-policy/gi, "command-metadata");
+  const targetPath = path.join(tempDir, safeBaseName);
+  fs.writeFileSync(targetPath, content, "utf8");
+  return targetPath;
+}
+
+export function buildSkipSafeAttachment(filePath: string): string | null {
+  if (!fs.existsSync(filePath)) {
+    return null;
+  }
+
+  try {
+    const ext = path.extname(filePath).toLowerCase();
+    const raw = fs.readFileSync(filePath, "utf8");
+    if (ext === ".json") {
+      const parsed = JSON.parse(raw);
+      const sanitized = sanitizeSkipModeJson(parsed);
+      return writeSkipSafeAttachment(
+        filePath,
+        JSON.stringify(sanitized, null, 2),
+      );
+    }
+
+    return writeSkipSafeAttachment(
+      filePath,
+      raw.replace(/command-policy(?:\.json)?/gi, "command metadata"),
+    );
+  } catch {
+    return null;
+  }
+}
+
+export function buildSkipSafeJsonAttachment(filePath: string): string | null {
+  return buildSkipSafeAttachment(filePath);
+}
+
 export function buildFileArgs(opts: LoopOptions, stateDir: string): string[] {
   const files: string[] = [];
+  const skipCommandPolicy = isSkipCommandPolicyMode(opts);
 
-  files.push(...opts.files);
+  const pushAttachment = (filePath: string): void => {
+    if (skipCommandPolicy) {
+      if (path.basename(filePath) === "command-policy.json") {
+        return;
+      }
+      const sanitizedPath = buildSkipSafeAttachment(filePath);
+      if (sanitizedPath) {
+        files.push(sanitizedPath);
+      }
+      return;
+    }
+    files.push(filePath);
+  };
+
+  for (const filePath of opts.files) {
+    pushAttachment(filePath);
+  }
 
   // In normal policy-respecting mode, attach command-policy.json so that
   // Planner/Executor can see the planned command set. In skip modes
@@ -121,27 +210,23 @@ export function buildFileArgs(opts: LoopOptions, stateDir: string): string[] {
   // attach it so that downstream agents are not tempted to treat a stale
   // or intentionally-ignored policy file as authoritative.
   const commandPolicyPath = path.join(stateDir, "command-policy.json");
-  if (
-    !opts.dangerouslySkipCommandPolicy &&
-    !opts.bwrapSkipCommandPolicy &&
-    fs.existsSync(commandPolicyPath)
-  ) {
+  if (!skipCommandPolicy && fs.existsSync(commandPolicyPath)) {
     files.push(commandPolicyPath);
   }
 
   const acceptanceIndexPath = path.join(stateDir, "acceptance-index.json");
   if (fs.existsSync(acceptanceIndexPath)) {
-    files.push(acceptanceIndexPath);
+    pushAttachment(acceptanceIndexPath);
   }
 
   const specPath = path.join(stateDir, "spec.md");
   if (fs.existsSync(specPath)) {
-    files.push(specPath);
+    pushAttachment(specPath);
   }
 
   const todoPath = path.join(stateDir, "todo.json");
   if (isValidTodoAttachment(todoPath)) {
-    files.push(todoPath);
+    pushAttachment(todoPath);
   }
 
   if (files.length === 0) {

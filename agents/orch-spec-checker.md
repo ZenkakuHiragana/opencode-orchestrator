@@ -373,7 +373,13 @@ $HELPER_COMMANDS_SCHEMA
 
 - **Field semantics**
   - `status`:
-    - `"ok"` when the acceptance index and surrounding spec are structurally sound and reasonably complete for the current task, and the command-policy is compatible with them.
+    - `"ok"` only when all of the following are true from the artifacts you can actually inspect:
+      - `acceptance-index.json` is present, parseable, aligned to the current task, and structurally valid enough to enumerate the active requirements.
+      - `spec.md` and `command-policy.json` are present unless their absence is explicitly allowed by the current contract, and they do not contradict the acceptance index.
+      - each major requirement has a traceable scope source plus a concrete validation path or an explicit manual-verification note.
+      - the command-policy is compatible with those requirements and does not leave blocking command or safety gaps.
+      - no issue remains that requires Planner or Refiner follow-up beyond informational suggestions.
+    - Do not use a phrase like `reasonably complete` as the threshold for `status: "ok"`; rely on the observable conditions above.
     - `"needs_revision"` when you detect structural problems, contradictions, or important gaps in the acceptance index, `spec.md`, or `command-policy.json`. If unsure, prefer `"needs_revision"`.
   - `feasible_for_loop` (boolean):
     - Your best-effort judgment of whether the current spec is **operationally feasible** for the orchestrator loop, given the acceptance structure and command-policy.

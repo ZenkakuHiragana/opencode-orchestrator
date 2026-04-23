@@ -7,6 +7,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import {
   appendFileArg,
   buildFileArgs,
+  buildSkipSafeJsonAttachment,
   findSessionIdByTitle,
 } from "../src/orchestrator-session.js";
 import { runOpencode } from "../src/orchestrator-process.js";
@@ -26,8 +27,12 @@ describe("buildFileArgs", () => {
     const specPath = path.join(stateDir, "spec.md");
     const todoPath = path.join(stateDir, "todo.json");
 
-    fs.writeFileSync(acceptancePath, "{}", "utf8");
-    fs.writeFileSync(specPath, "# Spec", "utf8");
+    fs.writeFileSync(
+      acceptancePath,
+      JSON.stringify({ note: "command-policy should stay hidden" }),
+      "utf8",
+    );
+    fs.writeFileSync(specPath, "# Spec\ncommand-policy reference", "utf8");
     fs.writeFileSync(
       todoPath,
       JSON.stringify({
@@ -87,6 +92,89 @@ describe("buildFileArgs", () => {
     expect(args).toEqual([]);
   });
 
+  it("filters command-policy attachments and sanitizes todo.json in skip-command-policy mode", () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "orch-session-skip-"));
+    const acceptancePath = path.join(tmpDir, "acceptance-index.json");
+    const specPath = path.join(tmpDir, "spec.md");
+    const todoPath = path.join(tmpDir, "todo.json");
+    const policyPath = path.join(tmpDir, "command-policy.json");
+    const extraPath = path.join(tmpDir, "notes-command-policy.md");
+
+    fs.writeFileSync(
+      acceptancePath,
+      JSON.stringify({ note: "command-policy should stay hidden" }),
+      "utf8",
+    );
+    fs.writeFileSync(specPath, "# Spec\ncommand-policy reference", "utf8");
+    fs.writeFileSync(policyPath, JSON.stringify({ commands: [] }), "utf8");
+    fs.writeFileSync(extraPath, "command-policy scratch note", "utf8");
+    fs.writeFileSync(
+      todoPath,
+      JSON.stringify({
+        todos: [
+          {
+            id: "T1",
+            summary: "valid todo",
+            status: "pending",
+            related_requirement_ids: ["R1"],
+            execution_contract: {
+              intent: "verify",
+              command_ids: ["cmd-test"],
+            },
+          },
+        ],
+      }),
+      "utf8",
+    );
+
+    const args = buildFileArgs(
+      {
+        files: [extraPath, policyPath],
+        bwrapSkipCommandPolicy: true,
+      } as any,
+      tmpDir,
+    );
+
+    const files = args.filter((arg) => arg !== "--file");
+    expect(files).not.toContain(policyPath);
+    expect(files).not.toContain(todoPath);
+    expect(files).not.toContain(acceptancePath);
+    expect(files).not.toContain(specPath);
+    expect(files).not.toContain(extraPath);
+
+    const attachedTodoPath = files.find((filePath) =>
+      filePath.endsWith(`${path.sep}todo.json`),
+    );
+    const attachedAcceptancePath = files.find((filePath) =>
+      filePath.endsWith(`${path.sep}acceptance-index.json`),
+    );
+    const attachedSpecPath = files.find((filePath) =>
+      filePath.endsWith(`${path.sep}spec.md`),
+    );
+    const attachedExtraPath = files.find((filePath) =>
+      filePath.endsWith(`${path.sep}notes-command-metadata.md`),
+    );
+    expect(attachedTodoPath).toBeTruthy();
+    expect(attachedAcceptancePath).toBeTruthy();
+    expect(attachedSpecPath).toBeTruthy();
+    expect(attachedExtraPath).toBeTruthy();
+    const attachedTodo = JSON.parse(
+      fs.readFileSync(attachedTodoPath as string, "utf8"),
+    );
+    expect(
+      attachedTodo.todos[0].execution_contract.command_ids,
+    ).toBeUndefined();
+    expect(
+      fs.readFileSync(attachedAcceptancePath as string, "utf8"),
+    ).not.toContain("command-policy");
+    expect(fs.readFileSync(attachedSpecPath as string, "utf8")).not.toContain(
+      "command-policy",
+    );
+    expect(fs.readFileSync(attachedExtraPath as string, "utf8")).not.toContain(
+      "command-policy",
+    );
+  });
+
   it("appends additional file attachments with their own --file flag", () => {
     expect(appendFileArg(["--file", "a.txt"], "b.txt")).toEqual([
       "--file",
@@ -127,5 +215,44 @@ describe("findSessionIdByTitle", () => {
       "--format",
       "json",
     ]);
+  });
+});
+
+describe("buildSkipSafeJsonAttachment", () => {
+  it("redacts command-policy strings and command id fields", () => {
+    const tmpDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), "orch-session-redact-"),
+    );
+    const statusPath = path.join(tmpDir, "status.json");
+    fs.writeFileSync(
+      statusPath,
+      JSON.stringify({
+        failure_budget: {
+          last_failure_summary: "command-policy.json is missing",
+        },
+        last_executor_step: {
+          step_cmd: [
+            {
+              command: "npm test",
+              command_id: "cmd-test",
+              outcome: "blocked by command-policy",
+            },
+          ],
+        },
+      }),
+      "utf8",
+    );
+
+    const sanitizedPath = buildSkipSafeJsonAttachment(statusPath);
+    expect(typeof sanitizedPath).toBe("string");
+
+    const sanitized = JSON.parse(
+      fs.readFileSync(sanitizedPath as string, "utf8"),
+    );
+    expect(JSON.stringify(sanitized)).not.toContain("command-policy");
+    expect(sanitized.last_executor_step.step_cmd[0].command_id).toBeUndefined();
+    expect(sanitized.failure_budget.last_failure_summary).toContain(
+      "command metadata",
+    );
   });
 });

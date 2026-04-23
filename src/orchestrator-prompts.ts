@@ -7,17 +7,34 @@ type FailedRequirementPromptInfo = {
   evidence_gaps?: string[];
 };
 
+function redactCommandPolicyTerms(text: string, enabled: boolean): string {
+  if (!enabled) {
+    return text;
+  }
+  return text.replace(/command-policy(?:\.json)?/gi, "command metadata");
+}
+
 function formatFailedRequirementDetails(
   failedRequirements: FailedRequirementPromptInfo[],
+  hideCommandPolicyConcept = false,
 ): string {
   return failedRequirements
     .map((req) => {
       const kind = req.failure_kind ? ` kind=${req.failure_kind}` : "";
       const gaps =
         req.evidence_gaps && req.evidence_gaps.length > 0
-          ? ` gaps=[${req.evidence_gaps.join("; ")}]`
+          ? ` gaps=[${req.evidence_gaps
+              .map((gap) =>
+                redactCommandPolicyTerms(gap, hideCommandPolicyConcept),
+              )
+              .join("; ")}]`
           : "";
-      return kind || gaps ? `${req.id}:${kind}${gaps}` : req.id;
+      return kind || gaps
+        ? redactCommandPolicyTerms(
+            `${req.id}:${kind}${gaps}`,
+            hideCommandPolicyConcept,
+          )
+        : req.id;
     })
     .join(", ");
 }
@@ -30,6 +47,7 @@ function formatFailedRequirementDetails(
 export function buildTodoWriterPrompt(
   status?: OrchestratorStatus,
   openProposals?: ProposalEntry[],
+  hideCommandPolicyConcept = false,
 ): string {
   const parts: string[] = [];
 
@@ -38,7 +56,10 @@ export function buildTodoWriterPrompt(
       .map((proposal) => {
         const reqs = proposal.related_requirement_ids.join(",") || "-";
         const todos = proposal.related_todo_ids.join(",") || "-";
-        return `[${proposal.source}] kind=${proposal.kind} req=${reqs} todo=${todos} ${proposal.summary}`;
+        return redactCommandPolicyTerms(
+          `[${proposal.source}] kind=${proposal.kind} req=${reqs} todo=${todos} ${proposal.summary}`,
+          hideCommandPolicyConcept,
+        );
       })
       .join("; ");
     parts.push(
@@ -61,7 +82,9 @@ export function buildTodoWriterPrompt(
     parts.push(
       "The last Todo-Writer pass produced a todo.json that violated dynamic coverage invariants. " +
         "You MUST ensure that every unsatisfied requirement from acceptance-index.json has at least one active todo (`pending` or `in_progress`) whose related_requirement_ids includes that requirement id. " +
-        (summary ? `Last failure summary from status.json: ${summary}` : ""),
+        (summary
+          ? `Last failure summary from status.json: ${redactCommandPolicyTerms(summary, hideCommandPolicyConcept)}`
+          : ""),
     );
   }
 
@@ -70,7 +93,10 @@ export function buildTodoWriterPrompt(
       (req) => req.passed === false,
     ) ?? [];
   if (failedRequirements.length > 0) {
-    const failureDetails = formatFailedRequirementDetails(failedRequirements);
+    const failureDetails = formatFailedRequirementDetails(
+      failedRequirements,
+      hideCommandPolicyConcept,
+    );
     parts.push(
       `The auditor reported failed requirements with structured failure information: ${failureDetails}. ` +
         "Use failure_kind to determine what type of todo to add (investigate, verify, or implement), " +
@@ -84,6 +110,7 @@ export function buildTodoWriterPrompt(
 export function buildExecutorPrompt(
   shouldEmphasizeAuditRead: boolean,
   status?: OrchestratorStatus,
+  hideCommandPolicyConcept = false,
 ): string {
   const parts: string[] = [];
 
@@ -102,8 +129,10 @@ export function buildExecutorPrompt(
       `The main open work items are those linked to auditor requirements ${failedRequirements.map((req) => req.id).join(", ")}. When choosing the next tasks, focus on Todos that contribute to satisfying these requirements.`,
     );
 
-    const structuredFailureDetails =
-      formatFailedRequirementDetails(failedRequirements);
+    const structuredFailureDetails = formatFailedRequirementDetails(
+      failedRequirements,
+      hideCommandPolicyConcept,
+    );
     if (structuredFailureDetails.length > 0) {
       parts.push(
         `Latest auditor failure details: ${structuredFailureDetails}. Use failure_kind and evidence_gaps to decide whether this step should primarily implement missing behavior, add missing verification, or gather missing investigation evidence.`,

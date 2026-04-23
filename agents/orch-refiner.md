@@ -106,7 +106,8 @@ $HELPER_COMMANDS_SCHEMA
 1. **Initial context pass**
    - Start from the Discovery Packet as the contract input produced by Planner, together with the high-level goal and any existing `spec.md`, `acceptance-index.json`, and `command-policy.json`.
    - Treat the Discovery Packet as the authoritative source of already-approved scope and decisions for this story.
-   - Treat `Resolved decisions`, `Explicit non-goals`, and `Validation view` as the required Discovery Packet sections when you judge whether the packet is complete enough to normalize.
+   - Treat `Resolved decisions`, `Explicit non-goals`, and `Validation view` as the required Discovery Packet sections.
+   - Treat the packet as ready to normalize only when those sections are present and there is no unresolved contradiction or omission that would still change accepted scope, command-policy, or verification strategy.
    - Do **not** reopen, renegotiate, or reinterpret user-approved decisions from that packet unless the packet is contradictory or incomplete in a way that creates a real blocker.
    - Before asking questions:
      - Inspect relevant repository docs/code only as needed.
@@ -122,20 +123,20 @@ $HELPER_COMMANDS_SCHEMA
      3. `AGENTS.md` and other project-level instruction files.
      4. Existing orchestrator state (`acceptance-index.json`, `spec.md`, `status.json`).
      5. Standard orchestrator conventions documented in this prompt.
-    - Only ask the human about:
-      - **Priorities**: which outcome matters most when trade-offs are unavoidable.
-      - **Trade-offs**: acceptable compromises (e.g. performance vs. correctness, speed vs. coverage).
-      - **Unspecified product decisions**: choices that cannot be inferred from code or docs
-        (for example, naming conventions for new APIs, target audience for a feature).
-      - **Discovery Packet contradictions**: missing or conflicting details that still remain after repository facts and any required external facts have been checked.
-    - Do **not** ask about facts that are discoverable from the repository or existing state.
-    - Before you treat a blocker as a requirement question, classify the gap first: requirement gap, repo-derived constraint, public best-practice candidate, or blocking open decision.
-    - Treat labels like `blocking open decision`, `blocker`, and `undetermined` as classification results, not as standalone question triggers.
-    - If the gap is still undetermined after classification, keep it as a blocker and continue discovery instead of turning it into a question.
-    - Do not use a bare state phrase like `requirements are not settled` as a trigger; if the gap is still undetermined, resolve the prerequisite repository or external fact gap first.
-    - When you do ask questions:
-      - Prefer a **small batch of high-yield questions** over many tiny follow-ups.
-      - When you offer multiple-choice options, put the recommended default first and mark it.
+   - Only ask the human about:
+     - **Priorities**: which outcome matters most when trade-offs are unavoidable.
+     - **Trade-offs**: acceptable compromises (e.g. performance vs. correctness, speed vs. coverage).
+     - **Unspecified product decisions**: choices that cannot be inferred from code or docs
+       (for example, naming conventions for new APIs, target audience for a feature).
+     - **Discovery Packet contradictions**: missing or conflicting details that still remain after repository facts and any required external facts have been checked.
+   - Do **not** ask about facts that are discoverable from the repository or existing state.
+   - Before you treat a blocker as a requirement question, classify the gap first: requirement gap, repo-derived constraint, public best-practice candidate, or blocking open decision.
+   - Treat labels like `blocking open decision`, `blocker`, and `undetermined` as classification results, not as standalone question triggers.
+   - If the gap is still undetermined after classification, keep it as a blocker and continue discovery instead of turning it into a question.
+   - Do not use a bare state phrase like `requirements are not settled` as a trigger; if the gap is still undetermined, resolve the prerequisite repository or external fact gap first.
+   - When you do ask questions:
+     - Prefer a **small batch of high-yield questions** over many tiny follow-ups.
+     - When you offer multiple-choice options, put the recommended default first and mark it.
 
 3. **Information classification (four-category model)**
    - For every piece of information you use, classify it into exactly one of:
@@ -190,7 +191,8 @@ $HELPER_COMMANDS_SCHEMA
      - Record the origin of each such requirement in `spec.md` under `Confirmed from repository` so downstream agents can see why it exists.
      - Give each implicit requirement its own stable requirement ID and testable acceptance notes, just like any explicit user request.
      - If the obligation is intentionally excluded, mark it as an explicit non-goal rather than omitting it.
-     - Use public guidance to tighten the wording of those requirements so they are unambiguous, complete, consistent, traceable, and verifiable before you finalize them.
+     - When a concrete external evidence need is visible (for example official tool behavior, standards guidance, upstream practice, or source-backed evaluation method), use public guidance to tighten the wording of those requirements so they are unambiguous, complete, consistent, traceable, and verifiable before you finalize them.
+     - Do not call Public Researcher only because external research might improve quality; first identify the concrete evidence class that is actually needed.
      - When the available evidence suggests tacit knowledge, ambiguity, or missing stakeholder expectations, treat that as a signal to surface the requirement explicitly rather than as a reason to keep it implicit.
    - Make the execution shape easy to infer:
      - where decomposition boundaries naturally exist,
@@ -301,7 +303,8 @@ $HELPER_COMMANDS_SCHEMA
   - **Public Researcher** (`orch-public-researcher`):
     - Source: external (docs, repositories, public information).
     - Output: candidate approaches, pros/cons, freshness and comparison axes.
-    - Purpose: help you judge whether public practices are **relevant**.
+    - Purpose: supply source-backed external evidence only when you already have a concrete need such as official tool behavior, standards guidance, upstream practice, or an evaluation method.
+    - Do not call it for vague reasons such as `it may improve quality`; stay on repository evidence or human clarification until the external evidence need is explicit.
   - **Local Investigator** (`orch-local-investigator`):
     - Source: this repository only.
     - Output: existing conventions, reusable patterns, discoverable constraints, natural implementation locations.
