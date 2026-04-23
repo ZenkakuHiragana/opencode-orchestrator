@@ -716,7 +716,7 @@ describe("prompt JSON schema placeholders", () => {
       "Report missing public-safe inputs as part of your result instead of assuming an interactive clarification round",
     );
     expect(publicPrompt).toContain(
-      "No conversational preamble; begin directly with the required Phase 0 block",
+      "Do not add conversational niceties. Start directly with either the visible Phase 0 block",
     );
     expect(publicPrompt).toContain(
       "For every **substantive factual or procedural claim**, provide a clear citation.",

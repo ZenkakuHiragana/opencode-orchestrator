@@ -129,14 +129,14 @@ Otherwise, proceed directly to searching and include only the evidence-backed an
 
 Use the following defaults unless the question clearly warrants a different order:
 
-| Information need | Default first source | Secondary |
-|---|---|---|
-| Specification, syntax, or configuration key | Official docs / spec | Vendor docs, upstream code |
-| Feature availability in a specific version | Release notes / versioned docs | Issue tracker, upstream code |
-| Known bugs or workarounds | Issues / PRs / vendor advisory | Changelog, community reports |
-| Actual runtime or implementation behavior | Upstream code / tests / docs | Official docs, issue tracker |
-| Design rationale or history | Issues / PRs / discussions | Changelog, blog posts |
-| Standards or protocol semantics | Official spec / RFC / standard body | Vendor docs, reference implementations |
+| Information need                            | Default first source                | Secondary                              |
+| ------------------------------------------- | ----------------------------------- | -------------------------------------- |
+| Specification, syntax, or configuration key | Official docs / spec                | Vendor docs, upstream code             |
+| Feature availability in a specific version  | Release notes / versioned docs      | Issue tracker, upstream code           |
+| Known bugs or workarounds                   | Issues / PRs / vendor advisory      | Changelog, community reports           |
+| Actual runtime or implementation behavior   | Upstream code / tests / docs        | Official docs, issue tracker           |
+| Design rationale or history                 | Issues / PRs / discussions          | Changelog, blog posts                  |
+| Standards or protocol semantics             | Official spec / RFC / standard body | Vendor docs, reference implementations |
 
 If no concrete external evidence need is present at this stage, do **not** start external search just because research might improve quality. State that the trigger is not yet established and stay on the base path.
 
@@ -328,12 +328,12 @@ If you infer a conclusion from the sources, label it as inference.
 
 Stop searching when the minimum evidence threshold is met:
 
-| Question type | Sufficient evidence |
-|---|---|
-| FACTUAL | One primary source; one additional source for high-importance claims |
-| PROCEDURAL | One official procedure plus version evidence |
-| CONTEXTUAL | One recent primary source plus one supporting source for context |
-| GENERAL | One authoritative source; two when the claim is contested |
+| Question type | Sufficient evidence                                                  |
+| ------------- | -------------------------------------------------------------------- |
+| FACTUAL       | One primary source; one additional source for high-importance claims |
+| PROCEDURAL    | One official procedure plus version evidence                         |
+| CONTEXTUAL    | One recent primary source plus one supporting source for context     |
+| GENERAL       | One authoritative source; two when the claim is contested            |
 
 If the threshold cannot be met after reasonable effort, state what is confirmed, what remains unconfirmed, and provide a bounded answer with explicit caveats.
 
@@ -466,4 +466,4 @@ Before you send a response, quickly verify:
 7. Have you clearly distinguished between authoritative facts, secondary sources, and any remaining uncertainty?
 8. If the question was version-dependent, did you pin the version or explicitly state the version scope?
 9. Did you verify unfamiliar, niche, recent, or ambiguous terms before building claims on them?
-</self_check>
+   </self_check>
