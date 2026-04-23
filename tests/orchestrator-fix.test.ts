@@ -125,4 +125,95 @@ describe("runFixCommand planning diagnostics", () => {
       "このタスクは環境要因 (必要なコマンドが利用できない・実行できない など) によって実行できない状態です",
     );
   });
+
+  it("prints an execution-ready message when the task can be run", async () => {
+    const tmpBase = fs.mkdtempSync(path.join(os.tmpdir(), "orch-fix-ready-"));
+    process.env.XDG_STATE_HOME = tmpBase;
+
+    const task = "cli-ux-i18n-and-completion";
+    const stateDir = path.join(
+      tmpBase,
+      "opencode",
+      "orchestrator",
+      task,
+      "state",
+    );
+    fs.mkdirSync(stateDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(stateDir, "command-policy.json"),
+      JSON.stringify(
+        {
+          version: 1,
+          summary: {
+            loop_status: "ready_for_loop",
+          },
+          commands: [],
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+
+    const code = await runFixCommand({ argv: ["--task", task] });
+
+    expect(code).toBe(0);
+    const errMock = console.error as unknown as {
+      mock: { calls: unknown[][] };
+    };
+    const text = errMock.mock.calls.map((c) => String(c[0])).join("\n");
+    expect(text).toContain("このタスクは実行可能な状態です");
+    expect(text).toContain(`ococ run --task ${task}`);
+  });
+
+  it("surfaces the latest failed audit requirements when planning state is unknown", async () => {
+    const tmpBase = fs.mkdtempSync(path.join(os.tmpdir(), "orch-fix-audit-"));
+    process.env.XDG_STATE_HOME = tmpBase;
+
+    const task = "cli-ux-i18n-and-completion";
+    const stateDir = path.join(
+      tmpBase,
+      "opencode",
+      "orchestrator",
+      task,
+      "state",
+    );
+    fs.mkdirSync(stateDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(stateDir, "status.json"),
+      JSON.stringify(
+        {
+          version: 1,
+          last_auditor_report: {
+            cycle: 7,
+            audit_mode: "final_full",
+            done: false,
+            requirements: [
+              {
+                id: "R1",
+                passed: false,
+                reason:
+                  "Missing verification evidence for the final acceptance path",
+              },
+            ],
+          },
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+
+    const code = await runFixCommand({ argv: ["--task", task] });
+
+    expect(code).toBe(1);
+    const errMock = console.error as unknown as {
+      mock: { calls: unknown[][] };
+    };
+    const text = errMock.mock.calls.map((c) => String(c[0])).join("\n");
+    expect(text).toContain("未達要件が残っています: R1");
+    expect(text).toContain(
+      "Missing verification evidence for the final acceptance path",
+    );
+  });
 });

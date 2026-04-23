@@ -968,6 +968,43 @@ describe("runExecutorAndAuditorStep", () => {
 
   it("invokes auditor when STEP_AUDIT ready and propagates done + report", async () => {
     const status = createStatus();
+    const tmpState = fs.mkdtempSync(
+      path.join(os.tmpdir(), "orch-steps-state-final-audit-"),
+    );
+    const statusPath = path.join(tmpState, "status.json");
+    fs.writeFileSync(
+      path.join(tmpState, "acceptance-index.json"),
+      JSON.stringify(
+        {
+          version: 1,
+          requirements: [
+            { id: "R1", title: "Requirement 1" },
+            { id: "R2", title: "Requirement 2" },
+          ],
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+    fs.writeFileSync(
+      path.join(tmpState, "todo.json"),
+      JSON.stringify(
+        {
+          todos: [
+            {
+              id: "T1",
+              summary: "final validation",
+              status: "completed",
+              related_requirement_ids: ["R1", "R2"],
+            },
+          ],
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
 
     const execStdout = [
       "STEP_TODO: T1 R1,R2 do something",
@@ -976,24 +1013,42 @@ describe("runExecutorAndAuditorStep", () => {
       "STEP_AUDIT: ready R1,R2",
     ].join("\n");
 
-    const auditPayload = {
+    const incrementalAuditPayload = {
+      audit_mode: "incremental",
+      scope_requirement_ids: ["R1", "R2"],
+      done: false,
+      requirements: [
+        { id: "R1", passed: true },
+        { id: "R2", passed: true },
+      ],
+    };
+    const finalAuditPayload = {
+      audit_mode: "final_full",
+      scope_requirement_ids: ["R1", "R2"],
       done: true,
       requirements: [
         { id: "R1", passed: true },
-        { id: "R2", passed: false, reason: "missing docs" },
+        { id: "R2", passed: true },
       ],
     };
-    const auditStdout = JSON.stringify({
+    const incrementalAuditStdout = JSON.stringify({
       part: {
         type: "text",
-        text: JSON.stringify(auditPayload),
+        text: JSON.stringify(incrementalAuditPayload),
+      },
+    });
+    const finalAuditStdout = JSON.stringify({
+      part: {
+        type: "text",
+        text: JSON.stringify(finalAuditPayload),
       },
     });
 
     mockRunOpencode
       .mockResolvedValueOnce({ code: 0, stdout: execStdout } as any)
-      .mockResolvedValueOnce({ code: 0, stdout: auditStdout } as any)
-      // findSessionIdByTitle (session list)
+      .mockResolvedValueOnce({ code: 0, stdout: incrementalAuditStdout } as any)
+      .mockResolvedValueOnce({ code: 0, stdout: "[]" } as any)
+      .mockResolvedValueOnce({ code: 0, stdout: finalAuditStdout } as any)
       .mockResolvedValueOnce({ code: 0, stdout: "[]" } as any);
 
     const res = await runExecutorAndAuditorStep(
@@ -1004,7 +1059,7 @@ describe("runExecutorAndAuditorStep", () => {
       "/tmp/logs/orch_step_003.txt",
       "/tmp/logs/audit_step_003.jsonl",
       status,
-      "/tmp/state/status.json",
+      statusPath,
       0,
       false,
       "/tmp/logs",
@@ -1016,26 +1071,36 @@ describe("runExecutorAndAuditorStep", () => {
 
     expect(status.last_auditor_report).toBeDefined();
     expect(status.last_auditor_report?.cycle).toBe(3);
+    expect(status.last_auditor_report?.audit_mode).toBe("final_full");
+    expect(status.last_auditor_report?.scope_requirement_ids).toEqual([
+      "R1",
+      "R2",
+    ]);
     expect(status.last_auditor_report?.done).toBe(true);
     expect(status.last_auditor_report?.requirements).toHaveLength(2);
     const [r1, r2] = status.last_auditor_report!.requirements;
-    // Executor 実行 + Auditor 実行 + session list の 3 回呼ばれていることを確認
-    expect(mockRunOpencode).toHaveBeenCalledTimes(3);
+    // Executor 実行 + incremental auditor + incremental cleanup lookup +
+    // final full auditor + final cleanup lookup の 5 回呼ばれていることを確認
+    expect(mockRunOpencode).toHaveBeenCalledTimes(5);
 
     const execCallArgs = mockRunOpencode.mock.calls[0][0] as string[];
-    const auditCallArgs = mockRunOpencode.mock.calls[1][0] as string[];
+    const incrementalAuditCallArgs = mockRunOpencode.mock
+      .calls[1][0] as string[];
+    const finalAuditCallArgs = mockRunOpencode.mock.calls[3][0] as string[];
 
     // Executor はメインセッションを共有している
     expect(execCallArgs).toContain("--session");
     expect(execCallArgs).toContain("sess-1");
 
-    // Auditor は --session を使わず、--title で専用セッションを作る
-    expect(auditCallArgs).not.toContain("--session");
-    expect(auditCallArgs).toContain("--title");
+    // Auditor は incremental と final_full の両方で --session を使わず、--title で専用セッションを作る
+    expect(incrementalAuditCallArgs).not.toContain("--session");
+    expect(incrementalAuditCallArgs).toContain("--title");
+    expect(finalAuditCallArgs).not.toContain("--session");
+    expect(finalAuditCallArgs).toContain("--title");
 
-    // 順序は失敗→成功の順で入るので、R2 が failed, R1 が passed になっていることを確認
-    expect(r1).toMatchObject({ id: "R2", passed: false });
-    expect(r2).toMatchObject({ id: "R1", passed: true });
+    // final_full の report では scoped requirements がすべて passed になることを確認
+    expect(r1).toMatchObject({ id: "R1", passed: true });
+    expect(r2).toMatchObject({ id: "R2", passed: true });
   });
 
   it("invokes auditor when STEP_AUDIT ready using persisted artifacts even without new commands or diffs", async () => {
@@ -1072,21 +1137,36 @@ describe("runExecutorAndAuditorStep", () => {
       "STEP_AUDIT: ready R1",
     ].join("\n");
 
-    const auditPayload = {
+    const incrementalAuditPayload = {
+      audit_mode: "incremental",
+      scope_requirement_ids: ["R1"],
+      done: false,
+      requirements: [{ id: "R1", passed: true }],
+    };
+    const finalAuditPayload = {
+      audit_mode: "final_full",
+      scope_requirement_ids: ["R1"],
       done: true,
       requirements: [{ id: "R1", passed: true }],
     };
-    const auditStdout = JSON.stringify({
+    const incrementalAuditStdout = JSON.stringify({
       part: {
         type: "text",
-        text: JSON.stringify(auditPayload),
+        text: JSON.stringify(incrementalAuditPayload),
+      },
+    });
+    const finalAuditStdout = JSON.stringify({
+      part: {
+        type: "text",
+        text: JSON.stringify(finalAuditPayload),
       },
     });
 
     mockRunOpencode
       .mockResolvedValueOnce({ code: 0, stdout: execStdout } as any)
-      .mockResolvedValueOnce({ code: 0, stdout: auditStdout } as any)
-      // findSessionIdByTitle (session list)
+      .mockResolvedValueOnce({ code: 0, stdout: incrementalAuditStdout } as any)
+      .mockResolvedValueOnce({ code: 0, stdout: "[]" } as any)
+      .mockResolvedValueOnce({ code: 0, stdout: finalAuditStdout } as any)
       .mockResolvedValueOnce({ code: 0, stdout: "[]" } as any);
 
     const res = await runExecutorAndAuditorStep(
@@ -1106,7 +1186,8 @@ describe("runExecutorAndAuditorStep", () => {
     expect(res.done).toBe(true);
     expect(res.abortLoop).toBe(false);
     expect(res.skipAuditorThisStep).toBe(false);
-    expect(mockRunOpencode).toHaveBeenCalledTimes(3);
+    expect(status.last_auditor_report?.audit_mode).toBe("final_full");
+    expect(mockRunOpencode).toHaveBeenCalledTimes(5);
   });
 
   it("merges auditor failures into proposals.json when replanning is already required", async () => {
@@ -1176,13 +1257,37 @@ describe("runExecutorAndAuditorStep", () => {
     const brokenAuditStdout = "not json at all";
 
     const auditPayload = {
-      done: true,
+      audit_mode: "incremental",
+      scope_requirement_ids: ["R1"],
+      done: false,
       requirements: [{ id: "R1", passed: true }],
     };
     const validAuditStdout = JSON.stringify({
       part: {
         type: "text",
         text: JSON.stringify(auditPayload),
+      },
+    });
+    const finalAuditPayload = {
+      audit_mode: "final_full",
+      scope_requirement_ids: ["R1"],
+      done: false,
+      requirements: [
+        {
+          id: "R1",
+          passed: false,
+          reason: "Final full audit still lacks repository-wide proof",
+          failure_kind: "weak_evidence",
+          evidence_gaps: [
+            "No final full anchor beyond the retried incremental check",
+          ],
+        },
+      ],
+    };
+    const finalAuditStdout = JSON.stringify({
+      part: {
+        type: "text",
+        text: JSON.stringify(finalAuditPayload),
       },
     });
 
@@ -1196,12 +1301,16 @@ describe("runExecutorAndAuditorStep", () => {
     //   3. session list → auditor セッション ID を取得
     //   4. auditor (2 回目: 同じセッションに対して run --session)
     //   5. session delete
+    //   6. final_full auditor
+    //   7. final_full cleanup lookup
     mockRunOpencode
       .mockResolvedValueOnce({ code: 0, stdout: execStdout } as any)
       .mockResolvedValueOnce({ code: 0, stdout: brokenAuditStdout } as any)
       .mockResolvedValueOnce({ code: 0, stdout: sessionListStdout } as any)
       .mockResolvedValueOnce({ code: 0, stdout: validAuditStdout } as any)
-      .mockResolvedValueOnce({ code: 0, stdout: "" } as any);
+      .mockResolvedValueOnce({ code: 0, stdout: "" } as any)
+      .mockResolvedValueOnce({ code: 0, stdout: finalAuditStdout } as any)
+      .mockResolvedValueOnce({ code: 0, stdout: "[]" } as any);
 
     const res = await runExecutorAndAuditorStep(
       baseOpts,
@@ -1217,14 +1326,15 @@ describe("runExecutorAndAuditorStep", () => {
       "/tmp/logs",
     );
 
-    expect(res.done).toBe(true);
+    expect(res.done).toBe(false);
     expect(res.abortLoop).toBe(false);
     expect(res.skipAuditorThisStep).toBe(false);
+    expect(status.last_auditor_report?.audit_mode).toBe("final_full");
 
-    // executor 1 回 + auditor 2 回 + session list 1 回 + session delete 1 回
-    expect(mockRunOpencode).toHaveBeenCalledTimes(5);
+    expect(mockRunOpencode).toHaveBeenCalledTimes(7);
     const auditFirstCallArgs = mockRunOpencode.mock.calls[1][0] as string[];
     const auditSecondCallArgs = mockRunOpencode.mock.calls[3][0] as string[];
+    const finalAuditCallArgs = mockRunOpencode.mock.calls[5][0] as string[];
 
     // 1 回目は新規 orch-audit セッション、2 回目は run --session で同一
     // セッションに対する continue になっていることを確認する。
@@ -1236,13 +1346,19 @@ describe("runExecutorAndAuditorStep", () => {
     expect(auditSecondCallArgs).toContain("--session");
     expect(auditSecondCallArgs).not.toContain("--command");
 
+    expect(finalAuditCallArgs).toContain("--command");
+    expect(finalAuditCallArgs).toContain("orch-audit");
+    expect(finalAuditCallArgs).toContain("--title");
+    expect(finalAuditCallArgs).not.toContain("--session");
+
     expect(status.last_auditor_report).toBeDefined();
     expect(status.last_auditor_report?.cycle).toBe(8);
-    expect(status.last_auditor_report?.done).toBe(true);
+    expect(status.last_auditor_report?.audit_mode).toBe("final_full");
+    expect(status.last_auditor_report?.done).toBe(false);
     expect(status.last_auditor_report?.requirements).toHaveLength(1);
     expect(status.last_auditor_report?.requirements[0]).toMatchObject({
       id: "R1",
-      passed: true,
+      passed: false,
     });
   });
 
@@ -1344,6 +1460,8 @@ describe("runExecutorAndAuditorStep", () => {
     // Simulate that an auditor ran on cycle 4 and reported not done yet.
     status.last_auditor_report = {
       cycle: 4,
+      audit_mode: "incremental",
+      scope_requirement_ids: ["R1"],
       done: false,
       requirements: [],
     };
@@ -1391,6 +1509,8 @@ describe("runExecutorAndAuditorStep", () => {
 
     status.last_auditor_report = {
       cycle: 4,
+      audit_mode: "final_full",
+      scope_requirement_ids: ["R1"],
       done: true,
       requirements: [],
     };

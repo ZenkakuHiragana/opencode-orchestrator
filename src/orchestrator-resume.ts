@@ -22,7 +22,7 @@ export async function runResumeCommand(
 
   let task: string | undefined;
   for (let i = 0; i < args.length; i += 1) {
-    if (args[i] === "--task") {
+    if (args[i] === "--task" || args[i] === "-t") {
       task = args[i + 1];
       break;
     }

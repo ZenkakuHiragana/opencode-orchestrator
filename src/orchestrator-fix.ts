@@ -1,4 +1,3 @@
-import * as fs from "node:fs";
 import * as path from "node:path";
 
 import { t } from "./i18n/messages.js";
@@ -8,40 +7,117 @@ import {
   suggestRecentTasks,
 } from "./task-resolution.js";
 import { getOrchestratorStateDir } from "./orchestrator-paths.js";
+import { loadProposals } from "./orchestrator-proposals.js";
+import { inspectTaskStatus } from "./orchestrator-status.js";
 
 export interface FixCommandOptions {
   argv: string[];
 }
 
-function diagnosePlanningForTask(task: string): number {
-  const stateDir = getOrchestratorStateDir(task);
-  const policyPath = path.join(stateDir, "command-policy.json");
-
-  let loopStatus: string | null = null;
-  try {
-    const raw = fs.readFileSync(policyPath, "utf8");
-    const json = JSON.parse(raw) as {
-      summary?: { loop_status?: string };
-    };
-    const s = json.summary?.loop_status;
-    loopStatus = typeof s === "string" ? s : null;
-  } catch {
-    loopStatus = null;
+function diagnoseTask(task: string): number {
+  const snapshot = inspectTaskStatus(task);
+  if (!snapshot) {
+    console.error(t("cli.fix.info.not_ready_generic", { task }));
+    return 1;
   }
 
-  if (loopStatus === "blocked_by_environment") {
+  const stateDir = getOrchestratorStateDir(task);
+  const proposalsPath = path.join(stateDir, "proposals.json");
+  const openProposals = loadProposals(proposalsPath).proposals.filter(
+    (proposal) => proposal.status === "open",
+  );
+  const firstOpenProposal = openProposals[0];
+  const failedRequirements =
+    snapshot.status.last_auditor_report?.requirements?.filter(
+      (requirement) => requirement.passed === false,
+    ) ?? [];
+
+  if (snapshot.phase === "completed") {
+    console.error(
+      t("cli.fix.info.completed", {
+        task,
+      }),
+    );
+    return 0;
+  }
+
+  if (snapshot.phase === "execution_ready") {
+    console.error(
+      t("cli.fix.info.execution_ready", {
+        task,
+      }),
+    );
+    return 0;
+  }
+
+  if (snapshot.phase === "env_blocked") {
     console.error(
       t("cli.fix.info.env_blocked", {
+        task,
+      }),
+    );
+    if (snapshot.lastFailureSummary) {
+      console.error(
+        t("cli.fix.info.last_failure", {
+          summary: snapshot.lastFailureSummary,
+        }),
+      );
+    }
+    return 1;
+  }
+
+  if (snapshot.phase === "planning") {
+    console.error(
+      t("cli.fix.info.planning_blocked", {
+        task,
+      }),
+    );
+    if (snapshot.openProposalCount > 0 && firstOpenProposal) {
+      console.error(
+        t("cli.fix.info.open_proposals", {
+          count: String(snapshot.openProposalCount),
+          summary: firstOpenProposal.summary,
+          task,
+        }),
+      );
+    }
+    return 1;
+  }
+
+  if (failedRequirements.length > 0) {
+    console.error(
+      t("cli.fix.info.audit_failed", {
+        task,
+        requirements: failedRequirements.map((req) => req.id).join(", "),
+      }),
+    );
+    const firstReason = failedRequirements[0]?.reason?.trim();
+    if (firstReason) {
+      console.error(
+        t("cli.fix.info.first_requirement_reason", {
+          reason: firstReason,
+        }),
+      );
+    }
+    return 1;
+  }
+
+  if (snapshot.openProposalCount > 0 && firstOpenProposal) {
+    console.error(
+      t("cli.fix.info.open_proposals", {
+        count: String(snapshot.openProposalCount),
+        summary: firstOpenProposal.summary,
         task,
       }),
     );
     return 1;
   }
 
-  if (loopStatus === "needs_refinement") {
+  if (snapshot.lastFailureSummary) {
     console.error(
-      t("cli.fix.info.planning_blocked", {
+      t("cli.fix.info.last_failure_only", {
         task,
+        summary: snapshot.lastFailureSummary,
       }),
     );
     return 1;
@@ -60,7 +136,7 @@ export async function runFixCommand(opts: FixCommandOptions): Promise<number> {
 
   let explicitTask: string | undefined;
   for (let i = 0; i < args.length; i += 1) {
-    if (args[i] === "--task") {
+    if (args[i] === "--task" || args[i] === "-t") {
       explicitTask = args[i + 1];
       break;
     }
@@ -92,7 +168,7 @@ export async function runFixCommand(opts: FixCommandOptions): Promise<number> {
     }
 
     const task = knownTasks[0];
-    return diagnosePlanningForTask(task);
+    return diagnoseTask(task);
   }
 
   if (knownTasks.length === 0) {
@@ -105,7 +181,7 @@ export async function runFixCommand(opts: FixCommandOptions): Promise<number> {
   }
 
   if (knownTasks.includes(explicitTask)) {
-    return diagnosePlanningForTask(explicitTask);
+    return diagnoseTask(explicitTask);
   }
 
   const suggestions = suggestRecentTasks(explicitTask, knownInfos, 5);

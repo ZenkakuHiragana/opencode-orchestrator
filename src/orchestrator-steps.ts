@@ -10,7 +10,11 @@ import {
   buildTodoWriterPrompt,
   withTaskKeyHint,
 } from "./orchestrator-prompts.js";
-import { parseAuditResult, type AuditSummary } from "./orchestrator-audit.js";
+import {
+  parseAuditResult,
+  type AuditMode,
+  type AuditSummary,
+} from "./orchestrator-audit.js";
 import type {
   AuditorRequirementSnapshot,
   FailureBudgetSnapshot,
@@ -62,6 +66,237 @@ export type ExecutorAuditorStepResult = {
   abortLoop: boolean;
   skipAuditorThisStep: boolean;
 };
+
+type AuditorPassResult = {
+  done: boolean;
+  failed: AuditSummary["failed"];
+  passed: string[];
+  parseError: string | null;
+  report: AuditorReportSnapshot;
+};
+
+function normalizeRequirementIds(ids: string[]): string[] {
+  return Array.from(
+    new Set(ids.map((id) => id.trim()).filter((id) => id.length > 0)),
+  );
+}
+
+function loadAcceptanceRequirementIds(stateDir: string): string[] {
+  const acceptanceIndexPath = path.join(stateDir, "acceptance-index.json");
+  if (!fs.existsSync(acceptanceIndexPath)) {
+    return [];
+  }
+
+  try {
+    const raw = fs.readFileSync(acceptanceIndexPath, "utf8");
+    const parsed = JSON.parse(raw) as {
+      requirements?: { id?: unknown }[];
+    };
+    if (!Array.isArray(parsed.requirements)) {
+      return [];
+    }
+    return normalizeRequirementIds(
+      parsed.requirements
+        .map((requirement) =>
+          typeof requirement?.id === "string" ? requirement.id : "",
+        )
+        .filter((id) => id.length > 0),
+    );
+  } catch {
+    return [];
+  }
+}
+
+function buildAuditorReport(
+  step: number,
+  auditMode: AuditMode,
+  scopeRequirementIds: string[],
+  done: boolean,
+  failed: AuditSummary["failed"],
+  passed: string[],
+): AuditorReportSnapshot {
+  return {
+    cycle: step,
+    audit_mode: auditMode,
+    scope_requirement_ids: normalizeRequirementIds(scopeRequirementIds),
+    done,
+    requirements: failed
+      .map<AuditorRequirementSnapshot>((requirement) => ({
+        id: requirement.id,
+        passed: false,
+        reason: requirement.reason,
+        failure_kind: requirement.failure_kind,
+        evidence_gaps: requirement.evidence_gaps,
+      }))
+      .concat(
+        passed.map<AuditorRequirementSnapshot>((id) => ({
+          id,
+          passed: true,
+        })),
+      ),
+  };
+}
+
+async function cleanupAuditorSession(
+  sessionId: string | null,
+  auditTitle: string,
+): Promise<void> {
+  let resolvedSessionId = sessionId;
+  if (!resolvedSessionId) {
+    try {
+      resolvedSessionId = await findSessionIdByTitle(auditTitle);
+    } catch {
+      resolvedSessionId = null;
+    }
+  }
+
+  if (!resolvedSessionId) {
+    return;
+  }
+
+  try {
+    await runOpencode(
+      ["session", "delete", resolvedSessionId],
+      undefined,
+      false,
+    );
+  } catch {
+    // Cleanup failure is non-fatal.
+  }
+}
+
+async function runAuditorPass(
+  opts: LoopOptions,
+  step: number,
+  fileArgs: string[],
+  auditRaw: string,
+  auditMode: AuditMode,
+  scopeRequirementIds: string[],
+): Promise<AuditorPassResult> {
+  const normalizedScopeRequirementIds =
+    normalizeRequirementIds(scopeRequirementIds);
+  const auditPromptBase = buildAuditPrompt(
+    opts.prompt,
+    opts.task,
+    auditMode,
+    normalizedScopeRequirementIds,
+  );
+  const auditPrompt = withTaskKeyHint(auditPromptBase, opts.task);
+  const auditTitle =
+    `orchestrator-audit ${opts.task} step=${step} mode=${auditMode} ` +
+    `${new Date().toISOString()}`;
+  const maxAuditAttempts = Math.max(1, opts.maxRestarts);
+
+  let summary: AuditSummary = {
+    done: false,
+    requirementsJson: null,
+    failed: [],
+    passed: [],
+    parseError: null,
+  };
+  let auditorSessionId: string | null = null;
+  let attemptsInCurrentSession = 0;
+
+  for (let attempt = 1; attempt <= maxAuditAttempts; attempt += 1) {
+    const canReuseSession =
+      auditorSessionId !== null &&
+      attemptsInCurrentSession > 0 &&
+      attemptsInCurrentSession < 3;
+    const useExistingSession = canReuseSession;
+    const args: string[] = useExistingSession
+      ? [
+          "run",
+          "--session",
+          auditorSessionId as string,
+          ...fileArgs,
+          "--",
+          auditPrompt,
+        ]
+      : [
+          "run",
+          "--command",
+          "orch-audit",
+          "--title",
+          auditTitle,
+          "--format",
+          "json",
+          ...fileArgs,
+          "--",
+          auditPrompt,
+        ];
+
+    const auditRes = await runOpencode(args, auditRaw, false);
+    const auditInfraError = detectExecutorOpencodeInfraError(
+      auditRes.stdout,
+      auditRes.stderr,
+      auditRes.code,
+    );
+    if (auditInfraError) {
+      console.error(
+        `[opencode-orchestrator] auditor 実行中に OpenCode 実行エラーが発生しました: ${auditInfraError.message}`,
+      );
+    }
+
+    const auditSafety = auditRes.stdout.includes(
+      "I'm sorry, but I cannot assist with that request.",
+    );
+    summary = parseAuditResult(auditRes.stdout);
+
+    if (useExistingSession) {
+      attemptsInCurrentSession += 1;
+    } else {
+      attemptsInCurrentSession = 1;
+    }
+
+    const shouldRetry =
+      attempt < maxAuditAttempts && (auditSafety || !!summary.parseError);
+
+    if (shouldRetry && !useExistingSession) {
+      try {
+        auditorSessionId = await findSessionIdByTitle(auditTitle);
+      } catch {
+        auditorSessionId = null;
+      }
+    }
+
+    if (!shouldRetry) {
+      if (auditSafety) {
+        console.error(
+          "[opencode-orchestrator] auditor の出力で safety trip を検出しました。この監査パスは done=false として扱います。",
+        );
+      }
+      break;
+    }
+
+    console.error(
+      `[opencode-orchestrator] auditor の出力が契約どおりではありませんでした (attempt=${attempt}/${maxAuditAttempts - 1})。この監査パス内で再試行します。`,
+    );
+  }
+
+  const effectiveScopeRequirementIds =
+    summary.scopeRequirementIds && summary.scopeRequirementIds.length > 0
+      ? normalizeRequirementIds(summary.scopeRequirementIds)
+      : normalizedScopeRequirementIds;
+  const done = auditMode === "final_full" ? summary.done : false;
+  const report = buildAuditorReport(
+    step,
+    auditMode,
+    effectiveScopeRequirementIds,
+    done,
+    summary.failed,
+    summary.passed,
+  );
+
+  await cleanupAuditorSession(auditorSessionId, auditTitle);
+
+  return {
+    done,
+    failed: summary.failed,
+    passed: summary.passed,
+    parseError: summary.parseError ?? null,
+    report,
+  };
+}
 
 export async function maybeRunTodoWriterStep(
   opts: LoopOptions,
@@ -921,167 +1156,69 @@ export async function runExecutorAndAuditorStep(
 
   let stepDone = false;
   if (shouldAudit) {
-    const auditPromptBase = buildAuditPrompt(opts.prompt, opts.task);
-    const auditPrompt = withTaskKeyHint(auditPromptBase, opts.task);
-    const auditTitle = `orchestrator-audit ${opts.task} step=${step} ${new Date().toISOString()}`;
-    // Auditor は毎回専用タイトルで短命セッションとして起動する。
-    //
-    // すでに Todo-Writer / Executor については "I'm sorry, but I cannot
-    // assist with that request." を検出してセッション再起動を行う
-    // safety 機構があるが、Auditor でも「契約どおりの出力が返らなかった」
-    // 場合に限定して同様に 1 回だけ再試行する。
-    //
-    // 再試行条件:
-    // - "I'm sorry, but I cannot assist with that request." を含む
-    // - もしくは parseAuditResult が parseError を返した
-    // 上記のいずれかで、かつこのステップでまだ再試行していない場合。
+    const stateDir = path.dirname(statusPath);
+    const fullRequirementIds = loadAcceptanceRequirementIds(stateDir);
+    const incrementalScopeIds = normalizeRequirementIds(
+      (stepSnapshot.step_audit?.requirement_ids?.length ?? 0) > 0
+        ? (stepSnapshot.step_audit?.requirement_ids ?? [])
+        : (stepSnapshot.step_intent?.requirement_ids ?? []),
+    );
+    const effectiveIncrementalScopeIds =
+      incrementalScopeIds.length > 0 ? incrementalScopeIds : fullRequirementIds;
 
-    // Auditor の再試行回数は loop オプションの --max-restarts と揃える。
-    //
-    // - maxRestarts は Todo-Writer / Executor のセッション再起動回数の上限だが、
-    //   ここでは「Auditor を同一ステップ内で何回まで再実行してよいか」の上限
-    //   としても流用する。
-    // - 少なくとも 1 回は必ず実行されるように、0 や負の値は 1 として扱う。
-    const maxAuditAttempts = Math.max(1, opts.maxRestarts);
-    let auditSafety = false;
-    let auditDone = false;
-    let failed: AuditSummary["failed"] = [];
-    let passed: string[] = [];
-    let parseErrorFromAudit: string | null | undefined = null;
-    let auditorSessionId: string | null = null;
-    let attemptsInCurrentSession = 0;
-
-    for (let attempt = 1; attempt <= maxAuditAttempts; attempt++) {
-      const canReuseSession =
-        auditorSessionId !== null &&
-        attemptsInCurrentSession > 0 &&
-        attemptsInCurrentSession < 3;
-
-      const useExistingSession = canReuseSession;
-
-      const args: string[] = useExistingSession
-        ? [
-            "run",
-            "--session",
-            auditorSessionId as string,
-            ...fileArgs,
-            "--",
-            auditPrompt,
-          ]
-        : [
-            "run",
-            "--command",
-            "orch-audit",
-            "--title",
-            auditTitle,
-            "--format",
-            "json",
-            ...fileArgs,
-            "--",
-            auditPrompt,
-          ];
-
-      const auditRes = await runOpencode(args, auditRaw, false);
-
-      const auditInfraError = detectExecutorOpencodeInfraError(
-        auditRes.stdout,
-        auditRes.stderr,
-        auditRes.code,
-      );
-      if (auditInfraError) {
-        console.error(
-          `[opencode-orchestrator] auditor 実行中に OpenCode 実行エラーが発生しました: ${auditInfraError.message}`,
-        );
-      }
-
-      auditSafety = auditRes.stdout.includes(
-        "I'm sorry, but I cannot assist with that request.",
-      );
-
-      const summary = parseAuditResult(auditRes.stdout);
-      auditDone = summary.done;
-      failed = summary.failed;
-      passed = summary.passed;
-      parseErrorFromAudit = summary.parseError ?? null;
-
-      // セッション単位の試行カウンタを更新する。
-      if (useExistingSession) {
-        attemptsInCurrentSession += 1;
-      } else {
-        attemptsInCurrentSession = 1;
-      }
-
-      const hasContractOutput = !parseErrorFromAudit;
-      const shouldRetry =
-        attempt < maxAuditAttempts && (auditSafety || !hasContractOutput);
-
-      if (shouldRetry && !useExistingSession) {
-        // 新しい Auditor セッションで契約外出力だった場合に、タイトル
-        // からセッション ID を特定する。次回は run --session で continue
-        // を試みる。
-        try {
-          auditorSessionId = await findSessionIdByTitle(auditTitle);
-        } catch {
-          auditorSessionId = null;
-        }
-      }
-
-      if (!shouldRetry) {
-        // 最終試行として扱う。
-        if (auditSafety) {
-          console.error(
-            "[opencode-orchestrator] auditor の出力で safety trip を検出しました。このステップは done=false として扱い、ループを継続します。",
-          );
-        }
-        break;
-      }
-
-      // 契約どおりの出力が得られなかったため、このステップ内で
-      // もう 1 度だけ auditor を再試行する。
+    if (incrementalScopeIds.length === 0 && fullRequirementIds.length > 0) {
       console.error(
-        `[opencode-orchestrator] auditor の出力が契約どおりではありませんでした (attempt=${attempt}/${maxAuditAttempts - 1})。このステップ内で再試行します。`,
+        `[opencode-orchestrator] executor が監査対象 ID を明示しなかったため、incremental audit は full acceptance set にフォールバックします: ${fullRequirementIds.join(", ")}`,
       );
     }
 
-    auditParseError = parseErrorFromAudit ?? null;
-    stepDone = auditDone;
-    if (parseErrorFromAudit) {
+    let activeAudit = await runAuditorPass(
+      opts,
+      step,
+      fileArgs,
+      auditRaw,
+      "incremental",
+      effectiveIncrementalScopeIds,
+    );
+
+    const incrementalPassedAllScopedRequirements =
+      !activeAudit.parseError && activeAudit.failed.length === 0;
+
+    if (incrementalPassedAllScopedRequirements) {
       console.error(
-        `[opencode-orchestrator] auditor の出力をパースできませんでした: ${parseErrorFromAudit}`,
+        "[opencode-orchestrator] incremental audit passed for the executor-declared scope. Running final full audit before authorizing loop completion.",
+      );
+      activeAudit = await runAuditorPass(
+        opts,
+        step,
+        fileArgs,
+        auditRaw,
+        "final_full",
+        fullRequirementIds,
       );
     }
-    if (auditDone) {
+
+    auditParseError = activeAudit.parseError;
+    stepDone = activeAudit.done;
+    if (activeAudit.parseError) {
+      console.error(
+        `[opencode-orchestrator] auditor の出力をパースできませんでした: ${activeAudit.parseError}`,
+      );
+    }
+    if (activeAudit.done) {
       failureBudget.consecutive_audit_failures = 0;
     } else {
       failureBudget.consecutive_audit_failures += 1;
       failureBudget.last_failure_kind = "audit_failed";
       failureBudget.last_failure_summary =
-        failed[0]?.reason || "auditor が未達要件を報告した";
+        activeAudit.failed[0]?.reason || "auditor が未達要件を報告した";
     }
     console.error(`[opencode-orchestrator] auditor done = ${stepDone}`);
 
-    const reporter: AuditorReportSnapshot = {
-      cycle: step,
-      done: auditDone,
-      requirements: failed
-        .map<AuditorRequirementSnapshot>((f) => ({
-          id: f.id,
-          passed: false,
-          reason: f.reason,
-          failure_kind: f.failure_kind,
-          evidence_gaps: f.evidence_gaps,
-        }))
-        .concat(
-          passed.map<AuditorRequirementSnapshot>((id) => ({
-            id,
-            passed: true,
-          })),
-        ),
-    };
-    status.last_auditor_report = reporter;
+    status.last_auditor_report = activeAudit.report;
 
-    if (failed.length > 0) {
-      const ids = failed.map((f) => f.id).join(", ");
+    if (activeAudit.failed.length > 0) {
+      const ids = activeAudit.failed.map((f) => f.id).join(", ");
       console.error(
         `[opencode-orchestrator] auditor が未達と判定した要件: ${ids}`,
       );
@@ -1090,7 +1227,7 @@ export async function runExecutorAndAuditorStep(
         "proposals.json",
       );
       const proposalsFile = loadProposals(proposalsPath);
-      for (const f of failed) {
+      for (const f of activeAudit.failed) {
         if (!f.reason) continue;
         const firstLine = String(f.reason).split(/\r?\n/, 1)[0];
         console.error(`[opencode-orchestrator]   - ${f.id}: ${firstLine}`);
@@ -1119,28 +1256,10 @@ export async function runExecutorAndAuditorStep(
       forceTodoWriterNextStep = true;
     }
 
-    if (passed.length > 0) {
+    if (activeAudit.passed.length > 0) {
       console.error(
-        `[opencode-orchestrator] auditor が達成済みと判定した要件: ${passed.join(", ")}`,
+        `[opencode-orchestrator] auditor が達成済みと判定した要件: ${activeAudit.passed.join(", ")}`,
       );
-    }
-
-    // Best-effort cleanup: locate the dedicated auditor session by title and
-    // delete it so that it does not linger in the session list。
-    try {
-      let cleanupSessionId = auditorSessionId;
-      if (!cleanupSessionId) {
-        cleanupSessionId = await findSessionIdByTitle(auditTitle);
-      }
-      if (cleanupSessionId) {
-        await runOpencode(
-          ["session", "delete", cleanupSessionId],
-          undefined,
-          false,
-        );
-      }
-    } catch {
-      // Cleanup failureは非致命的。ループの継続を優先する。
     }
   } else if (lastAuditStatus === "ready") {
     // ready だが shouldAudit=false ということは、STEP_VERIFY 側の

@@ -135,6 +135,7 @@ export async function runCli(argv: string[]): Promise<number> {
     "doctor",
     "fix",
     "list",
+    "clear",
   ]);
 
   if (actualSubcommand && taskAwareSubcommands.has(actualSubcommand)) {

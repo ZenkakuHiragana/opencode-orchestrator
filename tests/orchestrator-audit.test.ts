@@ -19,6 +19,8 @@ describe("parseAuditResult", () => {
         part: {
           type: "text",
           text: JSON.stringify({
+            audit_mode: "final_full",
+            scope_requirement_ids: ["R1", "R2"],
             done: true,
             requirements: [
               { id: "R1", passed: true },
@@ -31,6 +33,8 @@ describe("parseAuditResult", () => {
 
     const res = parseAuditResult(stdout);
     expect(res.done).toBe(true);
+    expect(res.auditMode).toBe("final_full");
+    expect(res.scopeRequirementIds).toEqual(["R1", "R2"]);
     expect(res.failed).toEqual([{ id: "R2", reason: "missing tests" }]);
     expect(res.passed).toEqual(["R1"]);
 

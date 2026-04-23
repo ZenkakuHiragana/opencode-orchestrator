@@ -152,13 +152,35 @@ export function buildExecutorPrompt(
 export function buildAuditPrompt(
   originalPrompt: string,
   taskName: string,
+  auditMode: "incremental" | "final_full",
+  scopeRequirementIds: string[],
 ): string {
+  const uniqueScopeRequirementIds = Array.from(new Set(scopeRequirementIds));
+  const scopeLabel =
+    uniqueScopeRequirementIds.length > 0
+      ? uniqueScopeRequirementIds.join(", ")
+      : "ALL_ACCEPTANCE_REQUIREMENTS";
+  const scopeInstructions =
+    auditMode === "incremental"
+      ? "This is an incremental audit. Only inspect the scoped requirement IDs listed below. Do not widen the audit beyond that subset. Even if every scoped requirement passes, you MUST return `done: false` because only a final full audit can authorize loop completion."
+      : "This is the final full audit that authorizes loop completion. Inspect the full acceptance set for the story and return `done: true` only when every acceptance requirement is satisfied.";
+  const requirementsInstructions =
+    auditMode === "incremental"
+      ? "For this incremental audit, the `requirements` array MUST contain exactly one entry for each scoped requirement ID and MUST NOT include requirements outside the scoped subset."
+      : "For this final full audit, the `requirements` array MUST contain exactly one entry for every requirement in the canonical acceptance set.";
+
   return (
     "You are a strict external auditor for an orchestrated development loop.\n\n" +
     "The original high-level goal for this run was:\n---\n" +
     originalPrompt +
     "\n---\n\n" +
-    "Decide whether the current story is fully completed according to its acceptance criteria and the verification gates relevant to the changes.\n" +
+    `Audit mode: ${auditMode}.\n` +
+    `Scoped requirement IDs: ${scopeLabel}.\n` +
+    scopeInstructions +
+    "\n" +
+    requirementsInstructions +
+    "\n" +
+    "Use the exact requirement IDs from acceptance-index.json.\n" +
     "Respond ONLY with a single JSON object on one line with the following shape:\n" +
     '{\n  "done": true | false,\n  "requirements": [ { "id": "R1-some-requirement", "passed": true | false, "reason"?: "...", "failure_kind"?: "...", "evidence_gaps"?: ["..."] } ]\n}\n' +
     "When a requirement fails, include `reason`, `failure_kind`, and `evidence_gaps` in that requirement object.\n" +

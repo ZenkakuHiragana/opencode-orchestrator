@@ -180,10 +180,16 @@ sequenceDiagram
             AUCommand-->>AUAgent: orch-auditor サブエージェントとして起動
             AUAgent->>StateDir: spec.md と acceptance-index.json と status.json を参照
             Note over AUAgent: git status / git diff / ログを調査
-            AUAgent-->>CLI: JSON: { done, requirements\[{ id, passed, reason?, failure_kind?, evidence_gaps? }\] }
+            AUAgent-->>CLI: JSON: { audit_mode, scope_requirement_ids, done, requirements\[{ id, passed, reason?, failure_kind?, evidence_gaps? }\] }
             CLI->>StateDir: status.json.last_auditor_report を更新
-            alt done === true
-                Note over CLI: done = true を返却
+            alt incremental audit が全件 pass
+                CLI->>AUCommand: final_full 用にもう一度 orch-audit を起動
+                AUCommand-->>AUAgent: orch-auditor サブエージェントとして起動
+                AUAgent-->>CLI: JSON: { audit_mode: final_full, scope_requirement_ids, done, requirements[] }
+                CLI->>StateDir: status.json.last_auditor_report を final_full で上書き
+                alt final_full done === true
+                    Note over CLI: done = true を返却
+                end
             end
         else STEP_VERIFY に根拠がない場合
             EXAgent-->>CLI: STEP_AUDIT: ready を返したが STEP_VERIFY の根拠不足
@@ -226,7 +232,7 @@ sequenceDiagram
 | フィールド            | 内容                                                                                                                                 |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | `last_executor_step`  | `step_todo` / `step_diff` / `step_cmd` / `step_intent` / `step_verify` / `step_audit` / `requirement_traceability`                   |
-| `last_auditor_report` | `{ done, requirements[{id, passed, reason?, failure_kind?, evidence_gaps?}] }`                                                       |
+| `last_auditor_report` | `{ audit_mode?, scope_requirement_ids?, done, requirements[{id, passed, reason?, failure_kind?, evidence_gaps?}] }`                  |
 | `proposals.json`      | Executor / Auditor / Todo-Writer などの loop actors が populate する live proposal queue。Planner は replanning 時にクリア／調整する |
 | `failure_budget`      | verification_gap・audit_failed 等の連続カウント                                                                                      |
 | `current_cycle`       | ステップ番号（1 始まり）                                                                                                             |
@@ -518,7 +524,9 @@ sequenceDiagram
 
 - (A) 役割
   - 開発ストーリーが受け入れ条件とプロジェクトゲート（テスト／ビルド／Lint／Docs）を
-    全て満たしているかを、外部監査の立場から判定する。
+    満たしているかを、外部監査の立場から判定する。
+  - 通常ステップでは Executor が申告した requirement subset に絞った
+    `incremental` 監査を行い、ループ完了の権限は `final_full` 監査だけが持つ。
   - 自身はコードやファイルを編集せず、`read` / `glob` / `grep` と Git の読み取り系コマンド、ログの確認だけを行う。
 
 - (B) 主な入力
@@ -540,7 +548,9 @@ sequenceDiagram
 - (D) 出力内容
   - 1 行の JSON オブジェクトのみ（`agents/orch-auditor.md`）。
   - フィールド:
-    - `done`: ストーリー全体が完了しているか（ブール）
+    - `audit_mode`: `incremental` または `final_full`
+    - `scope_requirement_ids`: その監査で実際に評価した requirement ID の一覧
+    - `done`: ループ終了を承認できるか（ブール）。`true` になり得るのは `final_full` のみ。
     - `requirements[]`: `{ id, passed, reason?, failure_kind?, evidence_gaps? }` の配列
       - `reason` は英語テキスト。`passed: false` の場合は必須。
       - `failure_kind` は `passed: false` の場合に必須で、`missing_implementation` /

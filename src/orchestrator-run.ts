@@ -20,7 +20,7 @@ export async function runRunCommand(opts: RunCommandOptions): Promise<number> {
 
   let explicitTask: string | undefined;
   for (let i = 0; i < args.length; i += 1) {
-    if (args[i] === "--task") {
+    if (args[i] === "--task" || args[i] === "-t") {
       explicitTask = args[i + 1];
       break;
     }

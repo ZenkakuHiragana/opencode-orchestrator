@@ -30,13 +30,13 @@ export const messagesEn = {
     "[opencode-orchestrator] {subcommand}: please use either --task or -t, not both.",
 
   "cli.list.usage":
-    "Usage: opencode-orchestrator list [--json] [--task <task-name> --proposals]\n" +
+    "Usage: opencode-orchestrator list [--json] [--task/-t <task-name> --proposals]\n" +
     "\n" +
     "List orchestrator tasks found under the orchestrator state directory.\n" +
     "\n" +
     "Options:\n" +
     "  --json                Output the task list as JSON\n" +
-    "  --task <name>         Filter to a single task (used together with --proposals)\n" +
+    "  --task, -t <name>     Filter to a single task (used together with --proposals)\n" +
     "  --proposals           Show proposals for the selected task instead of the task list\n" +
     "  --open                When showing proposals, only include status='open' entries\n",
 
@@ -76,12 +76,12 @@ export const messagesEn = {
     "  --help, -h               Show this help\n",
 
   "cli.loop.usage":
-    "Usage: opencode-orchestrator loop --task <task-name> [options] [prompt]\n" +
+    "Usage: opencode-orchestrator loop --task/-t <task-name> [options] [prompt]\n" +
     "\n" +
     "Run the Executor/Auditor loop for the specified task.\n" +
     "\n" +
     "Required:\n" +
-    "  --task <name>        Task key to run (for example: 'my-task')\n" +
+    "  --task, -t <name>    Task key to run (for example: 'my-task')\n" +
     "\n" +
     "Options:\n" +
     "  --session <id>       Continue a specific existing session id\n" +
@@ -94,6 +94,7 @@ export const messagesEn = {
     "  --bwrap-skip-command-policy (not available on Windows)\n" +
     "    Skip the command-policy gate but run the Executor in a Bubblewrap sandbox.\n" +
     "  --bwrap-arg <arg>    Additional argument passed to bwrap (repeatable)\n" +
+    "                       In bwrap-skip mode, bare bwrap flags such as --unshare-net are also accepted\n" +
     "  --file, -f <path>    Attach a file to each opencode run step\n" +
     "  --help, -h           Show this help\n" +
     "\n" +
@@ -131,12 +132,12 @@ export const messagesEn = {
     "[opencode-orchestrator] clear: nothing to do; specify --proposals or --resolve/--dismiss.",
 
   "cli.clear.usage":
-    "Usage: opencode-orchestrator clear --task <task-name> [--proposals | --resolve <id> | --dismiss <id>] [-y]\n" +
+    "Usage: opencode-orchestrator clear --task/-t <task-name> [--proposals | --resolve <id> | --dismiss <id>] [-y]\n" +
     "\n" +
     "Update the state of proposals associated with the specified task.\n" +
     "\n" +
     "Options:\n" +
-    "  --task <name>   Task key to target (for example: 'my-task')\n" +
+    "  --task, -t <name>   Task key to target (for example: 'my-task')\n" +
     "  --proposals     Mark all open proposals as resolved\n" +
     "  --resolve <id>  Mark the specified proposal as resolved\n" +
     "  --dismiss <id>  Mark the specified proposal as dismissed\n" +
@@ -324,6 +325,27 @@ export const messagesEn = {
 
   "cli.fix.info.env_blocked":
     "[opencode-orchestrator] This task cannot run because required commands are unavailable or cannot execute in the current environment. Run 'ococ doctor' to identify missing tools or permission issues, fix them, and then re-run 'ococ run' or 'ococ resume'.",
+
+  "cli.fix.info.completed":
+    "[opencode-orchestrator] This task is already recorded as completed by the latest final audit. Run 'ococ status --task {task}' if you want to confirm the completion state.",
+
+  "cli.fix.info.execution_ready":
+    "[opencode-orchestrator] This task is ready to execute. Run 'ococ run --task {task}' to start fresh, or 'ococ resume --task {task}' to continue the most recent session.",
+
+  "cli.fix.info.last_failure":
+    "[opencode-orchestrator] Last failure: {summary}",
+
+  "cli.fix.info.open_proposals":
+    "[opencode-orchestrator] This task has {count} open proposals. Latest summary: {summary}. Run 'ococ list --task {task} --proposals' for details, then re-run 'ococ resume --task {task}' if appropriate.",
+
+  "cli.fix.info.audit_failed":
+    "[opencode-orchestrator] This task still has unmet requirements in the latest audit: {requirements}. Run 'ococ list --task {task} --proposals' to inspect the findings, then continue with 'ococ resume --task {task}'.",
+
+  "cli.fix.info.first_requirement_reason":
+    "[opencode-orchestrator] Representative audit reason: {reason}",
+
+  "cli.fix.info.last_failure_only":
+    "[opencode-orchestrator] This task is not ready to continue yet. Last failure: {summary}. Check 'ococ status --task {task}' and 'ococ doctor' before retrying.",
 
   "cli.fix.info.multiple_tasks_hint_use_list":
     "[opencode-orchestrator] Showing only the most recently updated tasks above. Run 'ococ list' to see all available tasks.",

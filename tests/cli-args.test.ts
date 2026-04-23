@@ -59,6 +59,27 @@ describe("parseLoopArgs", () => {
     expect(opts.files).toEqual(["a.txt", "b.txt"]);
   });
 
+  it("accepts -t as an alias for --task", () => {
+    const opts = parseLoopArgs(["-t", "foo", "do something"]);
+    expect(opts.task).toBe("foo");
+    expect(opts.prompt).toBe("do something");
+  });
+
+  it("captures direct bwrap flag arguments after --bwrap-skip-command-policy", () => {
+    const opts = parseLoopArgs([
+      "--task",
+      "foo",
+      "--bwrap-skip-command-policy",
+      "--unshare-net",
+      "--new-session",
+      "do",
+      "something",
+    ]);
+    expect(opts.bwrapSkipCommandPolicy).toBe(true);
+    expect(opts.bwrapArgs).toEqual(["--unshare-net", "--new-session"]);
+    expect(opts.prompt).toBe("do something");
+  });
+
   it("generates a fallback prompt when none is provided", () => {
     const opts = parseLoopArgs(["--task", "foo"]);
     expect(opts.prompt).toContain("foo");
@@ -88,6 +109,12 @@ describe("parseListArgs", () => {
 
   it("parses --task and --proposals together", () => {
     const opts = parseListArgs(["--task", "foo", "--proposals"]);
+    expect(opts.task).toBe("foo");
+    expect(opts.showProposals).toBe(true);
+  });
+
+  it("accepts -t for list", () => {
+    const opts = parseListArgs(["-t", "foo", "--proposals"]);
     expect(opts.task).toBe("foo");
     expect(opts.showProposals).toBe(true);
   });

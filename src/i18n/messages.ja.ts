@@ -30,13 +30,13 @@ export const messagesJa = {
     "[opencode-orchestrator] {subcommand}: --task と -t を同時には指定できません。どちらか一方を使用してください。",
 
   "cli.list.usage":
-    "使い方: opencode-orchestrator list [--json] [--task <task-name> --proposals]\n" +
+    "使い方: opencode-orchestrator list [--json] [--task/-t <task-name> --proposals]\n" +
     "\n" +
     "orchestrator の状態ディレクトリに存在するタスク一覧を表示します。\n" +
     "\n" +
     "オプション:\n" +
     "  --json                タスク一覧を JSON 形式で出力する\n" +
-    "  --task <name>         対象タスクを 1 つに絞り込む (--proposals と併用)\n" +
+    "  --task, -t <name>     対象タスクを 1 つに絞り込む (--proposals と併用)\n" +
     "  --proposals           タスク一覧の代わりに指定タスクの proposal 一覧を表示する\n" +
     "  --open                proposal 一覧では status='open' のものだけ表示する\n",
 
@@ -76,12 +76,12 @@ export const messagesJa = {
     "  --help, -h               このヘルプを表示する\n",
 
   "cli.loop.usage":
-    "使い方: opencode-orchestrator loop --task <task-name> [options] [prompt]\n" +
+    "使い方: opencode-orchestrator loop --task/-t <task-name> [options] [prompt]\n" +
     "\n" +
     "指定したタスクの Executor/Auditor ループを実行します。\n" +
     "\n" +
     "必須:\n" +
-    "  --task <name>        実行するタスクキー (例: 'my-task')\n" +
+    "  --task, -t <name>    実行するタスクキー (例: 'my-task')\n" +
     "\n" +
     "オプション:\n" +
     "  --session <id>      既存セッション ID を指定して継続する\n" +
@@ -97,6 +97,7 @@ export const messagesJa = {
     "    ただし、Executor 用の opencode run プロセス全体を Bubblewrap サンドボックス内で実行する。\n" +
     "    OpenCode の permission.bash 権限設定はサンドボックス内でもそのまま適用される。\n" +
     "  --bwrap-arg <arg>    bwrap に渡す追加引数 (複数指定可)\n" +
+    "                       bwrap-skip モードでは --unshare-net のような bare flag も受け付けます\n" +
     "  --file, -f <path>   各ステップの opencode run に添付するファイル\n" +
     "  --help, -h          このヘルプを表示する\n" +
     "\n" +
@@ -249,6 +250,26 @@ export const messagesJa = {
   "cli.fix.info.env_blocked":
     "[opencode-orchestrator] このタスクは環境要因 (必要なコマンドが利用できない・実行できない など) によって実行できない状態です。'ococ doctor' を実行して不足しているツールや権限を確認し、問題を解消してから 'ococ run' や 'ococ resume' を再実行してください。",
 
+  "cli.fix.info.completed":
+    "[opencode-orchestrator] このタスクは直近の最終監査で完了済みとして記録されています。必要なら 'ococ status --task {task}' で完了状態を確認してください。",
+
+  "cli.fix.info.execution_ready":
+    "[opencode-orchestrator] このタスクは実行可能な状態です。新しく始めるなら 'ococ run --task {task}'、直近のセッションを継続するなら 'ococ resume --task {task}' を実行してください。",
+
+  "cli.fix.info.last_failure": "[opencode-orchestrator] 直近の失敗: {summary}",
+
+  "cli.fix.info.open_proposals":
+    "[opencode-orchestrator] このタスクには未解決 proposal が {count} 件あります。最新の要約: {summary}。'ococ list --task {task} --proposals' で詳細を確認し、必要なら 'ococ resume --task {task}' を再実行してください。",
+
+  "cli.fix.info.audit_failed":
+    "[opencode-orchestrator] このタスクは直近の監査で未達要件が残っています: {requirements}。まず 'ococ list --task {task} --proposals' で指摘内容を確認し、その後 'ococ resume --task {task}' で継続してください。",
+
+  "cli.fix.info.first_requirement_reason":
+    "[opencode-orchestrator] 代表的な監査理由: {reason}",
+
+  "cli.fix.info.last_failure_only":
+    "[opencode-orchestrator] このタスクはまだ進行を再開できません。直近の失敗: {summary}。'ococ status --task {task}' と 'ococ doctor' を確認してから再実行してください。",
+
   "cli.fix.info.multiple_tasks_hint_use_list":
     "[opencode-orchestrator] 上には直近で更新されたタスクのみを表示しています。すべてのタスクを確認するには 'ococ list' を実行してください。",
 
@@ -271,12 +292,12 @@ export const messagesJa = {
     "[opencode-orchestrator] clear: 実行対象が指定されていません (--proposals か --resolve/--dismiss のいずれかが必要です)",
 
   "cli.clear.usage":
-    "使い方: opencode-orchestrator clear --task <task-name> [--proposals | --resolve <id> | --dismiss <id>] [-y]\n" +
+    "使い方: opencode-orchestrator clear --task/-t <task-name> [--proposals | --resolve <id> | --dismiss <id>] [-y]\n" +
     "\n" +
     "指定したタスクに紐づく提案の状態を更新します。\n" +
     "\n" +
     "オプション:\n" +
-    "  --task <name>   対象となるタスクキー (例: 'my-task')\n" +
+    "  --task, -t <name>   対象となるタスクキー (例: 'my-task')\n" +
     "  --proposals     すべての open proposal を resolved にする\n" +
     "  --resolve <id>  指定した proposal を resolved にする\n" +
     "  --dismiss <id>  指定した proposal を dismissed にする\n" +

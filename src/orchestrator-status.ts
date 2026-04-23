@@ -99,8 +99,27 @@ export type AuditorRequirementSnapshot = {
 
 export type AuditorReportSnapshot = {
   cycle: number;
+  audit_mode?: "incremental" | "final_full";
+  scope_requirement_ids?: string[];
   done: boolean;
   requirements: AuditorRequirementSnapshot[];
+};
+
+export type StatusPhase =
+  | "planning"
+  | "execution_ready"
+  | "env_blocked"
+  | "completed"
+  | "unknown";
+
+export type TaskStatusSnapshot = {
+  task: string;
+  stateDir: string;
+  status: OrchestratorStatus;
+  loopStatus: string | null;
+  phase: StatusPhase;
+  openProposalCount: number;
+  lastFailureSummary: string;
 };
 
 export type FailureBudgetSnapshot = {
@@ -144,7 +163,7 @@ export async function runStatusCommand(
 
   let explicitTask: string | undefined;
   for (let i = 0; i < args.length; i += 1) {
-    if (args[i] === "--task") {
+    if (args[i] === "--task" || args[i] === "-t") {
       explicitTask = args[i + 1];
       break;
     }
@@ -214,10 +233,10 @@ export async function runStatusCommand(
   return exitCode;
 }
 
-function derivePhase(
+export function derivePhase(
   loopStatus: string | null,
   status: OrchestratorStatus,
-): "planning" | "execution_ready" | "env_blocked" | "completed" | "unknown" {
+): StatusPhase {
   if (loopStatus === "needs_refinement") return "planning";
   if (loopStatus === "blocked_by_environment") return "env_blocked";
   if (loopStatus === "ready_for_loop") return "execution_ready";
@@ -225,6 +244,7 @@ function derivePhase(
   const report = status.last_auditor_report;
   if (
     report &&
+    report.audit_mode === "final_full" &&
     report.done &&
     Array.isArray(report.requirements) &&
     report.requirements.length > 0 &&
@@ -236,7 +256,7 @@ function derivePhase(
   return "unknown";
 }
 
-function countOpenProposals(proposalsPath: string): number {
+export function countOpenProposals(proposalsPath: string): number {
   if (!fs.existsSync(proposalsPath)) return 0;
   try {
     const raw = fs.readFileSync(proposalsPath, "utf8");
@@ -250,7 +270,7 @@ function countOpenProposals(proposalsPath: string): number {
   }
 }
 
-function readLoopStatus(policyPath: string): string | null {
+export function readLoopStatus(policyPath: string): string | null {
   try {
     const raw = fs.readFileSync(policyPath, "utf8");
     const json = JSON.parse(raw) as {
@@ -263,11 +283,10 @@ function readLoopStatus(policyPath: string): string | null {
   }
 }
 
-function printStatusSummary(task: string): number {
+export function inspectTaskStatus(task: string): TaskStatusSnapshot | null {
   const stateDir = getOrchestratorStateDir(task);
   if (!fs.existsSync(stateDir) || !fs.statSync(stateDir).isDirectory()) {
-    console.error(t("cli.status.error.state_missing", { task }));
-    return 1;
+    return null;
   }
 
   const statusPath = path.join(stateDir, "status.json");
@@ -280,6 +299,26 @@ function printStatusSummary(task: string): number {
   const openCount = countOpenProposals(proposalsPath);
   const lastFailureSummary =
     status.failure_budget?.last_failure_summary?.trim() || "";
+
+  return {
+    task,
+    stateDir,
+    status,
+    loopStatus,
+    phase,
+    openProposalCount: openCount,
+    lastFailureSummary,
+  };
+}
+
+function printStatusSummary(task: string): number {
+  const snapshot = inspectTaskStatus(task);
+  if (!snapshot) {
+    console.error(t("cli.status.error.state_missing", { task }));
+    return 1;
+  }
+
+  const { phase, openProposalCount: openCount, lastFailureSummary } = snapshot;
 
   console.error(t("cli.status.summary.header", { task }));
 

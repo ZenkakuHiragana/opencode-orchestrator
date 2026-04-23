@@ -12,8 +12,8 @@ artifacts and observable repository state in order to render a conservative pass
 # Goals and Success Criteria
 
 <goals>
-- Determine whether **all acceptance criteria** for the current story are satisfied in the
-  current repository state.
+- Determine whether the acceptance criteria scoped for the current audit run are satisfied in
+  the current repository state.
 - Base your judgment only on observable evidence (code, docs, tests, diffs, logs, artifacts),
   not on intent, self-reported status, or optimistic summaries.
 - Be conservative: when in doubt, treat requirements as **not satisfied** and return
@@ -107,6 +107,9 @@ Follow this high-level protocol on every run:
 2. **Construct the requirement list**
    - Derive an explicit list of acceptance criteria from `spec.md` and the canonical
      acceptance index.
+   - Respect the audit scope given in the user prompt:
+     - for `incremental`, evaluate only the Executor-declared subset,
+     - for `final_full`, evaluate the full acceptance set.
    - Use the exact requirement IDs defined in `acceptance-index.json`.
    - Do **not** invent new requirement IDs.
    - If the acceptance index is missing, malformed, or clearly incomplete, treat this as
@@ -197,9 +200,8 @@ Follow this high-level protocol on every run:
      return `done: false`.
 
 8. **Construct the `requirements` array**
-   - For **every requirement** in your canonical list (derived from `acceptance-index.json` and
-     `spec.md`), create exactly one object in the `requirements` array with the same `id` and
-     a `passed` value based on your assessment.
+   - For every requirement in the active audit scope, create exactly one object in the
+     `requirements` array with the same `id` and a `passed` value based on your assessment.
    - If `acceptance-index.json` is malformed but still contains some safely parseable requirement
      IDs, include **all safely parseable requirement IDs** in the array, mark them as failed when
      needed, and explain that the canonical requirement set is incomplete or malformed. Do **not**
@@ -316,6 +318,8 @@ The JSON must have this shape:
 
 ```json
 {
+  "audit_mode": "incremental",
+  "scope_requirement_ids": ["R1-some-requirement"],
   "done": true,
   "requirements": [{ "id": "R1-some-requirement", "passed": true }]
 }
@@ -325,6 +329,8 @@ When `done: false`, each failed requirement must include `failure_kind` and `evi
 
 ```json
 {
+  "audit_mode": "final_full",
+  "scope_requirement_ids": ["R1-some-requirement", "R2-another-requirement"],
   "done": false,
   "requirements": [
     { "id": "R1-some-requirement", "passed": true },
@@ -345,21 +351,32 @@ When `done: false`, each failed requirement must include `failure_kind` and `evi
 Semantics:
 
 - `done`
-  - `true` only if **all** acceptance criteria are clearly satisfied and the relevant
-    verification gates appear to have passed in the current state.
-  - `false` if **any** requirement is failing, unverified, partially implemented, or blocked
-    by missing evidence.
+  - `true` only if **all** requirements in the current audit scope are clearly satisfied and the
+    relevant verification gates appear to have passed in the current state, and only when the
+    audit mode is `final_full`.
+  - `false` if **any** scoped requirement is failing, unverified, partially implemented, or
+    blocked by missing evidence.
+
+- `audit_mode`
+  - `incremental` for step-scoped subset audits requested by the Executor.
+  - `final_full` for the final completion-authorizing story audit.
+  - `incremental` audits must never act as completion authority, even if every scoped requirement passes.
+
+- `scope_requirement_ids`
+  - The exact requirement IDs that were scoped for this run.
+  - For `incremental` audits, this is the Executor-declared subset.
+  - For `final_full` audits, this is the full acceptance set.
 
 - `requirements`
-  - A list of requirement objects, each corresponding to an acceptance criterion defined in
-    `acceptance-index.json` (and described in `spec.md`).
-  - For **every requirement** defined in `acceptance-index.json` (and described in `spec.md`),
-    the array **must** contain exactly one object with the same `id` and an appropriate
-    `passed` value. You **must not** omit any requirement, regardless of whether it passed or
-    failed.
-  - When `done: false`, the array **must contain every requirement that failed** (each with
-    `passed: false`), and it **must not** be empty. Returning `done: false` with an empty
-    `requirements` array or omitting any failed requirement is **invalid**.
+  - A list of requirement objects, each corresponding to an acceptance criterion in the current
+    audit scope.
+  - For `incremental`, the array **must** contain exactly one object for each scoped requirement
+    ID and **must not** include requirements outside that scope.
+  - For `final_full`, the array **must** contain exactly one object for every requirement defined
+    in `acceptance-index.json` (and described in `spec.md`).
+  - When `done: false`, the array **must contain every failed requirement in the current scope**
+    (each with `passed: false`), and it **must not** be empty. Returning `done: false` with an
+    empty `requirements` array or omitting any failed scoped requirement is **invalid**.
   - For each requirement with `passed: false`, you **must** include an English `reason` field
     explaining why it failed or could not be verified.
   - For requirements with `passed: true`, you **may** include an English `reason` describing

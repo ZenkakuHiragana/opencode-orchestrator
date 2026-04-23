@@ -9,6 +9,9 @@ const runListMock = vi.fn<(opts: any) => Promise<void>>(() =>
 const runInstallMock = vi.fn<(opts: any) => Promise<void>>(() =>
   Promise.resolve(),
 );
+const runClearMock = vi.fn<(opts: any) => Promise<void>>(() =>
+  Promise.resolve(),
+);
 const runExecMock = vi.fn<(opts: any) => Promise<any>>(() =>
   Promise.resolve({ code: 0, stdout: "", stderr: "", truncated: false }),
 );
@@ -55,6 +58,15 @@ vi.mock("../src/orchestrator-install.js", async (importOriginal) => {
   return {
     ...actual,
     runInstall: runInstallMock,
+  };
+});
+
+vi.mock("../src/orchestrator-clear.js", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("../src/orchestrator-clear.js")>();
+  return {
+    ...actual,
+    runClear: runClearMock,
   };
 });
 
@@ -109,6 +121,7 @@ describe("runCli subcommands", () => {
     runLoopMock.mockClear();
     runListMock.mockClear();
     runInstallMock.mockClear();
+    runClearMock.mockClear();
     runExecMock.mockClear();
     runRunCommandMock.mockClear();
     runResumeCommandMock.mockClear();
@@ -224,6 +237,22 @@ describe("runCli subcommands", () => {
     const listCode = await runCli(["list", "-t", "t5", "--proposals"]);
     expect(listCode).toBe(0);
     expect(runListMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("rewrites -t to --task for clear before parsing", async () => {
+    const { runCli } = await import("../src/cli.js");
+
+    const code = await runCli(["clear", "-t", "t1", "--proposals", "-y"]);
+
+    expect(code).toBe(0);
+    expect(runClearMock).toHaveBeenCalledTimes(1);
+    expect(runClearMock).toHaveBeenCalledWith({
+      task: "t1",
+      clearProposals: true,
+      yes: true,
+      resolveId: undefined,
+      dismissId: undefined,
+    });
   });
 
   it("rewrites -t to --task for loop before parsing", async () => {

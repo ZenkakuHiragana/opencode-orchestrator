@@ -7,9 +7,13 @@ export type AuditFailureKind =
   | "artifact_mismatch"
   | "scope_unclear";
 
+export type AuditMode = "incremental" | "final_full";
+
 export interface AuditSummary {
   done: boolean;
   requirementsJson: string | null;
+  auditMode?: AuditMode;
+  scopeRequirementIds?: string[];
   failed: {
     id: string;
     reason?: string;
@@ -67,6 +71,8 @@ export function parseAuditResult(stdout: string): AuditSummary {
   try {
     const payload = JSON.parse(lastText) as {
       done?: boolean;
+      audit_mode?: string;
+      scope_requirement_ids?: unknown;
       requirements?: {
         id?: string;
         passed?: boolean;
@@ -95,6 +101,16 @@ export function parseAuditResult(stdout: string): AuditSummary {
     }
 
     let requirementsJson: string | null = null;
+    const auditMode =
+      payload.audit_mode === "incremental" ||
+      payload.audit_mode === "final_full"
+        ? payload.audit_mode
+        : undefined;
+    const scopeRequirementIds = Array.isArray(payload.scope_requirement_ids)
+      ? payload.scope_requirement_ids.filter(
+          (id): id is string => typeof id === "string" && id.length > 0,
+        )
+      : undefined;
     const failed: {
       id: string;
       reason?: string;
@@ -132,13 +148,22 @@ export function parseAuditResult(stdout: string): AuditSummary {
     }
 
     const doneFlag = !!payload && payload.done === true;
-    return { done: doneFlag, requirementsJson, failed, passed };
+    return {
+      done: doneFlag,
+      requirementsJson,
+      auditMode,
+      scopeRequirementIds,
+      failed,
+      passed,
+    };
   } catch {
     const reason =
       "auditor produced invalid JSON when parsing the audit report";
     return {
       done: false,
       requirementsJson: null,
+      auditMode: undefined,
+      scopeRequirementIds: undefined,
       failed: [],
       passed: [],
       parseError: reason,

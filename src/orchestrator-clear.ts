@@ -26,7 +26,7 @@ export function parseClearArgs(argv: string[]): ClearOptions {
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
-    if (arg === "--task") {
+    if (arg === "--task" || arg === "-t") {
       const next = argv[++i];
       if (!next) {
         throw new Error(t("cli.clear.error.missing_task_name"));

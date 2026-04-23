@@ -92,7 +92,7 @@ export function parseLoopArgs(argv: string[]): LoopOptions {
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
-    if (arg === "--task") {
+    if (arg === "--task" || arg === "-t") {
       const next = argv[++i];
       if (!next) {
         throw new Error("--task requires a task name");
@@ -132,12 +132,17 @@ export function parseLoopArgs(argv: string[]): LoopOptions {
       dangerouslySkipCommandPolicy = true;
     } else if (arg === "--bwrap-skip-command-policy") {
       bwrapSkipCommandPolicy = true;
+    } else if (arg === "--") {
+      rest.push(...argv.slice(i + 1));
+      break;
     } else if (arg === "--bwrap-arg") {
       const next = argv[++i];
       if (!next) {
         throw new Error("--bwrap-arg requires an argument");
       }
       bwrapArgs.push(next);
+    } else if (bwrapSkipCommandPolicy && arg.startsWith("-")) {
+      bwrapArgs.push(arg);
     } else if (arg === "--file" || arg === "-f") {
       const next = argv[++i];
       if (!next) {
@@ -198,7 +203,7 @@ export function parseListArgs(argv: string[]): ListOptions {
     const arg = argv[i];
     if (arg === "--json") {
       format = "json";
-    } else if (arg === "--task") {
+    } else if (arg === "--task" || arg === "-t") {
       const next = argv[++i];
       if (!next) {
         throw new Error("--task requires a task name");

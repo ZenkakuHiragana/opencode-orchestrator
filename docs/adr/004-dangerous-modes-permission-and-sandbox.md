@@ -74,6 +74,9 @@ OpenCode 標準の permission.bash 自体は引き続き有効だが、bash ツ�
   - `bwrap --version` で存在確認。
   - `bwrap <args> -- true` で初期化テストを行い、失敗した場合はその場で
     Error を投げて loop 起動を中止する。
+  - 明示的な追加引数は `--bwrap-arg <arg>` の repeatable option で渡せる。
+  - `--bwrap-skip-command-policy` 以降では、`--unshare-net` のような単純な bare flag も
+    追加 bwrap 引数として解釈できる。
   - 検証済みの引数のみを `opts.bwrapArgs` に保存し、Executor ステップでは
     その値だけを `runOpencodeBwrap` に渡す。
 

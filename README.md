@@ -153,10 +153,10 @@ OpenCode を再起動すると有効化されます。Tab でエージェント�
 ```sh
 # 代表的な使い方 (短いエイリアス)
 ococ --help
-ococ run --task my-task-key
-ococ status --task my-task-key
+ococ run -t my-task-key
+ococ status -t my-task-key
 ococ doctor
-ococ fix --task my-task-key
+ococ fix -t my-task-key
 ococ completion bash
 ```
 
@@ -170,6 +170,7 @@ ococ completion bash
 
 - `run`: 受け入れ条件や command-policy が整ったタスクの実行を開始します。
   - 例: `ococ run --task cli-ux-i18n-and-completion`
+  - `-t` は `--task` の短縮エイリアスです。
 - `resume`: 直近で作業していたタスクやセッションを再開します。
   - 例: `ococ resume`
 - `status`: 特定タスクの現在の状況と、次に何をすればよいかを要約して表示します。
@@ -178,6 +179,8 @@ ococ completion bash
   - 例: `ococ doctor`
 - `fix`: 特定タスクがなぜ進まないのかを読み取り、次に実行すべきコマンド (status/doctor/fix/run など) を説明します。
   - 例: `ococ fix --task cli-ux-i18n-and-completion`
+  - 直近の監査失敗、open proposal、計画ブロック、環境ブロック、実行可能状態、完了状態を読み分けて案内します。
+  - 代表的な失敗理由や未達要件があれば、それも合わせて表示します。
 - `completion`: bash / PowerShell 用の補完設定を生成します。
   - 例: `ococ completion bash`
 
@@ -248,12 +251,12 @@ ococ completion powershell | Out-String | Invoke-Expression
 `loop` を直接呼び出すこともできます。
 
 ```sh
-npx ococ loop --task my-task-key
+npx ococ loop -t my-task-key
 ```
 
 主なオプション:
 
-- `--task <name>` (必須): ストーリーを識別するタスクキー
+- `--task/-t <name>` (必須): ストーリーを識別するタスクキー
 - `--continue`: `last_session_id` を使って直近のセッションを継続
 - `--session <ses_...>`: 既存セッション ID を明示してループを開始
 - `--max-loop N`: 最大ステップ数 (デフォルト 100)
@@ -267,6 +270,12 @@ npx ococ loop --task my-task-key
   - Todo-Writer もそれを加味した計画を立てるようになります。
 - `--bwrap-skip-command-policy` (Linux のみ有効):
   - 上記に加え、Executor エージェントの `opencode run` を Bubblewrap サンドボックスで実行します。
+  - `--bwrap-arg <arg>` を繰り返して追加引数を渡せます。単純なフラグであれば `--bwrap-skip-command-policy --unshare-net ...` のような bare option も受け付けます。
+  - 例:
+    ```sh
+    npx ococ loop -t my-task --bwrap-skip-command-policy --unshare-net
+    npx ococ loop -t my-task --bwrap-skip-command-policy --bwrap-arg --bind --bwrap-arg /src --bwrap-arg /src
+    ```
   - 次の引数を指定して Bubblewrap をセットアップしています。
     > ```bash
     > bwrap \
@@ -298,7 +307,9 @@ npx ococ loop --task my-task-key
 1. (必要に応じて) Todo-Writer ステップ: `opencode run --command orch-todo-write ...`
 2. Executor ステップ: `opencode run --command orch-exec ...`
 3. Auditor ステップ: `opencode run --command orch-audit --format json ...`
-   - Auditor が `done: true` を返した時点でループ終了
+   - 通常ステップでは、Executor が `STEP_AUDIT: ready` で申告した要件 subset のみを incremental audit します
+   - incremental audit が通った場合だけ、ループ終了直前に full acceptance set を対象とした final full audit を追加で実行します
+   - final full audit が `done: true` を返した時点でループ終了
    - `--commit` 指定時は、完了後に追加の executor ステップを使って `autocommit` ツール経由のコミットを依頼
 
 各コマンドがどのエージェントを起動し、どのツールを内部的に使うかの詳細は
@@ -452,9 +463,10 @@ Preflight-Runner が `commands[].availability` と `summary.available_helper_com
   - `status.json.last_auditor_report.requirements[]` に `failure_kind` / `evidence_gaps` がある場合は、それを次 step の structured remediation input として扱います。
   - ルーティングは軽量・逐次的です。サブエージェントの委譲は広範な読み取り専用の探索に限定し、並列実行や外部キューは前提としません。
 - Auditor (`orch-auditor`)
-  - 完了判定専用の外部監査役
-  - `read` / `glob` / `grep` と Git の読み取り系コマンドだけを使い、1 行 JSON (`{ done, requirements[] }`) を返す
+  - subset 監査と最終完了監査を担う外部監査役
+  - `read` / `glob` / `grep` と Git の読み取り系コマンドだけを使い、1 行 JSON (`{ audit_mode, scope_requirement_ids, done, requirements[] }`) を返す
   - Orchestrator CLI では `STEP_AUDIT: ready` に加えて `STEP_VERIFY: ready` が揃った step でのみ起動されます。
+  - 通常ステップでは Executor が申告した要件 subset に対して `incremental` 監査を行い、subset が通った場合だけ終了直前に `final_full` 監査を行います。
   - ファイルを変更せず、`git status` / `git diff` / ログファイルなどを参照して `done` と `requirements[{id, passed, reason, failure_kind?, evidence_gaps?}]` を返します。
 - Local Investigator (`orch-local-investigator`)
   - リポジトリ内だけを対象に、関数・型・設定キー・ファイルの所在と関係を調べる読み取り専用サブエージェントです。
