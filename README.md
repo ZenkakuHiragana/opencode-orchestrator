@@ -45,14 +45,32 @@ OpenCode で長めの開発タスクを進めるための、マルチエージ�
 4. 実行フェーズでは Todo-Writer → Executor → Auditor を繰り返し、完了まで進めます。
 
 ```mermaid
-flowchart TD
-  U[目標を伝える] --> P[計画を固める]
-  P --> G{実行準備OK?}
-  G -- いいえ --> P
-  G -- はい --> L[ococ run / ococ loop]
-  L --> X[実装と監査を繰り返す]
-  X -- 未達 --> X
-  X -- 完了 --> D[Done]
+flowchart LR
+  subgraph Planning["計画フェーズ"]
+    direction TB
+    Dev{{"開発者"}} --"大きな目標<br/>やりたいこと"-->
+    Planner[("Orch-Planner<br/>(OpenCode TUI)")] --"要件まとめ"-->
+    Refiner["Refiner"]
+    Refiner --"達成目標<br/>受け入れ要件等"-->
+    Spec-Checker["Spec-Checker"]
+    Refiner --"想定利用コマンド"--> Preflight["Preflight"]
+    Preflight --"実行権限チェック結果"-->
+    Spec-Checker --"実行可否・問題点"--> Planner
+  end
+
+  subgraph Execution["実行フェーズ"]
+    direction TB
+     Dev2{{"開発者"}} --"シェルスクリプト実行:<br/>npx ococ loop -t task-name"-->
+    TodoWriter["Todo-Writer"]
+    --"ToDo リスト"-->
+    Executor["Executor"]
+    --"成果物の生成"-->
+    Auditor{{"Auditor<br/>受け入れ条件の確認"}}
+    --"未達の項目一覧"--> TodoWriter
+    Auditor --"すべて達成"--> End(["終了"])
+  end
+
+  Planning ~~~ Execution
 ```
 
 ### 計画フェーズでやっていること
