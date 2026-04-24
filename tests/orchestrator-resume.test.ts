@@ -51,52 +51,54 @@ describe("runResumeCommand", () => {
     const tmpBase = fs.mkdtempSync(path.join(os.tmpdir(), "orch-resume-test-"));
     process.env.XDG_STATE_HOME = tmpBase;
 
-    const task = "demo-task";
-    const stateDir = path.join(
-      tmpBase,
-      "opencode",
-      "orchestrator",
-      task,
-      "state",
-    );
-    fs.mkdirSync(stateDir, { recursive: true });
-    fs.writeFileSync(
-      path.join(stateDir, "command-policy.json"),
-      JSON.stringify(
-        {
-          version: 1,
-          summary: {
-            loop_status: "ready_for_loop",
+    try {
+      const task = "demo-task";
+      const stateDir = path.join(
+        tmpBase,
+        "opencode",
+        "orchestrator",
+        task,
+        "state",
+      );
+      fs.mkdirSync(stateDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(stateDir, "command-policy.json"),
+        JSON.stringify(
+          {
+            version: 1,
+            summary: {
+              loop_status: "ready_for_loop",
+            },
+            commands: [],
           },
-          commands: [],
-        },
-        null,
-        2,
-      ),
-      "utf8",
-    );
+          null,
+          2,
+        ),
+        "utf8",
+      );
 
-    parseLoopArgsMock.mockImplementationOnce((argv: string[]) => ({ argv }));
-    runLoopMock.mockResolvedValueOnce(true);
+      parseLoopArgsMock.mockImplementationOnce((argv: string[]) => ({ argv }));
+      runLoopMock.mockResolvedValueOnce(true);
 
-    const code = await runResumeCommand({ argv: ["--task", task] });
+      const code = await runResumeCommand({ argv: ["--task", task] });
 
-    expect(code).toBe(0);
-    expect(parseLoopArgsMock).toHaveBeenCalledTimes(1);
-    expect(parseLoopArgsMock).toHaveBeenCalledWith([
-      "--task",
-      task,
-      "--continue",
-    ]);
-    expect(runLoopMock).toHaveBeenCalledTimes(1);
-    expect(runLoopMock).toHaveBeenCalledWith({
-      argv: ["--task", task, "--continue"],
-    });
-
-    if (originalXdg === undefined) {
-      delete process.env.XDG_STATE_HOME;
-    } else {
-      process.env.XDG_STATE_HOME = originalXdg;
+      expect(code).toBe(0);
+      expect(parseLoopArgsMock).toHaveBeenCalledTimes(1);
+      expect(parseLoopArgsMock).toHaveBeenCalledWith([
+        "--task",
+        task,
+        "--continue",
+      ]);
+      expect(runLoopMock).toHaveBeenCalledTimes(1);
+      expect(runLoopMock).toHaveBeenCalledWith({
+        argv: ["--task", task, "--continue"],
+      });
+    } finally {
+      if (originalXdg === undefined) {
+        delete process.env.XDG_STATE_HOME;
+      } else {
+        process.env.XDG_STATE_HOME = originalXdg;
+      }
     }
   });
 });

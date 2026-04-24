@@ -1102,14 +1102,9 @@ export async function runExecutorAndAuditorStep(
     failureBudget.last_failure_kind = "env_blocked";
     failureBudget.last_failure_summary = envBlockedReason;
     if (status.consecutive_env_blocked >= 3) {
-      const proposalsPath = path.join(
-        path.dirname(statusPath),
-        "proposals.json",
-      );
-      const proposalsFile = loadProposals(proposalsPath);
       if (envBlockedBlockers.length > 0) {
         for (const blocker of envBlockedBlockers) {
-          proposalsFile.proposals.push(
+          stepProposalFile.proposals.push(
             createProposalEntry({
               source: "executor",
               cycle: step,
@@ -1129,7 +1124,7 @@ export async function runExecutorAndAuditorStep(
           );
         }
       } else {
-        proposalsFile.proposals.push(
+        stepProposalFile.proposals.push(
           createProposalEntry({
             source: "auditor",
             cycle: step,
@@ -1147,7 +1142,7 @@ export async function runExecutorAndAuditorStep(
           }),
         );
       }
-      saveProposals(proposalsPath, proposalsFile);
+      stepProposalChanged = true;
     }
   } else {
     status.consecutive_env_blocked = 0;
@@ -1222,11 +1217,6 @@ export async function runExecutorAndAuditorStep(
       console.error(
         `[opencode-orchestrator] auditor が未達と判定した要件: ${ids}`,
       );
-      const proposalsPath = path.join(
-        path.dirname(statusPath),
-        "proposals.json",
-      );
-      const proposalsFile = loadProposals(proposalsPath);
       for (const f of activeAudit.failed) {
         if (!f.reason) continue;
         const firstLine = String(f.reason).split(/\r?\n/, 1)[0];
@@ -1238,7 +1228,7 @@ export async function runExecutorAndAuditorStep(
         if (f.evidence_gaps && f.evidence_gaps.length > 0) {
           detailsParts.push(`Evidence gaps: ${f.evidence_gaps.join("; ")}`);
         }
-        proposalsFile.proposals.push(
+        stepProposalFile.proposals.push(
           createProposalEntry({
             source: "auditor",
             cycle: step,
@@ -1252,7 +1242,7 @@ export async function runExecutorAndAuditorStep(
           }),
         );
       }
-      saveProposals(proposalsPath, proposalsFile);
+      stepProposalChanged = true;
       forceTodoWriterNextStep = true;
     }
 

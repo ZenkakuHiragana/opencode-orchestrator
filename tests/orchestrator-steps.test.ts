@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 
 import type { LoopOptions } from "../src/cli-args.js";
 import { runOpencode } from "../src/orchestrator-process.js";
@@ -20,6 +20,55 @@ vi.mock("../src/orchestrator-process.js", () => ({
 }));
 
 const mockRunOpencode = runOpencode as unknown as ReturnType<typeof vi.fn>;
+
+let sharedStateDir = "";
+let sharedLogsDir = "";
+
+function setupSharedStepDirs(): void {
+  sharedStateDir = fs.mkdtempSync(
+    path.join(os.tmpdir(), "orch-steps-state-shared-"),
+  );
+  sharedLogsDir = fs.mkdtempSync(
+    path.join(os.tmpdir(), "orch-steps-logs-shared-"),
+  );
+}
+
+function cleanupSharedStepDirs(): void {
+  fs.rmSync(sharedStateDir, { recursive: true, force: true });
+  fs.rmSync(sharedLogsDir, { recursive: true, force: true });
+  sharedStateDir = "";
+  sharedLogsDir = "";
+}
+
+function stepLogPath(step: number): string {
+  return path.join(
+    sharedLogsDir,
+    `orch_step_${String(step).padStart(3, "0")}.txt`,
+  );
+}
+
+function auditLogPath(step: number): string {
+  return path.join(
+    sharedLogsDir,
+    `audit_step_${String(step).padStart(3, "0")}.jsonl`,
+  );
+}
+
+function sharedStatusPath(): string {
+  return path.join(sharedStateDir, "status.json");
+}
+
+function sharedProposalsPath(): string {
+  return path.join(sharedStateDir, "proposals.json");
+}
+
+beforeEach(() => {
+  setupSharedStepDirs();
+});
+
+afterEach(() => {
+  cleanupSharedStepDirs();
+});
 
 const baseOpts: LoopOptions = {
   task: "test-task",
@@ -80,13 +129,13 @@ describe("maybeRunTodoWriterStep", () => {
       baseOpts,
       1,
       "001",
-      "/tmp/state",
-      "/tmp/logs",
-      path.join("/tmp/state", "missing-acceptance-index.json"),
+      sharedStateDir,
+      sharedLogsDir,
+      path.join(sharedStateDir, "missing-acceptance-index.json"),
       "sess-1",
       [],
       status,
-      "/tmp/state/status.json",
+      sharedStatusPath(),
       0,
       false,
     );
@@ -617,13 +666,13 @@ describe("runExecutorAndAuditorStep", () => {
       1,
       "sess-1",
       [],
-      "/tmp/logs/orch_step_001.txt",
-      "/tmp/logs/audit_step_001.jsonl",
+      stepLogPath(1),
+      auditLogPath(1),
       status,
       statusPath,
       baseOpts.maxRestarts, // 既に上限
       false,
-      "/tmp/logs",
+      sharedLogsDir,
     );
 
     expect(res.abortLoop).toBe(true);
@@ -762,13 +811,13 @@ describe("runExecutorAndAuditorStep", () => {
       1,
       "sess-1",
       [],
-      "/tmp/logs/orch_step_001.txt",
-      "/tmp/logs/audit_step_001.jsonl",
+      stepLogPath(1),
+      auditLogPath(1),
       status,
       statusPath,
       0,
       false,
-      "/tmp/logs",
+      sharedLogsDir,
     );
 
     expect(res.abortLoop).toBe(false);
@@ -808,13 +857,13 @@ describe("runExecutorAndAuditorStep", () => {
       1,
       "sess-1",
       [],
-      "/tmp/logs/orch_step_001.txt",
-      "/tmp/logs/audit_step_001.jsonl",
+      stepLogPath(1),
+      auditLogPath(1),
       status,
       statusPath,
       0,
       false,
-      "/tmp/logs",
+      sharedLogsDir,
     );
 
     expect(res.abortLoop).toBe(false);
@@ -887,13 +936,13 @@ describe("runExecutorAndAuditorStep", () => {
         step,
         sessionId,
         [],
-        `/tmp/logs/orch_step_${String(step).padStart(3, "0")}.txt`,
-        `/tmp/logs/audit_step_${String(step).padStart(3, "0")}.jsonl`,
+        stepLogPath(step),
+        auditLogPath(step),
         status,
         statusPath,
         restartCount,
         false,
-        "/tmp/logs",
+        sharedLogsDir,
       );
 
       if (step < 3) {
@@ -950,17 +999,17 @@ describe("runExecutorAndAuditorStep", () => {
       1,
       "sess-1",
       [],
-      "/tmp/logs/orch_step_001.txt",
-      "/tmp/logs/audit_step_001.jsonl",
+      stepLogPath(1),
+      auditLogPath(1),
       status,
-      "/tmp/state/status.json",
+      sharedStatusPath(),
       0,
       false,
-      "/tmp/logs",
+      sharedLogsDir,
     );
 
     expect(res.forceTodoWriterNextStep).toBe(true);
-    const proposals = loadProposals(path.join("/tmp/state", "proposals.json"));
+    const proposals = loadProposals(sharedProposalsPath());
     expect(proposals.proposals.some((p) => p.kind === "need_replan")).toBe(
       true,
     );
@@ -1056,13 +1105,13 @@ describe("runExecutorAndAuditorStep", () => {
       3,
       "sess-1",
       [],
-      "/tmp/logs/orch_step_003.txt",
-      "/tmp/logs/audit_step_003.jsonl",
+      stepLogPath(3),
+      auditLogPath(3),
       status,
       statusPath,
       0,
       false,
-      "/tmp/logs",
+      sharedLogsDir,
     );
 
     expect(res.done).toBe(true);
@@ -1174,13 +1223,13 @@ describe("runExecutorAndAuditorStep", () => {
       4,
       "sess-1",
       [],
-      "/tmp/logs/orch_step_004.txt",
-      "/tmp/logs/audit_step_004.jsonl",
+      stepLogPath(4),
+      auditLogPath(4),
       status,
       statusPath,
       0,
       false,
-      "/tmp/logs",
+      sharedLogsDir,
     );
 
     expect(res.done).toBe(true);
@@ -1226,16 +1275,16 @@ describe("runExecutorAndAuditorStep", () => {
       6,
       "sess-1",
       [],
-      "/tmp/logs/orch_step_006.txt",
-      "/tmp/logs/audit_step_006.jsonl",
+      stepLogPath(6),
+      auditLogPath(6),
       status,
-      "/tmp/state/status.json",
+      sharedStatusPath(),
       0,
       false,
-      "/tmp/logs",
+      sharedLogsDir,
     );
 
-    const proposals = loadProposals(path.join("/tmp/state", "proposals.json"));
+    const proposals = loadProposals(sharedProposalsPath());
     expect(proposals.proposals.some((p) => p.kind === "need_replan")).toBe(
       true,
     );
@@ -1317,13 +1366,13 @@ describe("runExecutorAndAuditorStep", () => {
       8,
       "sess-1",
       [],
-      "/tmp/logs/orch_step_008.txt",
-      "/tmp/logs/audit_step_008.jsonl",
+      stepLogPath(8),
+      auditLogPath(8),
       status,
-      "/tmp/state/status.json",
+      sharedStatusPath(),
       0,
       false,
-      "/tmp/logs",
+      sharedLogsDir,
     );
 
     expect(res.done).toBe(false);
@@ -1398,13 +1447,13 @@ describe("runExecutorAndAuditorStep", () => {
       7,
       "sess-1",
       [],
-      "/tmp/logs/orch_step_007.txt",
-      "/tmp/logs/audit_step_007.jsonl",
+      stepLogPath(7),
+      auditLogPath(7),
       status,
       statusPath,
       0,
       false,
-      "/tmp/logs",
+      sharedLogsDir,
     );
 
     expect(res.abortLoop).toBe(false);
@@ -1436,13 +1485,13 @@ describe("runExecutorAndAuditorStep", () => {
       4,
       "sess-1",
       [],
-      "/tmp/logs/orch_step_004.txt",
-      "/tmp/logs/audit_step_004.jsonl",
+      stepLogPath(4),
+      auditLogPath(4),
       status,
-      "/tmp/state/status.json",
+      sharedStatusPath(),
       0,
       false,
-      "/tmp/logs",
+      sharedLogsDir,
     );
 
     expect(mockRunOpencode).toHaveBeenCalledTimes(1);
@@ -1482,13 +1531,13 @@ describe("runExecutorAndAuditorStep", () => {
       5, // current step is last_auditor_report.cycle + 1
       "sess-1",
       [],
-      "/tmp/logs/orch_step_005.txt",
-      "/tmp/logs/audit_step_005.jsonl",
+      stepLogPath(5),
+      auditLogPath(5),
       status,
       statusPath,
       0,
       false,
-      "/tmp/logs",
+      sharedLogsDir,
     );
 
     expect(mockRunOpencode).toHaveBeenCalledTimes(1);
@@ -1537,7 +1586,7 @@ describe("runExecutorAndAuditorStep", () => {
       statusPath,
       0,
       false,
-      "/tmp/logs",
+      sharedLogsDir,
     );
 
     expect(mockRunOpencode).toHaveBeenCalledTimes(1);
@@ -1582,7 +1631,7 @@ describe("runExecutorAndAuditorStep", () => {
       path.join(tmpState, "status.json"),
       0,
       false,
-      "/tmp/logs",
+      sharedLogsDir,
     );
 
     expect(res.abortLoop).toBe(true);
@@ -1627,7 +1676,7 @@ describe("runExecutorAndAuditorStep", () => {
       statusPath,
       0,
       false,
-      "/tmp/logs",
+      sharedLogsDir,
     );
 
     expect(res.done).toBe(false);
@@ -1673,7 +1722,7 @@ describe("runExecutorAndAuditorStep", () => {
       path.join(tmpState, "status.json"),
       0,
       false,
-      "/tmp/logs",
+      sharedLogsDir,
     );
 
     expect(status.failure_budget?.consecutive_verification_gaps).toBe(0);
@@ -1710,7 +1759,7 @@ describe("runExecutorAndAuditorStep", () => {
       statusPath,
       0,
       false,
-      "/tmp/logs",
+      sharedLogsDir,
     );
 
     expect(res.done).toBe(false);
@@ -1756,7 +1805,7 @@ describe("runExecutorAndAuditorStep", () => {
       statusPath,
       0,
       false,
-      "/tmp/logs",
+      sharedLogsDir,
     );
 
     expect(status.failure_budget?.consecutive_contract_gaps).toBe(2);
@@ -1793,7 +1842,7 @@ describe("runExecutorAndAuditorStep", () => {
       statusPath,
       0,
       false,
-      "/tmp/logs",
+      sharedLogsDir,
     );
 
     expect(res.abortLoop).toBe(false);
