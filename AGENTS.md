@@ -1,330 +1,339 @@
 # OpenCode Orchestrator Plugin エージェント向けルール
 
-このファイルは、OpenCode / 他のエージェント実行系がこのリポジトリで作業するときの共通ルールです。
-実際のアプリケーションロジックは別リポジトリ側にあり、このリポジトリは「オーケストレータ制御用スクリプトとツール」のみを持ちます。
+この文書は、このリポジトリで作業するエージェント向けの **repo-specific working agreement** です。
+一般的なコーディング常識ではなく、この repo 固有の制約、所有境界、安全ルール、更新時の注意点をまとめます。
 
-## ビルド / Lint / テスト
+日常的な作業では、まず **「まず守ること」** と **「日常開発の流れ」** を読んでください。
+プロンプトや command template を編集する場合だけ、後半の **「プロンプト設計ルール」** まで読めば十分です。
 
-- ビルド
-  - `package.json` / `tsconfig.json` はリポジトリルートにあります。
-  - CLI とプラグインは `src/**/*.ts` からビルドされます。
-  - 依存関係のインストール: `npm install`
-  - TypeScript ビルド: `npm run build`
-  - ビルド成果物は `dist/cli.js`（CLI）と `dist/index.js`（プラグイン）です。
+## この文書の役割
 
-- `.opencode` 配下
-  - `.opencode` はプロジェクトごとの OpenCode 設定ディレクトリとして扱います。
-  - `.opencode/tools/*.ts` は OpenCode 側が bun/ts-node 相当で解釈する前提で、個別に `tsc` する必要はありません。
+- 対象:
+  - この repo のコード、ドキュメント、プロンプト、コマンドテンプレートを編集するエージェント
+  - この repo の構造や ownership を短時間で確認したい開発者
+- 主な役割:
+  - 日常開発で守るべきルールをまとめる
+  - 所有境界を崩しやすい箇所を明示する
+  - prompt / command template を編集するときの落とし穴を防ぐ
+- この文書が **直接は担わない** もの:
+  - 実行時の system prompt の正本
+  - デプロイ先エージェントがそのまま読める runtime contract
 
-- ローカル開発用 CI ラッパ (`test-harness` ツール)
-  - `.opencode/tools/test-harness.ts` は、別リポジトリの CI スクリプトを叩くためのラッパツールです。
-  - Linux 側では `scripts/linux_ci.sh`、Windows 側では `scripts/windows_ci.ps1` を呼び出す想定です（本体はこのリポジトリにはありません）。
+## まず守ること
 
-- 推奨 Orchestrator ループ起動コマンド
-  - `npx opencode-orchestrator loop --task <task-key> "...大きな目標..."`
+以下は、この repo で作業するときの非交渉ルールです。
 
-- コード整形: `npm run format` ... **ビルド前に整形をお願いします。**
-- 単一テストの実行: `npm test`
+1. **勝手にコミットしない**
+   - コミットは、ユーザーが明示的に依頼したときだけ許可されます。
+   - `autocommit` ツールも opt-in 制です。`loop --commit` のような明示フラグ、または会話中の明示的なコミット依頼がある場合に限って使ってください。
+2. **ビルド前に整形する**
+   - `npm run format` を先に実行し、その後に `npm run build` を実行します。
+3. **ユーザー向けログ文言は i18n 経由にする**
+   - CLI / Orchestrator のログメッセージは、`src/i18n/messages.{ja,en}.ts` のメッセージ ID を `t("...")` 経由で出力してください。
+   - `console.error("...日本語...")` のような生文言の直書きは避けてください。
+4. **system prompt と custom command 本文は英語で書く**
+   - 日本語の自然文を prompt 本文に直接書かないでください。
+5. **prompt / command template に解決不能なローカルパスを書かない**
+   - 特に `resources/helper-commands.json` のような、この npm パッケージ内部のパスを本文に埋め込まないでください。
+   - 必要な情報は、TypeScript 側で JSON オブジェクトとして埋め込んで渡します。
+6. **役割境界を崩さない**
+   - Orchestrator / Refiner / Spec-Checker / Preflight / Todo-Writer / Executor / Auditor の責務をまたぐ変更は、意図を明確にして最小限に行ってください。
 
-- カスタムコマンド
-  - `orch-todo-write`, `orch-exec`, `orch-audit`, `orch-refine`, `orch-spec-check`, `orch-preflight` などが `commands/*.md` に定義されており、プラグインから自動登録されます。
-  - CLI からは `opencode run --command orch-todo-write ...` のように呼び出します。
+## 日常開発の流れ
 
-## コードスタイル / 設計ガイドライン
+### ビルド / テスト
 
-このリポジトリの TypeScript / シェル / PowerShell コードは、OpenCode プラグインおよびオーケストレータ用ユーティリティとして書かれています。以下の指針に従ってください。
+- 依存関係のインストール: `npm install`
+- 整形: `npm run format`
+- TypeScript ビルド: `npm run build`
+- テスト実行: `npm test`
 
-- 一般方針
-  - 変更は「最小限で意味のある差分」を心がけ、1 ステップで関連する処理をまとめて編集します。
-  - Orchestrator / Refiner / Spec-Checker / Preflight-Runner / Todo-Writer / Executor / Auditor の責務分担は崩さず、役割をまたぐ機能追加は慎重に行います。
-  - ログ/エラーメッセージは日本語メイン・英語補助の現在のスタイルを踏襲してください。
-  - CLI / Orchestrator のログメッセージは、必ず `src/i18n/messages.{ja,en}.ts` に定義したメッセージ ID を `t("...")` 経由で呼び出す形で出力してください。`console.error("...日本語...")` のように生のユーザー向け文言を直書きしないこと（既存コードに残っている箇所は、今後の編集時に少しずつ i18n 化していきます）。
-  - システムプロンプトとカスタムコマンドに記載するプロンプトは英語で書いてください。
-  - システムプロンプトやカスタムコマンド本文には、デプロイ先エージェントから見て解決不能なローカルファイルパスを直接書かないでください。特に `resources/helper-commands.json` のようなパスは記載禁止です。helper command の内容が必要な場合は、TypeScript 側で JSON オブジェクトをプロンプトへ埋め込んで渡してください。
+ビルド成果物:
 
-- TypeScript（`src/**/*.ts`)
-  - モジュール構造
-    - ルートの CLI/プラグインは NodeNext (ESM) を利用しています。`import fs from "node:fs"` のように `node:` プレフィックスを使用します。
-    - OpenCode ツールは `import { tool } from "@opencode-ai/plugin/tool";` のようなトップレベル import を使います。
-    - 内部モジュールを import するときは、`./autocommit.js` のように `.js` 拡張子まで書きます（NodeNext の制約）。
-  - 型
-    - `tsconfig.json` は `strict: true` です。暗黙の `any` を避け、パブリックな戻り値や外部とのインターフェースには明示的な型を付けます。
-  - エラーハンドリング
-    - ツールは失敗時に `{ ok: false, error, details }` を返す方針で、呼び出し側が判定しやすい形にします。
-    - CLI は致命的なエラー時に非 0 の exit code を返すようにし、`stderr` に人間向けメッセージを出します。
-  - 文字列 / ログ
-    - 変数展開が必要なログはテンプレートリテラル（バッククォート）を使用します。
-    - UTF-8 前提で、日本語ログと英語ログの混在を許容します。
-  - フォーマット
-    - インデントは 2 スペース、セミコロンあり。
-    - シングル/ダブルクォートは既存コードのスタイルに合わせます（このリポジトリではダブルクォート多め）。
+- `dist/cli.js` - CLI
+- `dist/index.js` - プラグイン
 
-## 5. 命名規則
+### `.opencode` 配下の扱い
+
+- `.opencode` はプロジェクトごとの OpenCode 設定ディレクトリとして扱います。
+- `.opencode/tools/*.ts` は OpenCode 側が bun / ts-node 相当で解釈する前提です。
+  個別に `tsc` する必要はありません。
+
+### ローカル開発用 CI ラッパ
+
+- `.opencode/tools/test-harness.ts` は、別リポジトリの CI スクリプトを叩くラッパです。
+- Linux では `scripts/linux_ci.sh`、Windows では `scripts/windows_ci.ps1` を呼ぶ想定です。
+- これらの本体はこの repo にはありません。
+
+### 推奨ループ起動コマンド
+
+- `npx opencode-orchestrator loop --task <task-key> "...大きな目標..."`
+
+### カスタムコマンド
+
+- `orch-todo-write`, `orch-exec`, `orch-audit`, `orch-refine`, `orch-spec-check`, `orch-preflight` などは `commands/*.md` に定義され、プラグインから自動登録されます。
+- CLI からは `opencode run --command orch-todo-write ...` のように呼び出します。
+
+## サーフェス別の編集ルール
+
+### TypeScript (`src/**/*.ts`)
+
+- ルートの CLI / プラグインは NodeNext (ESM) を使います。
+  - `import fs from "node:fs"` のように `node:` プレフィックスを使います。
+  - 内部モジュールの import では `./autocommit.js` のように `.js` 拡張子まで書きます。
+- OpenCode ツールでは `import { tool } from "@opencode-ai/plugin/tool";` のようなトップレベル import を使います。
+- `tsconfig.json` は `strict: true` です。
+  - 暗黙の `any` を避け、公開インターフェースには明示的な型を付けてください。
+- エラーハンドリング
+  - ツールは失敗時に `{ ok: false, error, details }` を返す方針です。
+  - CLI は致命的なエラー時に非 0 exit code を返し、`stderr` に人間向けメッセージを出します。
+- 文字列 / ログ
+  - 変数展開が必要なログはテンプレートリテラルを使います。
+  - UTF-8 前提です。日本語ログと英語ログの混在は許容します。
+- フォーマット
+  - インデントは 2 スペース、セミコロンあり。
+  - クォートは既存コードのスタイルに合わせます。この repo ではダブルクォートが多めです。
+
+### Shell / PowerShell
+
+- Bash
+  - 定数は `UPPER_SNAKE_CASE`
+  - 関数名は `lower_snake_case`
+- PowerShell
+  - 変数名は `PascalCase`
+  - 文字コード指定が必要な書き込みでは必ず `-Encoding UTF8` を付けてください。
+- Windows / PowerShell をまたぐ処理では、WSL パスと Windows パスの違いに注意してください。
+
+### Prompt / command template
+
+- 本文は英語で書きます。
+- 実行時に見えない前提を持ち込まないでください。
+- ローカルの内部パスを本文へ直書きしないでください。
+- 存在しない schema、過去専用の概念、未導入機能を先回りして書かないでください。
+
+詳しいルールは後半の「プロンプト設計ルール」を参照してください。
+
+## 命名とコミット
+
+### 命名規則
 
 - ファイル名
-  - ツール: `my-custom-tool.ts` のように `kebab-case`。
-  - エージェント: `orch-refiner.md`, `orch-executor.md` など単純な小文字名。`orch-` で始める。
-  - シェル / PowerShell: `orchestrator-loop.sh`, `Start-Orchestrator.ps1` のように用途を明確にします。
-
+  - ツール: `my-custom-tool.ts` のような `kebab-case`
+  - エージェント: `orch-refiner.md`, `orch-executor.md` などの小文字名
+  - シェル / PowerShell: 用途が分かる名前にする
 - 変数名 / 関数名
-  - TypeScript: `camelCase`（例: `buildAuthFromEnv`, `extractImageLinks`）。クラス/インターフェースは `PascalCase`。
-  - Bash: `UPPER_SNAKE_CASE` で定数、`lower_snake_case` で関数名。一時変数は短い `i`, `tmp` などで構いませんが、ログに現れるものはわかりやすい名前にします。
-  - PowerShell: `PascalCase`（例: `$RUN_ID`, `$SessionTitle`）。
+  - TypeScript: `camelCase`
+  - クラス / インターフェース: `PascalCase`
+  - Bash: 定数は `UPPER_SNAKE_CASE`、関数は `lower_snake_case`
+  - PowerShell: `PascalCase`
 
-- コミットガイドライン
-  - 勝手にコミットはしないでください。指示があったときのみ許可されます。
-  - コミットメッセージは `fix:`, `refactor:` などで始まる conventional commit style で、本文は英語、詳細コメントは日本語とします。
+### コミット規則
 
-## 6. エラー処理とフェイルセーフ / Git 操作
+- 勝手にコミットしないでください。
+- conventional commits を使います。
+  - 例: `fix:`, `refactor:`
+- 本文は英語、詳細コメントは日本語にします。
 
-- Orchestrator ループ
-  - 旧シェル版 `orchestrator-loop.sh` は Orchestrator / Auditor のハングや安全装置トリップを検出し、ウォッチドッグ + timeout で保護します。
-  - 新 CLI 版 `opencode-orchestrator loop` でも同様に `MAX_LOOP` / `MAX_RESTARTS` 相当の制御を行います。デフォルト値を変える場合は README とコメントを更新してください。
-  - planning gate のソース・オブ・トゥルースは `command-policy.json.summary` です。`status.json` は Executor / Auditor の進捗スナップショットであり、計画 readiness の最終判定を保持する場所ではありません。Planner が `status.json` を触る場合も、proposal 解消や failure-budget cleanup に結びつく保守的な更新に限ります。
-  - `status.json` には `failure_budget` も保存されます。`consecutive_verification_gaps` は `STEP_AUDIT: ready` に `STEP_VERIFY: ready` が伴わないケースのみ連続カウントし、通常の非監査ステップではリセットされます。
-  - Executor プロトコルでは各 step で `STEP_INTENT:` と `STEP_VERIFY:` を必ず出力する前提です。ID 列はカンマ区切りで、`R1,R2` / `R1, R2` の両方を許容します。
-  - `--bwrap-skip-command-policy` / `--dangerously-skip-command-policy` では、**execution-phase 向けに `command-policy` という概念自体を露出してはいけません**。
-    - 対象は少なくとも `orch-todo-writer` / `orch-executor` / `orch-exec` command template / それらに添付する state ファイルや per-step prompt です。
-    - skip モードでは `command-policy.json` を添付しないだけでは不十分で、`status.json` / `todo.json` / `spec.md` / `acceptance-index.json` / 追加 `--file` 入力 / proposal summary / failure summary などを経由した **語句・フィールド・要約のリーク** も防いでください。
-    - 具体的には `command-policy`, `command-policy.json`, `command_ids`, `command_id`, policy 由来の stale summary を execution-phase 側へそのまま渡さず、必要なら `explicit command metadata`, `available commands`, `host-permitted commands` のような中立表現へ rewrite / sanitize してください。
-    - skip モードの execution-phase prompt / 添付物 / step prompt を編集するときは、「policy を無視する」のではなく「その概念を見せない」ことを完了条件にしてください。
+## 運用と安全ルール
 
-## 7. エディタ / 補完ツールルール
+### ループと state の原則
 
-- AI コーディングエージェントへの追加指示
-  - Windows / PowerShell にまたがる処理では、文字コードとパス（WSL パス vs Windows パス）に注意し、PowerShell スクリプトには必ず `-Encoding UTF8` を指定します。
-  - ローカルの `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/logs` / `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state` は長期的な状態を持つため、手動編集や削除は慎重に行ってください（特に `acceptance-index.json` は他エージェントの前提になります）。
+- 旧シェル版 `orchestrator-loop.sh` は、Orchestrator / Auditor のハングや安全装置トリップを watchdog + timeout で保護します。
+- 新 CLI 版 `opencode-orchestrator loop` でも、`MAX_LOOP` / `MAX_RESTARTS` 相当の制御を行います。
+  - デフォルト値を変える場合は README とコメントも更新してください。
+- planning gate のソース・オブ・トゥルースは `command-policy.json.summary` です。
+- `status.json` は Executor / Auditor の進捗スナップショットであり、計画 readiness の最終判定を保持する場所ではありません。
+  - Planner が `status.json` を触る場合も、proposal 解消や failure-budget cleanup に結びつく保守的な更新に限ります。
 
-## 8. エージェントごとの「見えているもの」とプロンプト設計ガイド
+### Executor / Auditor プロトコル
 
-プロンプトを編集するときは、「各エージェントから実際に見えている情報」と「見えていない情報」を明確に区別してください。
-ここに書いていない前提を system prompt に書くと、将来の仕様変更や別リポジトリで破綻しやすくなります。
+- `status.json` には `failure_budget` も保存されます。
+- `consecutive_verification_gaps` は、`STEP_AUDIT: ready` に `STEP_VERIFY: ready` が伴わないケースだけを連続カウントします。
+  - 通常の非監査ステップではリセットされます。
+- Executor プロトコルでは、各 step で `STEP_INTENT:` と `STEP_VERIFY:` を必ず出力する前提です。
+- ID 列はカンマ区切りで、`R1,R2` と `R1, R2` の両方を許容します。
 
-### 8.1 共通の前提
+### skip-command-policy 系モード
+
+`--bwrap-skip-command-policy` / `--dangerously-skip-command-policy` では、**execution-phase に `command-policy` という概念自体を露出してはいけません**。
+
+- 対象:
+  - `orch-todo-writer`
+  - `orch-executor`
+  - `orch-exec` command template
+  - それらに添付する state ファイルや per-step prompt
+- `command-policy.json` を添付しないだけでは不十分です。
+  - `status.json`, `todo.json`, `spec.md`, `acceptance-index.json`, 追加 `--file` 入力, proposal summary, failure summary などを経由した語句・フィールド・要約のリークも防いでください。
+- 次の語を execution-phase 側へそのまま渡さないでください。
+  - `command-policy`
+  - `command-policy.json`
+  - `command_ids`
+  - `command_id`
+  - policy 由来の stale summary
+- 必要なら、次のような中立表現へ書き換えます。
+  - `explicit command metadata`
+  - `available commands`
+  - `host-permitted commands`
+- 現行実装では `src/orchestrator-session.ts` 側でも skip-safe な一時添付ファイルを生成し、JSON から `command_id(s)` を落としつつ文字列中の `command-policy` を `command metadata` に書き換えています。
+  - prompt だけ直して添付物を放置しないでください。
+- 完了条件は「policy を無視する」ことではなく、**その概念を見せないこと**です。
+
+### 長期 state の扱い
+
+- ローカルの `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/logs` / `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state` は長期状態です。
+- 手動編集や削除は慎重に行ってください。
+  - 特に `acceptance-index.json` は他エージェントの前提になります。
+
+## Ownership クイックリファレンス
+
+### 主要 owner
+
+- Planner
+  - 主に `discovery-packet.md` と `command-policy.json.summary` を扱う
+  - strict readiness を最終化する
+- Refiner
+  - `acceptance-index.json`, `spec.md`, `command-policy.json.commands[]` の唯一のオーナー
+- Spec-Checker
+  - `acceptance-index.json` / `spec.md` / `command-policy.json` を read-only で監査する
+  - routed failure を Planner または Refiner に返す
+- Todo-Writer
+  - `todo.json` の canonical structure を作る
+- Executor
+  - コード / テスト / ドキュメントを変更し、todo の status を更新する
+- Auditor
+  - ファイルは変更せず、監査結果だけを返す
+- preflight-cli
+  - permission.bash をローカル評価し、`commands[].availability` と `summary.available_helper_commands` を更新する
+
+### やってはいけないことの要約
+
+- Planner
+  - `acceptance-index.json` / `spec.md` / `command-policy.json.commands[]` を直接編集させない
+  - Executor 用の具体的実装手順を列挙させない
+- Refiner
+  - コードやテストを編集させない
+  - 他エージェントのプロトコルを上書きさせない
+- Spec-Checker
+  - コードや state ファイルを変更させない
+  - severity を machine gate として扱わせない
+- Todo-Writer
+  - `acceptance-index.json` / `spec.md` / `command-policy.json` を変更させない
+  - コード編集や `bash` 実行をさせない
+  - 人間に質問させない
+- Executor
+  - `acceptance-index.json` / `spec.md` / `command-policy.json` や canonical todo 構造を変更させない
+  - 人間へ質問させない
+  - 許可されていない危険な `bash` / `git commit` を実行させない
+- Auditor
+  - コードや state ファイルを変更させない
+  - 他エージェントへの依頼をさせない
+
+## プロンプト設計ルール
+
+ここから先は、`agents/*.md` や `commands/*.md` を編集する場合に必要なルールです。
+日常的なコード編集だけなら、ここより下は必要な箇所だけ参照してください。
+
+### 実行時に見えているものだけを前提にする
 
 どの orchestrator エージェントも、実行時に見えている情報は概ね次の 4 つに限られます。
 
-- 自分の system prompt 本文（`agents/<name>.md`）
+- 自分の system prompt 本文
 - TypeScript 側から埋め込まれた JSON schema / 設定ブロック
-- ホストが渡す system / developer / user メッセージ（タスク説明や高レベルゴール）
+- ホストが渡す system / developer / user メッセージ
 - ツール一覧と、そのツール経由で読めるファイル・コマンド結果
 
-したがって、system prompt に書いてよい「事実」は、**この視野で観測可能なものだけ**です。
+したがって、prompt に書いてよい「事実」は **この視野で観測可能なものだけ** です。
 
-- OK 例
-  - 「acceptance-index.json は `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/acceptance-index.json` にある」
-  - 「このエージェントは `read` / `glob` / `grep` を使ってリポジトリを読む」
-  - 「この prompt の末尾に貼られた JSON schema に従って acceptance-index.json を書く」
-- NG 例
-  - 「AGENTS.md に書いてある〜」とだけ書いて、その内容を prompt 内に反映しない
-  - 「社内ポリシーでは〜」のように、エージェントから参照できない前提を暗黙に使う
+- 良い例
+  - `acceptance-index.json` のパスを、実際にそのエージェントが read できる前提として書く
+  - 利用可能なツールを明示する
+  - prompt 末尾に貼った schema を根拠に出力フォーマットを指定する
+- 悪い例
+  - 「AGENTS.md に書いてあるので従え」とだけ書く
+  - 社内ポリシーのような runtime で見えない抽象ルールを持ち込む
 
-### 8.2 エージェントごとの視野と禁止事項（プロンプトを書くときのチェックリスト）
+### この repo の事情と、配布先での視野を混同しない
 
-以下は、主要 orchestrator エージェントごとに「知っているもの / 読めるもの / 書けるもの」の実装事実を簡単にまとめたものです。
-system prompt を編集する際は、ここから外れる権限を勝手に与えないようにしてください。
+- AGENTS.md や README は、この repo の開発者には見えますが、配布先で動くエージェントには見えていません。
+- 必要なルールは、system prompt 本文か埋め込み JSON として実際に渡してください。
 
-#### orch-planner（Planner）
+### 言語ルール
 
-- 主な読み取り対象
-  - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/discovery-packet.md`
-  - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/acceptance-index.json`
-  - 同 `spec.md` / `command-policy.json` / `status.json`
-  - リポジトリ内のコード／ドキュメント（`read` / `glob` / `grep`）
-  - Spec-Checker / Preflight の結果 JSON（`task` ツール / `preflight-cli` 経由）
-- 主な書き込み対象
-  - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/discovery-packet.md`
-  - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/command-policy.json`
-    - `summary` 配下の strict readiness metadata を最終化する。
-  - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/proposals.json`
-    - live proposal queue 自体は loop actors が populate し、Planner は replanning 時のクリア／調整だけを行う。
-  - `$XDG_STATE_HOME/opencode/orchestrator/<task-name>/state/status.json`
-    - planning gate 用ではなく、proposal 解消や failure-budget cleanup に伴う保守的な更新だけを行いうる。
-- 呼べるもの
-  - `task` → `orch-refiner`, `orch-spec-checker`
-  - `preflight-cli` ツール → Refiner が定義した command descriptors と helper commands について、permission.bash ルールをローカル評価し、`command-policy.json.commands[].availability` と `command-policy.json.summary.available_helper_commands` を更新する。Planner はその結果を読んで `command-policy.json.summary` の strict readiness を最終化する。
-  - `bash` → `npx opencode-orchestrator loop ...` のような CLI の起動のみ
-- プロンプトで **やってはいけない指示**
-  - `acceptance-index.json` / `spec.md` / `command-policy.json.commands[]` の内容を直接編集させる
-  - Executor 用の具体的な実装手順や todo を列挙させる
+- **system prompt 本文は英語のみ** で書いてください。
+- 日本語で出力させたい場合も、英語で指示してください。
+  - 例: `Write a short Japanese summary ...`
+- prompt 本文に日本語の自然文や日本語例文を直接書かないでください。
+- この repo の「日本語メイン」は開発者向けルールであり、配布先のホストに日本語 UI を強制するものではありません。
 
-#### orch-refiner（Requirements Refiner）
+### 見えない前提を持ち込まない
 
-- 主な読み取り対象
-  - 高レベルゴール（user/developer メッセージ）
-  - `acceptance-index.json` / `spec.md` / `command-policy.json` / `status.json`（既存があれば）
-  - リポジトリ全体（`read` / `glob` / `grep`）
-  - `orch-local-investigator` / `orch-public-researcher` からの調査結果（`task` ツール経由）
-- 主な書き込み対象（**唯一のオーナー**）
-  - `acceptance-index.json`
-  - `spec.md`
-  - `command-policy.json.commands[]`（コマンド定義そのもの）
-  - fresh/current policy を書くときに必要な `command-policy.json.summary` フィールドの初期化
-- プロンプトで **してはいけない指示**
-  - コードやテスト、設定ファイルの編集（Refiner に `edit` / `bash` 権限は無い）
-  - 他エージェント（Planner / Executor / Todo-Writer）のプロトコルや出力フォーマットを上書きするような指示
+- 次のような情報を暗黙の前提にしないでください。
+  - この repo の内部ドキュメントにだけ書かれている方針
+  - 会社ポリシーなど、エージェントから参照できないルール
+  - 過去バージョンだけに存在した schema フィールド
+- 必要なら、prompt 本文や埋め込み JSON に実際に書き下ろしてください。
 
-#### orch-todo-writer（Todo-Writer）
+### 存在しない機能や過去専用概念を書かない
 
-- 主な読み取り対象
-  - `acceptance-index.json` / `spec.md`
-  - `todo.json`（既存 canonical todo）
-  - `status.json`（特に `failure_budget`）
-- 主な書き込み対象
-  - `todo.json`（`orch_todo_write` ツール経由）
-    - `mode=planner_replace_canonical` / `planner_add_todos` / `planner_update_todos` のみ
-  - セッション Todo（`todowrite`）… UI ミラー用
-- プロンプトで **してはいけない指示**
-  - `acceptance-index.json` / `spec.md` / `command-policy.json` を変更させる
-  - コード／テスト／ドキュメントの編集や `bash` コマンドの実行
-  - 人間に質問させる（非対話エージェント）
+- 今の schema / ツール定義に存在しない概念は prompt に出しません。
+- 「以前はこうだった」「将来戻すかもしれない」は開発者向け文書にだけ残してください。
+- 未導入機能を `If you see X ...` のような条件文で先回りして書かないでください。
 
-#### orch-executor（Executor）
+### 条件付きルールは、現在見えているものにだけ使う
 
-- 主な読み取り対象
-  - `acceptance-index.json` / `spec.md` / `command-policy.json` / `todo.json` / （必要に応じて）`status.json`
-  - リポジトリ内のコード／テスト／ドキュメント
-- 主な書き込み対象
-  - リポジトリ内のコード／テスト／ドキュメント（`edit` / `patch` / `write`）
-  - orchestrator `artifacts/*.json`（`investigation_v1` / `verification_v1` などの schema）
-  - `todo.json` の `status` / `result_artifacts`（`orch_todo_write(mode=executor_update_statuses)`）
-  - セッション Todo（`todowrite`）
-- プロンプトで **してはいけない指示**
-  - `acceptance-index.json` / `spec.md` / `command-policy.json` や canonical todo 構造の変更
-  - 人間への質問（Executor には human in the loop は居ない）
-  - `git commit` や危険な `bash` コマンドの実行（command-policy.json と permission.bash が許可していないもの）
+`If you see X ...` のような条件付きルールを使ってよいのは、次の両方を満たす場合だけです。
 
-#### orch-auditor（Auditor）
+1. X が **現在の resources / schema / ツール定義のどこかに存在する**
+2. X の有無がホストやタスクごとに変わり得る
 
-- 主な読み取り対象
-  - `spec.md` / `acceptance-index.json` / `status.json`
-  - orchestrator `artifacts/*`（Executor が生成した JSON）
-  - Git 差分／ログ、テストログなど（`bash` の read-only コマンド群）
-- 書き込み対象
-  - ファイルへの書き込みは一切しない
-- 出力
-  - 1 行 JSON `{ done, requirements[] }` のみ
-- プロンプトで **してはいけない指示**
-  - コードや state ファイルを変更させる
-  - 他エージェントに「〜してもらう」ような依頼をさせる
+これに当てはまらない架空の X は、条件付きでも prompt に書かないでください。
 
-#### preflight-cli（Preflight）
+### パスや内部実装を露出しない
 
-- preflight-cli ツール（TypeScript 実装）
-  - Planner 専用ツール。Refiner が定義した command descriptors と helper commands について、OpenCode 設定から得られる `permission.bash` の実効ルールをローカル評価し、その結果を `command-policy.json.commands[].availability` と `command-policy.json.summary.available_helper_commands` に反映する。
-  - strict readiness の最終判定は Planner が `command-policy.json.summary` に書く。`status.json` は planning gate のソース・オブ・トゥルースではない。
-  - system prompt には **preflight-cli 自身の実装詳細**（ログファイルのパスなど）を書かない。Planner から見えるのは「preflight-cli を呼ぶと per-command の availability が分かり、Planner が readiness summary を確定できる」というレベルまで。
+- デプロイ先エージェントから解決不能なローカルパスを system prompt や command template に書かないでください。
+- 特に `resources/helper-commands.json` のようなパッケージ内部パスは記載禁止です。
 
-### 8.3 「この repo の事情」と「配布先での視野」を混同しない
+### バージョンごとの一貫性
 
-- AGENTS.md や README は、この npm パッケージの開発者向けには便利ですが、実際のエージェント実行時には **見えていません**。
-- system prompt で「AGENTS.md によると〜」とだけ書いても、実行時には参照できず役に立ちません。
-  - 必要なルールは、system prompt にそのまま英語で書き下ろし、もしくは JSON schema として埋め込んでください。
+- system prompt は、その時点の schema / ツール / プロトコル仕様を正確に反映したスナップショットとして扱います。
+- 仕様が変わったら、古い説明に引きずられずに更新してください。
 
-### 8.4 「見えていないもの」に関する注意・禁止事項の書き方
+## 条件分岐レビューのチェックリスト
 
-- 禁止事項を書くときは、「エージェントから直接測定できる事実」に紐づけてください。
-  - 良い例: "You MUST NOT modify acceptance-index.json; it is owned by the Refiner agent and is only exposed read-only to you via the read tool."（実際に `edit` 権限が無い）
-  - 良くない例: "Follow the company security policy" のように、実行時にエージェントから参照できない抽象ルールだけを示す。
-- `--bwrap-skip-command-policy` / `--dangerously-skip-command-policy` 用の prompt では、execution-phase 側に `command-policy` の存在を前提とした禁止や条件分岐を書かないでください。
-  - skip モードで必要なのは「policy を見たうえで無視する」指示ではなく、**policy という語や field 名を受け取らなくても成立する中立な command-availability 指示**です。
-  - そのため、skip モード用に prompt / command template / 添付ファイルを変形するときは、block 削除だけでなく、block 外の文言・要約・status/proposal 由来テキスト・添付 JSON field まで含めてリークの有無を確認してください。
+条件分岐を書くときは、次を確認してください。
 
-この節の目標は、「将来プロンプトをいじるときに、**どこまで書いてよくて、どこから先は危ないか**」を一目で思い出せるリファレンスにすることです。未知の前提を持ち込みそうになったときは、一度ここに立ち返ってから system prompt を編集してください。
+1. この条件に必要な入力は、その分岐点で本当に見えているか
+2. 別スキルや別エージェントの役割を前借りしていないか
+3. 判定不能時の安全側デフォルトがあるか
+4. 誤判定しても安全側に倒れるか
+5. 曖昧語や価値判断語を、観測可能な条件に分解できているか
 
-### 8.5 条件分岐の監査ルール
+避けるべき条件の例:
 
-- system prompt や command template の条件文は、その時点で実際に見えている情報だけで判定できるものにしてください。
-- 判定に別スキルの出力や未実施の診断が必要なら、その条件をその場所に書かず、先に診断工程へ分離してください。
-- `helps quality`、`clear enough`、`needs research`、`ready for implementation` のような曖昧語は、そのまま条件にせず、観測可能な入力や安全側デフォルトに分解してください。
-- 判定不能な条件は、特殊分岐ではなく「既定の経路に留める」「前提診断を先に行う」のどちらかで安全側に倒してください。
-- `compaction`、hidden state、ファイルの存在だけを根拠にした条件分岐は避けてください。
+- 別スキルの診断結果を前提にした分岐
+- 他エージェントが所有する state の解釈結果を前提にした分岐
+- task identity のような continuation 判定を、ファイルの存在だけで決める分岐
+- `helps quality`, `clear enough`, `needs research`, `ready for implementation` のような曖昧語そのままの分岐
 
-#### 8.5.1 条件分岐レビューの実務チェックリスト
+安全側デフォルトの例:
 
-- 各条件文について、まず「この分岐点で実際に見えている入力」を箇条書きで列挙してください。
-  - 列挙できない入力に依存しているなら、その条件はその場では使えません。
-- 次のどれかに当てはまる条件は、その場の `if` 文に直接書かず、上流に分離してください。
-  - 別スキルの出力を要する診断結果
-  - 他エージェントが所有する state の解釈結果
-  - 継続作業の同一性のような task identity 判定
-  - 「品質向上に寄与するか」のような比較軸未定義の価値判断
-- 条件が価値判断語を含む場合は、そのまま使わず観測可能な代理条件へ分解してください。
-  - 例: `needs research` → 「公開仕様 / 公式推奨 / upstream 慣行 / source-backed evaluation method のいずれかが必要か」
-  - 例: `ready for implementation` → 「要求成果物が存在するか」「未解決事項が acceptance / command-policy / verification strategy を変えるか」
-- task identity や continuation 判定では、ファイルの存在だけを証拠にしないでください。
-  - 現在の会話で task key や高レベル goal が同定できないなら、既存 artifact は候補にとどめ、必要なら先に確認質問や recovery 診断を行ってください。
-- 判定不能時の安全側デフォルトを必ず書いてください。
-  - 既定経路に留まる
-  - 1 問だけ確認する
-  - 先に診断スキルへ送る
-    のどれかに落ちるようにします。
-- レビュー時は最低でも次の 5 問に `yes` と答えられるか確認してください。
-  1. この条件に必要な入力は、この時点で全て可視か。
-  2. この条件は、別スキルや別エージェントの役割を前借りしていないか。
-  3. 判定不能時の安全側デフォルトが明記されているか。
-  4. 誤判定しても安全側に倒れるか。
-  5. 曖昧語や価値判断語を、観測可能な条件または診断工程に分解できているか。
+- 既定経路に留まる
+- 1 問だけ確認する
+- 先に診断スキルへ送る
 
-## 8. システムプロンプト / コマンドテンプレート執筆ガイドライン
+## 補足: Preflight と skip-mode で特に崩してはいけないこと
 
-Orchestrator 用のシステムプロンプト (`agents/*.md`) やカスタムコマンドテンプレート (`commands/*.md`) を編集する際は、次の方針に従ってください。
+### preflight-cli
 
-### 8.1 言語に関するルール
+- Planner 専用ツールです。
+- Refiner が定義した command descriptors と helper commands について、plugin config hook で取り込んだ **実効 `permission.bash`** をローカル評価します。
+  - global 設定 + executor agent 設定を含みます。
+- permission が未定義なら OpenCode の permissive default に合わせて `allow` 扱いになります。
+- strict readiness の最終判定は Planner が `command-policy.json.summary` に書きます。
+  - `status.json` は planning gate のソース・オブ・トゥルースではありません。
 
-- **システムプロンプト本文は英語のみで書いてください。**
-  - 日本語で書かれたテキストをエージェントに出力させたい場合も、
-    - `Write a short Japanese summary ...` のように「日本語で書かせること」を英語で説明します。
-  - システムプロンプト内に日本語の自然文や日本語の例文（日本語のコードポイントを含む文字列）を直接書かないでください。
-- このリポジトリの「日本語メイン」の方針はあくまで **この repo の開発者向けルール** であり、
-  - npm パッケージとして配布された先のホスト環境に対して「日本語 UI を強制する」ものではありません。
-  - エージェントの出力言語は、ホスト側の system / developer / user メッセージで上書きされ得る「デフォルト」として記述してください。
+### skip-mode の prompt 編集
 
-### 8.2 エージェントから見えない前提を持ち込まない
-
-Orchestrator エージェントは npm パッケージとして任意のユーザーリポジトリにインストールされ、実行時に見える情報はおおむね次のものに限られます。
-
-- このシステムプロンプト本文（`agents/<name>.md`）
-- TypeScript 側から埋め込まれた JSON schema / 設定ブロック
-- ホストが渡すメッセージ（上位の system / developer / user プロンプト）
-- ツール一覧と、ホストワークスペース上のファイル / コマンド結果
-
-したがって、プロンプトに書いてよい前提は **この視野で観測可能なものだけ** です。
-
-- 次のような「見えないもの」を暗黙の前提にしてはいけません。
-  - このリポジトリの `AGENTS.md` や内部ドキュメントにだけ書かれているポリシー
-  - 「このリポジトリの global language policy」「会社のポリシー」など、エージェントからは参照できないルール
-  - 過去バージョンでのみ存在した schema フィールド
-- どうしてもその情報が必要な場合は、**実際にプロンプト本文か埋め込み JSON として書き下ろす** こと。
-  - それができないなら、そのルールは system プロンプトには書かないでください。
-
-### 8.3 「存在しない機能」「過去バージョン」の扱い
-
-- 「今の schema / ツール定義に存在しない概念」は system プロンプトに登場させません。
-  - 「以前はこうだった」「将来戻すかもしれない」といった履歴や仮定は、AGENTS.md や設計ドキュメント側にのみ書きます。
-- 「将来導入されるかもしれない」機能について、先回りして conditional な文言
-  - 例: `If you see any tool name that starts with ...` など
-    を **schema / resources にまだ存在しない段階で** プロンプトに埋め込むことは避けてください。
-  - 機能を本当に導入するタイミングで、そのバージョンのプロンプトもまとめて設計し直します。
-
-### 8.4 条件付きルールの使い方
-
-`If you see X ...` のような条件付きルールを使ってよいのは、次の条件を両方満たす場合だけです。
-
-1. X が **現在のバージョンの resources / schema / ツール定義のどこかに存在する** こと。
-2. X の有無がホストやタスクごとに変化し得る（ある run では見えるが、別の run では見えない）こと。
-
-これに該当しない「架空の X」（過去専用の概念や、まだ導入されていない案）は、条件付きであっても system プロンプトには書きません。
-
-### 8.5 パスや内部実装の露出を避ける
-
-- 既存ルールのとおり、システムプロンプトやコマンドテンプレート本文には、
-  デプロイ先エージェントから見て解決不能なローカルファイルパスを直接書かないでください。
-  - 特に `resources/helper-commands.json` など、**この npm パッケージの内部構造に依存したパス**は記載禁止です。
-  - 必要であれば TypeScript から JSON オブジェクトとして埋め込むか、schema を末尾に貼り付けます。
-
-### 8.6 バージョンごとの一貫性
-
-- システムプロンプトは「その時点の schema / ツール / プロトコル仕様」を正確に反映したスナップショットとして扱います。
-  - 仕様が変わったら、そのバージョン用のプロンプトを **過去の記述に引きずられずに** 更新してください。
-  - マイグレーションノートや「以前はこうだった」という説明は、AGENTS.md や report.md など開発者向け文書にのみ残します。
+- execution-phase 側では `command-policy` 概念を見せないことが要件です。
+- prompt、command template、添付ファイル、state 要約のすべてを対象にリークを確認してください。
+- block を削るだけでなく、block 外の語句や stale summary も確認してください。
