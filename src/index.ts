@@ -13,11 +13,7 @@ import {
   rewritePromptPaths,
 } from "./orchestrator-paths.js";
 import { loadMarkdownBody } from "./markdown.js";
-import {
-  getPreflightRunnerBashPermissionSource,
-  type PreflightRunnerBashPermissionSource,
-} from "./preflight-permission-store.js";
-import { evaluateEffectiveBashPermission } from "./preflight-cli.js";
+import { setPreflightRunnerBashPermissionSource } from "./preflight-permission-store.js";
 
 export const OrchestratorPlugin: Plugin = async (input) => {
   // Store the OpenCode client so that tools can call the API directly
@@ -211,6 +207,19 @@ export const OrchestratorPlugin: Plugin = async (input) => {
           agent: meta.agent,
           subtask: meta.subtask,
         };
+      }
+
+      // Wire the effective bash permission source for preflight-cli.
+      // Preflight evaluates whether commands described in command-policy will be
+      // available to the executor at runtime.  We extract the global bash
+      // permission and the executor agent's specific bash permission so that
+      // preflight can resolve availability without spawning child processes.
+      {
+        const globalBash = (config as Record<string, any>).permission?.bash;
+        const agentBash = (config as Record<string, any>).agent?.[
+          "orch-executor"
+        ]?.permission?.bash;
+        setPreflightRunnerBashPermissionSource({ globalBash, agentBash });
       }
     },
     // Executor/Todo-Writer 用の追加フックは現在使用していない。

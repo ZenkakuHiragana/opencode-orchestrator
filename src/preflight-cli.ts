@@ -239,6 +239,11 @@ export function evaluateEffectiveBashPermission(
   command: string,
   source: { globalBash: unknown; agentBash: unknown },
 ): PermissionEvaluationResult {
+  // OpenCode's default when no permission.bash is configured is "allow"
+  // (permissive defaults). This early-return preserves that behavior.
+  // The plugin's config hook is responsible for populating the permission
+  // store with actual config values so that user-configured restrictions
+  // take effect. See index.ts config() → setPreflightRunnerBashPermissionSource.
   if (source.globalBash === undefined && source.agentBash === undefined) {
     return { decision: "allow", determined: true, matchedPattern: null };
   }

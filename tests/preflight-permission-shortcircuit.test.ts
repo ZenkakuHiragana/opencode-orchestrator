@@ -83,7 +83,7 @@ describe("preflight permission evaluation", () => {
     });
   });
 
-  it("defaults to allow only when global/agent are both undefined", () => {
+  it("defaults to allow when global/agent are both undefined (OpenCode permissive default)", () => {
     expect(
       evaluateEffectiveBashPermission("ls -l", {
         globalBash: undefined,
@@ -115,7 +115,7 @@ describe("preflight permission evaluation", () => {
 });
 
 describe("preflight-cli short-circuit with effective permission", () => {
-  it("short-circuits to allow when both permission sources are missing", async () => {
+  it("short-circuits to allow when both permission sources are missing (OpenCode default)", async () => {
     const prevXdg = process.env.XDG_STATE_HOME;
     const xdg = fs.mkdtempSync(path.join(os.tmpdir(), "preflight-short-all-"));
     process.env.XDG_STATE_HOME = xdg;
@@ -152,6 +152,8 @@ describe("preflight-cli short-circuit with effective permission", () => {
         }[];
       };
 
+      // OpenCode defaults to "allow" when no permission.bash is configured.
+      // This matches the permissive defaults documented in the official docs.
       expect(parsed.status).toBe("ok");
       const cmd = parsed.results.find((r) => r.id === "cmd-missing");
       expect(cmd).toBeTruthy();
