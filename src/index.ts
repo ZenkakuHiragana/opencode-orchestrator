@@ -70,14 +70,16 @@ export const OrchestratorPlugin: Plugin = async (input) => {
     if (!body) return body;
     const open = `<${tagName}>`;
     const close = `</${tagName}>`;
-    let start = body.indexOf(open);
-    if (start === -1) return body;
-    let end = body.indexOf(close, start);
-    if (end === -1) return body;
-    // 単純化: 最初のペアだけ削除する。複数ブロックを想定する場合はループに拡張可能。
-    const before = body.slice(0, start);
-    const after = body.slice(end + close.length);
-    return before + after;
+    let out = body;
+    while (true) {
+      const start = out.indexOf(open);
+      if (start === -1) return out;
+      const end = out.indexOf(close, start);
+      if (end === -1) return out;
+      const before = out.slice(0, start);
+      const after = out.slice(end + close.length);
+      out = before + after;
+    }
   };
 
   // NOTE: We intentionally type this as `any` so that we can conditionally
@@ -131,6 +133,7 @@ export const OrchestratorPlugin: Plugin = async (input) => {
           process.env.OPENCODE_ORCH_EXEC_SKIP_COMMAND_POLICY === "1"
         ) {
           prompt = stripTaggedBlock(prompt, "command_policy");
+          prompt = stripTaggedBlock(prompt, "command_identifiers");
         }
 
         // For the auditor agent, also attach the effective bash permission map so that

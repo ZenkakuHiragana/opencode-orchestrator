@@ -441,17 +441,13 @@ describe("prompt JSON schema placeholders", () => {
     );
     expect(todoWriterPrompt).toContain("single Executor step");
     expect(todoWriterPrompt).toContain(
-      "If no such metadata is attached for this pass",
+      "Leave `execution_contract.command_ids` unset unless the current pass already includes an explicit,",
     );
     expect(executorPrompt).toContain(
       "completion unit that should normally finish within one Executor step",
     );
-    expect(executorPrompt).toContain(
-      "When no explicit command catalog or id mapping is attached for this pass",
-    );
-    expect(executorPrompt).toContain(
-      "The strict command-catalog rules below apply only when an explicit command catalog is actually supplied for this pass.",
-    );
+    expect(executorPrompt).toContain("any attached files you actually read");
+    expect(executorPrompt).toContain("opaque command template");
     expect(executorPrompt).not.toContain(
       "If not supplied, you can use any commands.",
     );
@@ -510,7 +506,7 @@ describe("prompt JSON schema placeholders", () => {
       "Use `blocked` when the missing evidence path cannot be completed from the currently visible plan, permissions, or environment",
     );
     expect(executorPrompt).toContain(
-      "Treat a blocker as `clearly environmental` only when the visible command catalog, tool permissions, or command results show",
+      "Treat a blocker as `clearly environmental` only when the visible attached files, tool permissions, or command results show",
     );
 
     expect(todoWriterPrompt).toContain(
@@ -527,7 +523,7 @@ describe("prompt JSON schema placeholders", () => {
       "Treat a replanning pass as `no-op` whenever the observable todo structure",
     );
     expect(todoWriterPrompt).toContain(
-      "same story revision` means the mapping is supported by the current attached todo state",
+      "same story revision` means the mapping is supported by the current attached `command-policy.json`",
     );
     expect(todoWriterPrompt).toContain(
       "Use `## Notes` when the limitation is only an operator-facing caveat",
@@ -549,9 +545,7 @@ describe("prompt JSON schema placeholders", () => {
     expect(execTemplate).toContain(
       "if actionability or the evidence path is not established, emit an explicit",
     );
-    expect(execTemplate).toContain(
-      "if no explicit command-id mapping is supplied for this run, rely only on",
-    );
+    expect(execTemplate).not.toContain("command-id mapping");
     expect(execTemplate).toContain(
       "Return only the required Executor `STEP_*` lines",
     );

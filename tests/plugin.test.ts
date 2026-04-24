@@ -41,6 +41,15 @@ describe("OrchestratorPlugin", () => {
     expect(typeof config.agent["orch-executor"].prompt).toBe("string");
     expect(config.command["orch-exec"]).toBeTruthy();
     expect(typeof config.command["orch-exec"].template).toBe("string");
+    expect(config.agent["orch-executor"].prompt).toContain(
+      "opaque command template",
+    );
+    expect(config.agent["orch-executor"].prompt).toContain(
+      "each rendered fragment must appear verbatim as one segment",
+    );
+    expect(config.command["orch-exec"].template).not.toContain(
+      "literal execution contract",
+    );
   });
 
   it("embeds helper command JSON into planner/spec-checker prompts", async () => {
@@ -92,21 +101,20 @@ describe("OrchestratorPlugin", () => {
       expect(typeof todoWriterPrompt).toBe("string");
       expect(typeof execTemplate).toBe("string");
 
-      expect(executorPrompt).toContain(
-        "When no explicit command catalog is attached",
-      );
-      expect(executorPrompt).toContain(
-        "report `-` in `STEP_CMD` / `STEP_VERIFY` command-id slots whenever no current command id exists",
-      );
+      expect(executorPrompt).toContain("any attached files you actually read");
       expect(executorPrompt).not.toContain(
         "Treat `command-policy.json` as the **single source of truth** for allowed commands and helpers.",
       );
-      expect(executorPrompt).not.toContain(
-        "You may compose shell scripts **only** from commands explicitly allowed by this task’s `command-policy.json`.",
-      );
+      expect(executorPrompt).not.toContain("opaque command template");
       expect(executorPrompt).not.toContain("command-policy");
+      expect(executorPrompt).not.toContain("command_ids");
       expect(todoWriterPrompt).not.toContain("command-policy");
+      expect(todoWriterPrompt).not.toContain("command_ids");
+      expect(todoWriterPrompt).not.toContain(
+        "current attached `command-policy.json`",
+      );
       expect(execTemplate).not.toContain("command-policy");
+      expect(execTemplate).not.toContain("host-permitted");
     } finally {
       if (previous === undefined) {
         delete process.env.OPENCODE_ORCH_EXEC_SKIP_COMMAND_POLICY;
