@@ -15,7 +15,6 @@ export const messagesJa = {
     "  list  [--json]   orchestrator タスク一覧または proposal 一覧を表示\n" +
     '  exec  [--allow-fs-read <path>] [--allow-fs-write <path>] [--file <path>] ["helper-source"]\n' +
     "  clear --task <task-name> --proposals [-y]   指定タスクの proposal を削除\n" +
-    "  install [-g|--global]   OpenCode 設定ファイルにプラグインを追加\n" +
     "\n" +
     "共通オプション:\n" +
     "  -h, --help       このヘルプを表示\n" +
@@ -339,33 +338,6 @@ export const messagesJa = {
   "cli.clear.info.updated":
     '[opencode-orchestrator] タスク "{task}" の proposal を更新しました。',
 
-  "cli.install.usage":
-    "使い方: opencode-orchestrator install [options]\n" +
-    "\n" +
-    "OpenCode の設定ファイル (opencode.json) にこのプラグインを追加します。\n" +
-    "\n" +
-    "オプション:\n" +
-    "  (指定なし)      カレントディレクトリの ./opencode.json を作成/更新\n" +
-    "  -g, --global    XDG_CONFIG_HOME/opencode/opencode.json または ~/.config/opencode/opencode.json を作成/更新\n",
-
-  "cli.install.error.invalid_config":
-    "[opencode-orchestrator] ERROR: 設定ファイルを JSON として読み取れませんでした: {path}",
-
-  "cli.install.error.invalid_config_hint":
-    "[opencode-orchestrator] 元のファイルを変更せずに終了します。JSON として有効な形式に修正してから再度実行してください。",
-
-  "cli.install.error.config_dir":
-    "[opencode-orchestrator] ERROR: 設定ディレクトリの作成に失敗しました: {dir}",
-
-  "cli.install.info.already_enabled":
-    '[opencode-orchestrator] すでに "{plugin}" が有効化されています: {path}',
-
-  "cli.install.info.created":
-    "[opencode-orchestrator] 新しい OpenCode 設定ファイルを作成しました: {path}",
-
-  "cli.install.info.updated":
-    "[opencode-orchestrator] 設定ファイルを更新しました: {path}",
-
   "cli.completion.subcommand.run": "タスク用の orchestrator ループを開始します",
 
   "cli.completion.subcommand.resume": "最近のタスクやセッションを再開します",
@@ -392,9 +364,6 @@ export const messagesJa = {
 
   "cli.completion.subcommand.clear":
     "タスクに紐づく proposal の状態を更新します",
-
-  "cli.completion.subcommand.install":
-    "このプラグインを OpenCode 設定ファイルに追加します",
 
   "cli.completion.option.task": "orchestrator タスクキーを指定します",
 

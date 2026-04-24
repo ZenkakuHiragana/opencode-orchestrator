@@ -15,7 +15,6 @@ export const messagesEn = {
     "  list    [--json]   Show orchestrator task list or proposals for a task\n" +
     '  exec    [--allow-fs-read <path>] [--allow-fs-write <path>] [--file <path>] ["helper-source"]\n' +
     "  clear   --task <task-name> --proposals [-y]   Update proposals recorded for a task\n" +
-    "  install [-g|--global]   Add this plugin to an OpenCode config file\n" +
     "\n" +
     "Common options:\n" +
     "  -h, --help       Show this help\n" +
@@ -100,33 +99,6 @@ export const messagesEn = {
     "\n" +
     "The trailing prompt argument is optional. When omitted, a default prompt derived from\n" +
     "spec.md / acceptance-index.json is used.\n",
-
-  "cli.install.usage":
-    "Usage: opencode-orchestrator install [options]\n" +
-    "\n" +
-    "Add this plugin to an OpenCode config file (opencode.json).\n" +
-    "\n" +
-    "Options:\n" +
-    "  (default)       Create/update ./opencode.json in the current directory\n" +
-    "  -g, --global    Create/update XDG_CONFIG_HOME/opencode/opencode.json or ~/.config/opencode/opencode.json\n",
-
-  "cli.install.error.invalid_config":
-    "[opencode-orchestrator] ERROR: Failed to read config as JSON: {path}",
-
-  "cli.install.error.invalid_config_hint":
-    "[opencode-orchestrator] The original file was not changed. Please fix it as valid JSON and try again.",
-
-  "cli.install.error.config_dir":
-    "[opencode-orchestrator] ERROR: Failed to create config directory: {dir}",
-
-  "cli.install.info.already_enabled":
-    '[opencode-orchestrator] "{plugin}" is already enabled in: {path}',
-
-  "cli.install.info.created":
-    "[opencode-orchestrator] Created a new OpenCode config file: {path}",
-
-  "cli.install.info.updated":
-    "[opencode-orchestrator] Updated OpenCode config file: {path}",
 
   "cli.clear.error.no_target":
     "[opencode-orchestrator] clear: nothing to do; specify --proposals or --resolve/--dismiss.",
@@ -389,9 +361,6 @@ export const messagesEn = {
   "cli.completion.subcommand.exec": "Run a constrained helper script",
 
   "cli.completion.subcommand.clear": "Update proposals for a task",
-
-  "cli.completion.subcommand.install":
-    "Add this plugin to an OpenCode config file",
 
   "cli.completion.option.task": "Specify the orchestrator task key",
 

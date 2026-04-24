@@ -92,12 +92,24 @@ flowchart LR
 
 ## クイックスタート
 
-日常的な利用では、短い CLI 名の `ococ` を使う前提で読むのが分かりやすいです。
-長い名前の `opencode-orchestrator` も互換エイリアスとして使えます。
+> [!NOTE]
+> OpenCode に以下のように伝えるとこのREADMEを読んでセットアップしてくれるはずです。
+>
+> ```text
+> read & follow https://www.npmjs.com/package/@zenorg/opencode-orchestrator
+> ```
+
+> [!NOTE]
+> LLM がこの README を使って導入を代行する場合は、手順 1 から 2.5 までだけを実行してください。
+>
+> - 各手順に選択肢がある場合は、`question` ツールで必ずユーザーに確認する
+> - 質問するときは、推奨案を先に示す
+> - 手順 2.5 が終わったら停止してユーザーに引き継ぐ
+> - 手順 3 以降は導入後の使い方の説明なので、LLM は代行しない
 
 ### 前提条件
 
-導入前に、次を用意してください。
+導入前に次を用意してください。
 
 - Node.js 18 以上
 - npm
@@ -107,19 +119,49 @@ flowchart LR
 
 ### 1. OpenCode にプラグインを登録する
 
+> LLM メモ: `question` で以下を尋ねてください:
+>
+> 1. OpenCode へグローバルに登録する (推奨)
+> 2. カレントディレクトリに登録する
+
 ```bash
-# グローバルに有効化する
-npx @zenorg/opencode-orchestrator install -g
+# グローバル インストール
+opencode plugin -g @zenorg/opencode-orchestrator
 
 # カレントディレクトリだけで有効化する
-npx @zenorg/opencode-orchestrator install
+opencode plugin @zenorg/opencode-orchestrator
 ```
 
 ### 2. CLI をインストールする
 
+> LLM メモ: ここでは step 1 で選んだスコープを引き継いでください。
+
 ```bash
+# グローバル インストール
 npm install -g @zenorg/opencode-orchestrator
-ococ --help
+
+# カレントディレクトリにインストール
+npm install @zenorg/opencode-orchestrator
+
+# 動作確認
+npx ococ --help
+```
+
+### 2.5 シェル補完を登録する（任意）
+
+必要なら、CLI を入れたあとでシェル補完を有効化できます。
+
+> LLM メモ: この任意ステップを実行するかどうかを尋ねてください。実行しないことに決まったか、シェル補完の登録をしたらここで停止して、以降のステップについて案内してください。
+
+```bash
+# bash
+echo 'eval "$(ococ completion bash)"' >> ~/.bashrc
+```
+
+```powershell
+# PowerShell
+'ococ completion powershell | Out-String | Invoke-Expression' |
+  Out-File -FilePath $PROFILE -Encoding UTF8 -Append
 ```
 
 ### 3. OpenCode を再起動する
@@ -133,45 +175,18 @@ OpenCode を再起動し、Tab でエージェントを切り替えて
 ここで要件、制約、必要コマンド、実行可否が整理されます。
 
 実行前に、計画フェーズと実行フェーズで必要なコマンドを
-`opencode.json` の権限設定で許可してください。
-
-最初に迷いやすい点は次の 2 つです。
-
-- どのサブエージェントを他エージェントから見せるか
-- どのシェルコマンドを許可するか
-
-前者は `permission.orchestrator`、後者は `permission.bash` で調整します。
-必要なコマンドはタスクごとに異なるため、まずは Planner の案内に従ってください。
+`opencode.json` の `permission.bash` で許可してください。
 
 ### 5. 実行フェーズを始める
 
-通常は高レベルコマンドの `run` を使います。
+`npx ococ run` を使います。
 
 ここで使う `<task-key>` は、Planner が扱っているタスク名と同じものです。
 迷ったときは `ococ list` や `ococ status --task <task-key>` で確認してください。
 
 ```bash
-ococ run --task <task-key>
+npx ococ run -t <task-key>
 ```
-
-低レベル API を直接使いたい場合は `loop` でも始められます。
-
-```bash
-ococ loop --task <task-key>
-```
-
-### LLM にセットアップを任せる場合
-
-OpenCode に次のプロンプトを渡すと、導入作業の入口として使えます。
-
-```text
-read & follow https://www.npmjs.com/package/@zenorg/opencode-orchestrator
-```
-
-> [!NOTE]
-> LLM が導入作業を代替する場合は、グローバルインストールにするか、
-> カレントディレクトリ限定にするかをユーザーに確認してください。
-> OpenCode TUI で作業している場合は `question` ツールを使う想定です。
 
 ## よく使うコマンド
 
@@ -190,12 +205,11 @@ read & follow https://www.npmjs.com/package/@zenorg/opencode-orchestrator
 
 ### 低レベルコマンド
 
-細かく制御したいときは、従来どおりの低レベルコマンドも使えます。
+細かく制御したいときは、低レベルコマンドも使えます。
 
 - `ococ loop --task <task>`
 - `ococ list`
 - `ococ clear`
-- `ococ install`
 
 ## シェル補完
 
@@ -230,10 +244,10 @@ ococ completion powershell | Out-String | Invoke-Expression
 
 ## 設定
 
-最初に意識すべき設定は、次の 2 つです。
+opencode.json に書き込むことで反映される設定は次の 2 つです。
 
 - `permission.orchestrator`: 他エージェントから見える orchestrator サブエージェントの制御
-- `permission.bash`: 計画フェーズと実行フェーズで使うコマンドの許可
+- `permission.bash`: (OpenCode 標準設定) 計画フェーズと実行フェーズで使うコマンドの許可
 
 `permission.bash` で何を許可すべきかはタスクごとに変わります。
 README では固定の推奨セットは示さず、Planner が提示する内容に合わせて設定する前提にしています。

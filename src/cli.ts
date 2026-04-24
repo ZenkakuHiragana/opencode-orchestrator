@@ -23,11 +23,6 @@ import {
   printClearUsage,
   runClear,
 } from "./orchestrator-clear.js";
-import {
-  parseInstallArgs,
-  printInstallUsage,
-  runInstall,
-} from "./orchestrator-install.js";
 import { parseAuditResult } from "./orchestrator-audit.js";
 import { t } from "./i18n/messages.js";
 import { runRunCommand } from "./orchestrator-run.js";
@@ -54,12 +49,6 @@ export {
   printClearUsage,
   runClear,
 } from "./orchestrator-clear.js";
-export {
-  parseInstallArgs,
-  printInstallUsage,
-  runInstall,
-} from "./orchestrator-install.js";
-
 function readPackageVersion(): string {
   const pkg = JSON.parse(
     fs.readFileSync(new URL("../package.json", import.meta.url), "utf-8"),
@@ -82,8 +71,7 @@ export async function runCli(argv: string[]): Promise<number> {
     subcommand !== "loop" &&
     subcommand !== "list" &&
     subcommand !== "exec" &&
-    subcommand !== "clear" &&
-    subcommand !== "install"
+    subcommand !== "clear"
   ) {
     if (args.includes("--help") || args.includes("-h")) {
       printUsage();
@@ -111,10 +99,6 @@ export async function runCli(argv: string[]): Promise<number> {
     }
     if (subcommand === "clear") {
       printClearUsage();
-      return 0;
-    }
-    if (subcommand === "install") {
-      printInstallUsage();
       return 0;
     }
   }
@@ -187,12 +171,6 @@ export async function runCli(argv: string[]): Promise<number> {
   if (actualSubcommand === "clear") {
     const opts = parseClearArgs(args);
     await runClear(opts);
-    return 0;
-  }
-
-  if (actualSubcommand === "install") {
-    const opts = parseInstallArgs(args);
-    await runInstall(opts);
     return 0;
   }
 

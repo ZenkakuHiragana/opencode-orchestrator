@@ -69,11 +69,6 @@ function getSubcommandCandidates(): CompletionCandidate[] {
       value: "clear",
       description: t("cli.completion.subcommand.clear"),
     },
-    {
-      type: "subcommand",
-      value: "install",
-      description: t("cli.completion.subcommand.install"),
-    },
   ];
 }
 
@@ -230,7 +225,6 @@ export async function runCompleteCommand(
     "list",
     "exec",
     "clear",
-    "install",
   ]);
 
   const subcommand = args[0];
