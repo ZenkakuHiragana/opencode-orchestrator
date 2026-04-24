@@ -484,7 +484,7 @@ Preflight-Runner が `commands[].availability` と `summary.available_helper_com
 - 目的: OpenCode から安全に Git コミットを作るためのラッパ
 - 用途: `opencode-orchestrator loop --commit` 引数を指定した時、実行フェーズ完了時に自動的にコミットする。
 - 特徴:
-  - **明示的に指示しない限り利用されません。**（そのようにプロンプトを指定している、という意味です）
+  - **明示的に指示しない限り利用されません。**ただし、ユーザーが明示的にコミットを求めた場合は利用できます。
     - 「use autocommit」などと指示するとそれまでの変更内容からもっともらしいコミットメッセージでコミットします。
   - conventional commits (`type: message`) 形式でコミットメッセージを組み立て
   - 引数 `files[]` に指定されたパスのみをコミット対象にする

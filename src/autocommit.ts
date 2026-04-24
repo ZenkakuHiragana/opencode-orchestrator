@@ -161,9 +161,10 @@ const autocommitTool: ToolDefinition = tool({
   description:
     "Create a git commit for specified files using conventional commits (with safety blacklist). " +
     "IMPORTANT: Do NOT use this tool unless the system prompt or agent description explicitly " +
-    "instructs you to use it. Some users do not want agents to interact with git. " +
-    "If the instructions do not mention autocommit, use `bash` with `git` commands instead " +
-    "or ask the user before committing.",
+    "instructs you to use it, or the user explicitly requests a commit. Some users do not " +
+    "want agents to interact with git. If the instructions do not mention autocommit and the " +
+    "user has not explicitly requested a commit, use `bash` with `git` commands instead or " +
+    "ask the user before committing.",
   args: {
     type: z
       .enum([

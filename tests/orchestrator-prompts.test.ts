@@ -2,8 +2,18 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildExecutorPrompt,
+  buildCommitPrompt,
   buildTodoWriterPrompt,
 } from "../src/orchestrator-prompts.js";
+
+describe("buildCommitPrompt", () => {
+  it("allows autocommit when the user explicitly asks for a commit", () => {
+    const prompt = buildCommitPrompt();
+
+    expect(prompt).toContain("user explicitly asks for a commit");
+    expect(prompt).toContain("autocommit");
+  });
+});
 
 describe("buildExecutorPrompt", () => {
   it("includes failed requirement prioritization from auditor report", () => {
