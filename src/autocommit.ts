@@ -94,10 +94,10 @@ type GitResult = {
   stderr: string;
 };
 
-async function runGit(args: string[]): Promise<GitResult> {
+async function runGit(args: string[], cwd = process.cwd()): Promise<GitResult> {
   return new Promise<GitResult>((resolve) => {
     const child = spawn("git", args, {
-      cwd: process.cwd(),
+      cwd,
       stdio: ["ignore", "pipe", "pipe"],
     });
 
@@ -126,6 +126,14 @@ async function runGit(args: string[]): Promise<GitResult> {
       resolve({ exitCode: code ?? 0, stdout, stderr });
     });
   });
+}
+
+async function resolveGitWorkTreeRoot(): Promise<
+  GitResult & { root?: string }
+> {
+  const result = await runGit(["rev-parse", "--show-toplevel"]);
+  const root = result.exitCode === 0 ? result.stdout.trim() : undefined;
+  return { ...result, root: root || undefined };
 }
 
 // Global autocommit logger: writes JSONL entries under the orchestrator base
@@ -201,19 +209,36 @@ const autocommitTool: ToolDefinition = tool({
     _context: unknown,
   ) {
     const { type, message, files, details } = args;
+    const gitRoot = await resolveGitWorkTreeRoot();
     logAutocommit({
       event: "execute_start",
       cwd: process.cwd(),
+      repoRoot: gitRoot.root,
       type,
       message,
       files,
     });
+    if (gitRoot.exitCode !== 0 || !gitRoot.root) {
+      logAutocommit({
+        event: "git_root_resolution_error",
+        args: ["rev-parse", "--show-toplevel"],
+        exitCode: gitRoot.exitCode,
+        stdout: gitRoot.stdout,
+        stderr: gitRoot.stderr,
+      });
+      return JSON.stringify({
+        ok: false,
+        error: "git rev-parse --show-toplevel failed",
+        out: gitRoot.stdout + gitRoot.stderr,
+      });
+    }
+    const repoRoot = gitRoot.root;
     // 1) 変更ファイル一覧を git diff + git ls-files ベースで収集
     //    - diff --name-only / diff --cached --name-only で追跡ファイルの変更
     //    - ls-files --others --exclude-standard で untracked ファイル
     const changed = new Set<string>();
 
-    const unstaged = await runGit(["diff", "--name-only"]);
+    const unstaged = await runGit(["diff", "--name-only"], repoRoot);
     if (unstaged.exitCode !== 0) {
       logAutocommit({
         event: "git_diff_error",
@@ -234,7 +259,10 @@ const autocommitTool: ToolDefinition = tool({
       if (p) changed.add(p);
     }
 
-    const stagedAll = await runGit(["diff", "--cached", "--name-only"]);
+    const stagedAll = await runGit(
+      ["diff", "--cached", "--name-only"],
+      repoRoot,
+    );
     if (stagedAll.exitCode !== 0) {
       logAutocommit({
         event: "git_diff_error",
@@ -255,11 +283,10 @@ const autocommitTool: ToolDefinition = tool({
       if (p) changed.add(p);
     }
 
-    const untracked = await runGit([
-      "ls-files",
-      "--others",
-      "--exclude-standard",
-    ]);
+    const untracked = await runGit(
+      ["ls-files", "--others", "--exclude-standard"],
+      repoRoot,
+    );
     if (untracked.exitCode !== 0) {
       logAutocommit({
         event: "git_ls_files_error",
@@ -323,7 +350,10 @@ const autocommitTool: ToolDefinition = tool({
     }
 
     // 4) 既にステージング済みのファイルがある場合は、予期せぬコミットを避けるためにチェック
-    const stagedList = await runGit(["diff", "--cached", "--name-only"]);
+    const stagedList = await runGit(
+      ["diff", "--cached", "--name-only"],
+      repoRoot,
+    );
     if (stagedList.exitCode !== 0) {
       return JSON.stringify({
         ok: false,
@@ -349,7 +379,7 @@ const autocommitTool: ToolDefinition = tool({
     // 5) allowed に含まれるファイルのうち、まだステージされていないものだけをステージング
     const toStage = allowed.filter((p) => !alreadyStaged.includes(p));
     for (const path of toStage) {
-      const addRes = await runGit(["add", "--", path]);
+      const addRes = await runGit(["add", "--", path], repoRoot);
       if (addRes.exitCode !== 0) {
         logAutocommit({
           event: "git_add_failed",
@@ -368,7 +398,10 @@ const autocommitTool: ToolDefinition = tool({
     }
 
     // 6) ステージングされたファイルを確認
-    const stagedList2 = await runGit(["diff", "--cached", "--name-only"]);
+    const stagedList2 = await runGit(
+      ["diff", "--cached", "--name-only"],
+      repoRoot,
+    );
     if (stagedList2.exitCode !== 0) {
       return JSON.stringify({
         ok: false,
@@ -402,7 +435,7 @@ const autocommitTool: ToolDefinition = tool({
     const commitArgs = trimmedDetails
       ? ["commit", "-m", fullMessage, "-m", trimmedDetails]
       : ["commit", "-m", fullMessage];
-    const commit = await runGit(commitArgs);
+    const commit = await runGit(commitArgs, repoRoot);
     if (commit.exitCode !== 0) {
       logAutocommit({
         event: "git_commit_failed",
@@ -418,7 +451,7 @@ const autocommitTool: ToolDefinition = tool({
       });
     }
 
-    const rev = await runGit(["rev-parse", "HEAD"]);
+    const rev = await runGit(["rev-parse", "HEAD"], repoRoot);
     if (rev.exitCode !== 0) {
       logAutocommit({
         event: "git_rev_parse_failed",

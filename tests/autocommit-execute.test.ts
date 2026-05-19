@@ -72,6 +72,65 @@ describe("autocommit tool execute", () => {
     expect(log.stdout.trim()).toBe("chore: add ok file");
   });
 
+  it("creates a commit when invoked from a subdirectory", async () => {
+    writeFile(path.join(repoDir, "src", "nested.txt"), "hello\n");
+    process.chdir(path.join(repoDir, "src"));
+
+    const mod = await import("../src/autocommit.js");
+    const tool = mod.default;
+
+    const resRaw = await tool.execute(
+      {
+        type: "chore",
+        message: "add nested file",
+        files: ["src/nested.txt"],
+      },
+      {} as any,
+    );
+    const res = JSON.parse(resRaw) as { ok: boolean; head?: string };
+    expect(res.ok).toBe(true);
+    expect(typeof res.head).toBe("string");
+
+    const log = run("git", ["log", "-1", "--pretty=%s"], repoDir);
+    expect(log.stdout.trim()).toBe("chore: add nested file");
+  });
+
+  it("creates a commit in a linked worktree", async () => {
+    const worktreeDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), "autocommit-worktree-"),
+    );
+    fs.rmSync(worktreeDir, { recursive: true, force: true });
+    run("git", ["worktree", "add", "-b", "feature", worktreeDir], repoDir);
+    try {
+      writeFile(path.join(worktreeDir, "feature.txt"), "feature\n");
+      process.chdir(worktreeDir);
+
+      const mod = await import("../src/autocommit.js");
+      const tool = mod.default;
+
+      const resRaw = await tool.execute(
+        {
+          type: "chore",
+          message: "worktree commit",
+          files: ["feature.txt"],
+        },
+        {} as any,
+      );
+      const res = JSON.parse(resRaw) as { ok: boolean; head?: string };
+      expect(res.ok).toBe(true);
+      expect(typeof res.head).toBe("string");
+
+      const worktreeLog = run("git", ["log", "-1", "--pretty=%s"], worktreeDir);
+      expect(worktreeLog.stdout.trim()).toBe("chore: worktree commit");
+
+      const mainLog = run("git", ["log", "-1", "--pretty=%s"], repoDir);
+      expect(mainLog.stdout.trim()).toBe("chore: init");
+    } finally {
+      process.chdir(repoDir);
+      run("git", ["worktree", "remove", "--force", worktreeDir], repoDir);
+    }
+  });
+
   it("refuses when index has staged files outside requested set", async () => {
     writeFile(path.join(repoDir, "a.txt"), "a\n");
     writeFile(path.join(repoDir, "b.txt"), "b\n");
