@@ -128,10 +128,10 @@ async function runGit(args: string[], cwd = process.cwd()): Promise<GitResult> {
   });
 }
 
-async function resolveGitWorkTreeRoot(): Promise<
-  GitResult & { root?: string }
-> {
-  const result = await runGit(["rev-parse", "--show-toplevel"]);
+async function resolveGitWorkTreeRoot(
+  cwd = process.cwd(),
+): Promise<GitResult & { root?: string }> {
+  const result = await runGit(["rev-parse", "--show-toplevel"], cwd);
   const root = result.exitCode === 0 ? result.stdout.trim() : undefined;
   return { ...result, root: root || undefined };
 }
@@ -203,16 +203,30 @@ const autocommitTool: ToolDefinition = tool({
       .array(z.string())
       .nonempty()
       .describe("Paths to include in the commit (relative to repo root)"),
+    cwd: z
+      .string()
+      .optional()
+      .describe(
+        "Optional directory inside the target git worktree. Relative paths are resolved from the current working directory.",
+      ),
   },
   async execute(
-    args: { type: string; message: string; files: string[]; details?: string },
+    args: {
+      type: string;
+      message: string;
+      files: string[];
+      details?: string;
+      cwd?: string;
+    },
     _context: unknown,
   ) {
-    const { type, message, files, details } = args;
-    const gitRoot = await resolveGitWorkTreeRoot();
+    const { type, message, files, details, cwd } = args;
+    const targetCwd = cwd ? path.resolve(process.cwd(), cwd) : process.cwd();
+    const gitRoot = await resolveGitWorkTreeRoot(targetCwd);
     logAutocommit({
       event: "execute_start",
       cwd: process.cwd(),
+      targetCwd,
       repoRoot: gitRoot.root,
       type,
       message,
@@ -222,6 +236,7 @@ const autocommitTool: ToolDefinition = tool({
       logAutocommit({
         event: "git_root_resolution_error",
         args: ["rev-parse", "--show-toplevel"],
+        targetCwd,
         exitCode: gitRoot.exitCode,
         stdout: gitRoot.stdout,
         stderr: gitRoot.stderr,

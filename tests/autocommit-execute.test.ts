@@ -95,6 +95,31 @@ describe("autocommit tool execute", () => {
     expect(log.stdout.trim()).toBe("chore: add nested file");
   });
 
+  it("creates a commit when invoked outside the repo with explicit cwd", async () => {
+    const parentDir = path.dirname(repoDir);
+    writeFile(path.join(repoDir, "src", "explicit.txt"), "hello\n");
+    process.chdir(parentDir);
+
+    const mod = await import("../src/autocommit.js");
+    const tool = mod.default;
+
+    const resRaw = await tool.execute(
+      {
+        type: "chore",
+        message: "add explicit cwd file",
+        files: ["src/explicit.txt"],
+        cwd: path.basename(repoDir),
+      },
+      {} as any,
+    );
+    const res = JSON.parse(resRaw) as { ok: boolean; head?: string };
+    expect(res.ok).toBe(true);
+    expect(typeof res.head).toBe("string");
+
+    const log = run("git", ["log", "-1", "--pretty=%s"], repoDir);
+    expect(log.stdout.trim()).toBe("chore: add explicit cwd file");
+  });
+
   it("creates a commit in a linked worktree", async () => {
     const worktreeDir = fs.mkdtempSync(
       path.join(os.tmpdir(), "autocommit-worktree-"),
@@ -122,6 +147,42 @@ describe("autocommit tool execute", () => {
 
       const worktreeLog = run("git", ["log", "-1", "--pretty=%s"], worktreeDir);
       expect(worktreeLog.stdout.trim()).toBe("chore: worktree commit");
+
+      const mainLog = run("git", ["log", "-1", "--pretty=%s"], repoDir);
+      expect(mainLog.stdout.trim()).toBe("chore: init");
+    } finally {
+      process.chdir(repoDir);
+      run("git", ["worktree", "remove", "--force", worktreeDir], repoDir);
+    }
+  });
+
+  it("creates a commit in an explicitly targeted linked worktree", async () => {
+    const parentDir = path.dirname(repoDir);
+    const worktreeDir = path.join(parentDir, "wt", "topic-branches", "feature");
+    fs.mkdirSync(path.dirname(worktreeDir), { recursive: true });
+    run("git", ["worktree", "add", "-b", "feature", worktreeDir], repoDir);
+    try {
+      writeFile(path.join(worktreeDir, "feature-explicit.txt"), "feature\n");
+      process.chdir(parentDir);
+
+      const mod = await import("../src/autocommit.js");
+      const tool = mod.default;
+
+      const resRaw = await tool.execute(
+        {
+          type: "chore",
+          message: "explicit worktree commit",
+          files: ["feature-explicit.txt"],
+          cwd: path.relative(parentDir, worktreeDir),
+        },
+        {} as any,
+      );
+      const res = JSON.parse(resRaw) as { ok: boolean; head?: string };
+      expect(res.ok).toBe(true);
+      expect(typeof res.head).toBe("string");
+
+      const worktreeLog = run("git", ["log", "-1", "--pretty=%s"], worktreeDir);
+      expect(worktreeLog.stdout.trim()).toBe("chore: explicit worktree commit");
 
       const mainLog = run("git", ["log", "-1", "--pretty=%s"], repoDir);
       expect(mainLog.stdout.trim()).toBe("chore: init");
