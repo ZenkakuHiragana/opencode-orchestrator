@@ -4,7 +4,7 @@ export const messagesEn = {
     "\n" +
     "High-level subcommands (recommended):\n" +
     "  run        Start an orchestrator loop for a task (short alias: ococ run)\n" +
-    "  resume     Resume the most relevant recent task/session\n" +
+    "  resume     Resume the most recent session for a task\n" +
     "  status     Show a high-level summary and next actions for a task\n" +
     "  doctor     Run environment-wide diagnostics for orchestrator usage\n" +
     "  fix        Explain why a specific task cannot progress and what to do next\n" +
@@ -28,6 +28,15 @@ export const messagesEn = {
   "cli.root.error.task_flag_conflict":
     "[opencode-orchestrator] {subcommand}: please use either --task or -t, not both.",
 
+  "cli.highlevel.error.unknown_option":
+    "[opencode-orchestrator] {subcommand}: unknown option: {option}",
+
+  "cli.highlevel.error.unexpected_arg":
+    "[opencode-orchestrator] {subcommand}: unexpected argument: {arg}",
+
+  "cli.highlevel.error.unsupported_option":
+    "[opencode-orchestrator] {subcommand}: {option} is not supported by this high-level command. Use 'ococ loop' if you need low-level session control.",
+
   "cli.list.usage":
     "Usage: opencode-orchestrator list [--json] [--task/-t <task-name> --proposals]\n" +
     "\n" +
@@ -41,6 +50,9 @@ export const messagesEn = {
 
   "cli.list.proposals.none":
     '[opencode-orchestrator] Task "{task}" has no proposals.',
+
+  "cli.list.proposals.none_open":
+    '[opencode-orchestrator] Task "{task}" has no open proposals.',
 
   "cli.list.proposals.header":
     '[opencode-orchestrator] Proposals for task "{task}":',
@@ -100,6 +112,62 @@ export const messagesEn = {
     "The trailing prompt argument is optional. When omitted, a default prompt derived from\n" +
     "spec.md / acceptance-index.json is used.\n",
 
+  "cli.run.usage":
+    "Usage: opencode-orchestrator run [--task/-t <task-name>] [options]\n" +
+    "\n" +
+    "Start the loop for a ready task. When omitted, --task is auto-resolved only if exactly one known task exists.\n" +
+    "\n" +
+    "Supported options:\n" +
+    "  --task, -t <name>                 Target task key\n" +
+    "  --commit                          Ask for autocommit when the loop finishes\n" +
+    "  --max-loop <n>                    Maximum number of loop steps\n" +
+    "  --max-restarts <n>                Maximum safety restarts\n" +
+    "  --dangerously-skip-command-policy Skip the command-policy gate without sandboxing\n" +
+    "  --bwrap-skip-command-policy       Skip the command-policy gate inside Bubblewrap\n" +
+    "  --bwrap-arg <arg>                 Additional Bubblewrap argument\n" +
+    "  --file, -f <path>                 Attach a file to each opencode run step\n" +
+    "  --help, -h                        Show this help\n" +
+    "\n" +
+    "This high-level wrapper does not accept --session, --continue, or a free-form prompt.\n",
+
+  "cli.resume.usage":
+    "Usage: opencode-orchestrator resume [--task/-t <task-name>] [options]\n" +
+    "\n" +
+    "Resume the most recent session for a ready task. When omitted, --task is auto-resolved only if exactly one known task exists.\n" +
+    "\n" +
+    "Supported options:\n" +
+    "  --task, -t <name>                 Target task key\n" +
+    "  --commit                          Ask for autocommit when the resumed loop finishes\n" +
+    "  --max-loop <n>                    Maximum number of loop steps\n" +
+    "  --max-restarts <n>                Maximum safety restarts\n" +
+    "  --dangerously-skip-command-policy Skip the command-policy gate without sandboxing\n" +
+    "  --bwrap-skip-command-policy       Skip the command-policy gate inside Bubblewrap\n" +
+    "  --bwrap-arg <arg>                 Additional Bubblewrap argument\n" +
+    "  --file, -f <path>                 Attach a file to each opencode run step\n" +
+    "  --help, -h                        Show this help\n" +
+    "\n" +
+    "This high-level wrapper always resumes the latest session and does not accept --session, --continue, or a free-form prompt.\n",
+
+  "cli.status.usage":
+    "Usage: opencode-orchestrator status [--task/-t <task-name>]\n" +
+    "\n" +
+    "Show a high-level summary and next actions for a task. When omitted, --task is auto-resolved only if exactly one known task exists.\n",
+
+  "cli.doctor.usage":
+    "Usage: opencode-orchestrator doctor\n" +
+    "\n" +
+    "Run environment-wide diagnostics required for orchestrator usage.\n",
+
+  "cli.fix.usage":
+    "Usage: opencode-orchestrator fix [--task/-t <task-name>]\n" +
+    "\n" +
+    "Explain why a task cannot progress and what to do next. When omitted, --task is auto-resolved only if exactly one known task exists.\n",
+
+  "cli.completion.usage":
+    "Usage: opencode-orchestrator completion <bash|powershell>\n" +
+    "\n" +
+    "Generate shell completion setup snippets.\n",
+
   "cli.clear.error.no_target":
     "[opencode-orchestrator] clear: nothing to do; specify --proposals or --resolve/--dismiss.",
 
@@ -133,6 +201,15 @@ export const messagesEn = {
   "cli.clear.error.unexpected_arg":
     "[opencode-orchestrator] clear: unexpected argument: {arg}",
 
+  "cli.clear.error.multiple_targets":
+    "[opencode-orchestrator] clear: choose exactly one of --proposals, --resolve <id>, or --dismiss <id>.",
+
+  "cli.clear.error.proposal_id_not_found":
+    "[opencode-orchestrator] clear: proposal id was not found: {id}",
+
+  "cli.clear.error.proposal_already_closed":
+    "[opencode-orchestrator] clear: proposal is already closed: {id}",
+
   "cli.clear.info.no_proposals":
     '[opencode-orchestrator] Task "{task}" has no proposals to update.',
 
@@ -150,6 +227,12 @@ export const messagesEn = {
 
   "cli.clear.info.updated":
     '[opencode-orchestrator] Updated proposals for task "{task}".',
+
+  "cli.exec.error.timeout":
+    "[opencode-orchestrator] exec timed out after {timeoutMs} ms.",
+
+  "cli.exec.error.max_output":
+    "[opencode-orchestrator] exec exceeded the maximum collected output of {maxOutputBytes} bytes.",
 
   "cli.run.error.no_tasks_found":
     "[opencode-orchestrator] No orchestrator tasks were found. Run planning for at least one task before using 'run'.",
@@ -180,6 +263,9 @@ export const messagesEn = {
 
   "cli.resume.error.multiple_tasks":
     "[opencode-orchestrator] Multiple tasks are available. Please specify --task <task-name> for 'resume'. Available tasks: {tasks}",
+
+  "cli.resume.error.no_recent_session":
+    "[opencode-orchestrator] No recent session was recorded for task '{task}'. Start with 'ococ run --task {task}' or use low-level 'ococ loop --task {task}' first.",
 
   "cli.resume.info.not_ready_generic":
     "[opencode-orchestrator] High-level 'resume' is not ready to continue a session yet. Use 'ococ status --task {task}' and 'ococ fix --task {task}' to inspect what remains before resuming.",
@@ -226,6 +312,9 @@ export const messagesEn = {
   "cli.status.summary.phase.planning":
     "[opencode-orchestrator] Phase: planning – command-policy and refinement are not yet ready to start the loop.",
 
+  "cli.status.summary.phase.proposal_blocked":
+    "[opencode-orchestrator] Phase: blocked by proposals – unresolved non-auto-resolvable proposals must be handled before the high-level run/resume commands can continue.",
+
   "cli.status.summary.phase.execution_ready":
     "[opencode-orchestrator] Phase: execution – the orchestrator loop is ready to run for this task.",
 
@@ -247,8 +336,14 @@ export const messagesEn = {
   "cli.status.summary.open_proposals.some":
     "[opencode-orchestrator] There are {count} open proposals for this task.",
 
+  "cli.status.summary.open_proposals.latest":
+    "[opencode-orchestrator] Latest open proposal summary: {summary}",
+
   "cli.status.summary.next_action.planning":
     "[opencode-orchestrator] Next step: run 'ococ fix --task {task}' to inspect planning issues, and 'ococ doctor' if environment problems are suspected.",
+
+  "cli.status.summary.next_action.proposal_blocked":
+    "[opencode-orchestrator] Next step: run 'ococ list --task {task} --proposals' to inspect unresolved proposals, address them, and only then re-run 'ococ run' or 'ococ resume'.",
 
   "cli.status.summary.next_action.env_blocked":
     "[opencode-orchestrator] Next step: run 'ococ doctor' to diagnose environment issues, then use 'ococ fix --task {task}' and re-run 'ococ run' or 'ococ resume' once they are resolved.",
@@ -304,6 +399,11 @@ export const messagesEn = {
   "cli.fix.info.execution_ready":
     "[opencode-orchestrator] This task is ready to execute. Run 'ococ run --task {task}' to start fresh, or 'ococ resume --task {task}' to continue the most recent session.",
 
+  "cli.fix.info.proposal_blocked":
+    "[opencode-orchestrator] This task has {count} unresolved blocking proposals. Latest summary: {summary}. Run 'ococ list --task {task} --proposals' to inspect them; high-level 'run' and 'resume' remain blocked until those proposals are handled.",
+
+  "cli.fix.info.no_summary": "(no summary available)",
+
   "cli.fix.info.last_failure":
     "[opencode-orchestrator] Last failure: {summary}",
 
@@ -311,7 +411,10 @@ export const messagesEn = {
     "[opencode-orchestrator] This task has {count} open proposals. Latest summary: {summary}. Run 'ococ list --task {task} --proposals' for details, then re-run 'ococ resume --task {task}' if appropriate.",
 
   "cli.fix.info.audit_failed":
-    "[opencode-orchestrator] This task still has unmet requirements in the latest audit: {requirements}. Run 'ococ list --task {task} --proposals' to inspect the findings, then continue with 'ococ resume --task {task}'.",
+    "[opencode-orchestrator] This task still has unmet requirements in the latest audit: {requirements}. Run 'ococ status --task {task}' to inspect the task state before continuing.",
+
+  "cli.fix.info.audit_failed_with_proposals":
+    "[opencode-orchestrator] This task still has unmet requirements in the latest audit: {requirements}. Run 'ococ list --task {task} --proposals' to inspect related proposals, then use 'ococ status --task {task}' before continuing.",
 
   "cli.fix.info.first_requirement_reason":
     "[opencode-orchestrator] Representative audit reason: {reason}",
@@ -337,10 +440,16 @@ export const messagesEn = {
   "cli.doctor.warn.state_base_not_writable":
     "[opencode-orchestrator] The orchestrator state directory does not appear to be writable. Please check directory permissions or mount options.",
 
+  "cli.completion.error.missing_shell":
+    "[opencode-orchestrator] completion: please specify 'bash' or 'powershell'.",
+
+  "cli.completion.error.unknown_shell":
+    "[opencode-orchestrator] completion: unknown shell: {shell}. Expected 'bash' or 'powershell'.",
+
   "cli.completion.subcommand.run": "Start an orchestrator loop for a task",
 
   "cli.completion.subcommand.resume":
-    "Resume the most relevant recent task/session",
+    "Resume the most recent session for a task",
 
   "cli.completion.subcommand.status":
     "Show a high-level summary and next actions for a task",
@@ -363,6 +472,10 @@ export const messagesEn = {
   "cli.completion.subcommand.clear": "Update proposals for a task",
 
   "cli.completion.option.task": "Specify the orchestrator task key",
+
+  "cli.completion.option.generic": "CLI option",
+
+  "cli.completion.option.shell": "Supported shell name",
 
   "cli.completion.task.known": "Known orchestrator task",
 

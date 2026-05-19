@@ -1,4 +1,11 @@
+import {
+  CLI_SUBCOMMANDS,
+  getCliOptionValues,
+  SUPPORTED_COMPLETION_SHELLS,
+  type CliSubcommand,
+} from "./cli-contract.js";
 import { listKnownTasks, type TaskInfo } from "./task-resolution.js";
+import { parseCompletionCliArgs } from "./cli-args.js";
 import { t } from "./i18n/messages.js";
 
 export interface CompletionCommandOptions {
@@ -17,69 +24,32 @@ export interface CompletionCandidate {
   description: string;
 }
 
-function getSubcommandCandidates(): CompletionCandidate[] {
-  return [
-    {
-      type: "subcommand",
-      value: "run",
-      description: t("cli.completion.subcommand.run"),
-    },
-    {
-      type: "subcommand",
-      value: "resume",
-      description: t("cli.completion.subcommand.resume"),
-    },
-    {
-      type: "subcommand",
-      value: "status",
-      description: t("cli.completion.subcommand.status"),
-    },
-    {
-      type: "subcommand",
-      value: "doctor",
-      description: t("cli.completion.subcommand.doctor"),
-    },
-    {
-      type: "subcommand",
-      value: "fix",
-      description: t("cli.completion.subcommand.fix"),
-    },
-    {
-      type: "subcommand",
-      value: "completion",
-      description: t("cli.completion.subcommand.completion"),
-    },
-    {
-      type: "subcommand",
-      value: "loop",
-      description: t("cli.completion.subcommand.loop"),
-    },
-    {
-      type: "subcommand",
-      value: "list",
-      description: t("cli.completion.subcommand.list"),
-    },
-    {
-      type: "subcommand",
-      value: "exec",
-      description: t("cli.completion.subcommand.exec"),
-    },
-    {
-      type: "subcommand",
-      value: "clear",
-      description: t("cli.completion.subcommand.clear"),
-    },
-  ];
+function describeOption(value: string): string {
+  if (value === "--task" || value === "-t") {
+    return t("cli.completion.option.task");
+  }
+  return t("cli.completion.option.generic");
 }
 
-function getOptionCandidates(): CompletionCandidate[] {
-  return [
-    {
-      type: "option",
-      value: "--task",
-      description: t("cli.completion.option.task"),
-    },
-  ];
+function getSubcommandCandidates(): CompletionCandidate[] {
+  return CLI_SUBCOMMANDS.map((value) => ({
+    type: "subcommand" as const,
+    value,
+    description: t(`cli.completion.subcommand.${value}` as never),
+  }));
+}
+
+function getOptionCandidates(
+  subcommand?: CliSubcommand,
+): CompletionCandidate[] {
+  const values = subcommand
+    ? getCliOptionValues(subcommand)
+    : [...new Set(CLI_SUBCOMMANDS.flatMap((name) => getCliOptionValues(name)))];
+  return values.map((value) => ({
+    type: "option",
+    value,
+    description: describeOption(value),
+  }));
 }
 
 function getTaskCandidates(): CompletionCandidate[] {
@@ -91,10 +61,24 @@ function getTaskCandidates(): CompletionCandidate[] {
   }));
 }
 
+function getCompletionShellCandidates(): CompletionCandidate[] {
+  return [...SUPPORTED_COMPLETION_SHELLS].map((value) => ({
+    type: "option" as const,
+    value,
+    description: t("cli.completion.option.shell"),
+  }));
+}
+
 export async function runCompletionCommand(
   opts: CompletionCommandOptions,
 ): Promise<number> {
-  const shell = opts.argv[0];
+  let shell: "bash" | "powershell";
+  try {
+    shell = parseCompletionCliArgs(opts.argv).shell;
+  } catch (error) {
+    console.error(String((error as Error).message ?? error));
+    return 1;
+  }
 
   if (shell === "bash") {
     const header = t("cli.completion.script_header.bash");
@@ -161,10 +145,13 @@ Register-ArgumentCompleter -Native -CommandName 'ococ','opencode-orchestrator' -
 export async function runCompleteCommand(
   opts: CompleteCommandOptions,
 ): Promise<number> {
+  const subcommandCandidates = getSubcommandCandidates();
+  const optionCandidates = getOptionCandidates();
+  const taskCandidates = getTaskCandidates();
   const candidates: CompletionCandidate[] = [
-    ...getSubcommandCandidates(),
-    ...getOptionCandidates(),
-    ...getTaskCandidates(),
+    ...subcommandCandidates,
+    ...optionCandidates,
+    ...taskCandidates,
   ];
 
   // 後方互換性: 文脈情報 (shell/line/cursor) が渡されていない場合は、
@@ -214,20 +201,9 @@ export async function runCompleteCommand(
     return 0;
   }
 
-  const knownSubcommands = new Set([
-    "run",
-    "resume",
-    "status",
-    "doctor",
-    "fix",
-    "completion",
-    "loop",
-    "list",
-    "exec",
-    "clear",
-  ]);
+  const knownSubcommands = new Set<string>(CLI_SUBCOMMANDS);
 
-  const subcommand = args[0];
+  const subcommand = args[0] as CliSubcommand;
   const currentWord = endsWithSpace ? "" : args[args.length - 1];
 
   // サブコマンド入力中 (まだ確定していない) 場合はサブコマンド候補に絞る
@@ -237,39 +213,43 @@ export async function runCompleteCommand(
       (c) =>
         c.type === "subcommand" && c.value.toLowerCase().startsWith(prefix),
     );
-    const result =
-      filtered.length > 0
-        ? filtered
-        : candidates.filter((c) => c.type === "subcommand");
+    const result = filtered.length > 0 ? filtered : subcommandCandidates;
     for (const candidate of result) {
       console.log(JSON.stringify(candidate));
     }
     return 0;
   }
 
-  const highLevel = new Set(["run", "resume", "status", "fix"]);
-
-  // 高レベルサブコマンド以外は現状そのまま返す
-  if (!highLevel.has(subcommand)) {
-    for (const candidate of candidates) {
+  const subcommandOptions = getOptionCandidates(subcommand);
+  if (subcommand === "completion") {
+    const shellCandidates = getCompletionShellCandidates();
+    const filtered = currentWord
+      ? shellCandidates.filter((candidate) =>
+          candidate.value.toLowerCase().startsWith(currentWord.toLowerCase()),
+        )
+      : shellCandidates;
+    for (const candidate of filtered) {
       console.log(JSON.stringify(candidate));
     }
     return 0;
   }
 
-  const hasTaskFlagIndex = args.indexOf("--task");
+  const supportsTaskFlag = subcommandOptions.some(
+    (candidate) => candidate.value === "--task" || candidate.value === "-t",
+  );
+  const taskFlagIndex = supportsTaskFlag
+    ? Math.max(args.lastIndexOf("--task"), args.lastIndexOf("-t"))
+    : -1;
 
   // --task の直後、またはその値を入力中の位置ではタスク候補のみを返す
-  if (hasTaskFlagIndex >= 0) {
+  if (taskFlagIndex >= 0) {
     const currentIndex = endsWithSpace ? -1 : args.length - 1;
-    const isAfterTaskFlag =
-      hasTaskFlagIndex === args.length - 1 && endsWithSpace;
+    const isAfterTaskFlag = taskFlagIndex === args.length - 1 && endsWithSpace;
     const isCompletingTaskValue =
-      !endsWithSpace && currentIndex === hasTaskFlagIndex + 1;
+      !endsWithSpace && currentIndex === taskFlagIndex + 1;
 
     if (isAfterTaskFlag) {
-      const filteredTasks = candidates.filter((c) => c.type === "task");
-      for (const candidate of filteredTasks) {
+      for (const candidate of taskCandidates) {
         console.log(JSON.stringify(candidate));
       }
       return 0;
@@ -277,8 +257,8 @@ export async function runCompleteCommand(
 
     if (isCompletingTaskValue) {
       const prefix = currentWord.toLowerCase();
-      const filteredTasks = candidates.filter(
-        (c) => c.type === "task" && c.value.toLowerCase().startsWith(prefix),
+      const filteredTasks = taskCandidates.filter((c) =>
+        c.value.toLowerCase().startsWith(prefix),
       );
       for (const candidate of filteredTasks) {
         console.log(JSON.stringify(candidate));
@@ -288,11 +268,11 @@ export async function runCompleteCommand(
   }
 
   // 高レベルサブコマンドで --task 以外の位置の場合:
-  // "--" 入力中であればオプション候補、それ以外は --task のみを提案
+  // "-" 入力中であればオプション候補、それ以外はそのサブコマンド用オプションを提案
   if (currentWord.startsWith("-")) {
     const prefix = currentWord.toLowerCase();
-    const filteredOptions = candidates.filter(
-      (c) => c.type === "option" && c.value.toLowerCase().startsWith(prefix),
+    const filteredOptions = subcommandOptions.filter((c) =>
+      c.value.toLowerCase().startsWith(prefix),
     );
     for (const candidate of filteredOptions) {
       console.log(JSON.stringify(candidate));
@@ -300,8 +280,7 @@ export async function runCompleteCommand(
     return 0;
   }
 
-  const defaultOptions = candidates.filter((c) => c.type === "option");
-  for (const candidate of defaultOptions) {
+  for (const candidate of subcommandOptions) {
     console.log(JSON.stringify(candidate));
   }
   return 0;

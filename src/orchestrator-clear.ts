@@ -4,6 +4,7 @@ import * as path from "node:path";
 import { getOrchestratorStateDir } from "./orchestrator-paths.js";
 import { loadProposals, saveProposals } from "./orchestrator-proposals.js";
 import { t } from "./i18n/messages.js";
+import { listKnownTasks, suggestRecentTasks } from "./task-resolution.js";
 
 export interface ClearOptions {
   task: string;
@@ -69,39 +70,94 @@ export function parseClearArgs(argv: string[]): ClearOptions {
   if (!clearProposals && !resolveId && !dismissId) {
     throw new Error(t("cli.clear.error.no_target"));
   }
+  const targetCount =
+    Number(clearProposals) +
+    Number(Boolean(resolveId)) +
+    Number(Boolean(dismissId));
+  if (targetCount > 1) {
+    throw new Error(t("cli.clear.error.multiple_targets"));
+  }
 
   return { task, clearProposals, yes, resolveId, dismissId };
 }
 
-export async function runClear(opts: ClearOptions): Promise<void> {
+export async function runClear(opts: ClearOptions): Promise<number> {
   const stateDir = getOrchestratorStateDir(opts.task);
+  const knownInfos = listKnownTasks();
+  const knownTasks = knownInfos.map((info) => info.task);
+  if (!knownTasks.includes(opts.task)) {
+    const suggestions = suggestRecentTasks(opts.task, knownInfos, 5);
+    if (suggestions.length > 0) {
+      console.error(
+        t("cli.status.error.unknown_task_with_suggestions", {
+          input: opts.task,
+          candidates: suggestions.join(", "),
+        }),
+      );
+    } else {
+      console.error(
+        t("cli.status.error.unknown_task_no_suggestions", {
+          input: opts.task,
+        }),
+      );
+    }
+    return 1;
+  }
+
   const proposalsPath = path.join(stateDir, "proposals.json");
   const proposalsFile = loadProposals(proposalsPath);
   const proposals = proposalsFile.proposals;
+  const openProposals = proposals.filter(
+    (proposal) => proposal.status === "open",
+  );
+  const targetProposal = opts.resolveId
+    ? proposals.find((proposal) => proposal.id === opts.resolveId)
+    : opts.dismissId
+      ? proposals.find((proposal) => proposal.id === opts.dismissId)
+      : undefined;
 
   if (!opts.clearProposals && !opts.resolveId && !opts.dismissId) {
     console.error(t("cli.clear.error.no_target"));
-    return;
+    return 1;
   }
 
-  if (proposals.length === 0) {
+  if (opts.clearProposals && openProposals.length === 0) {
     console.error(
       t("cli.clear.info.no_proposals", {
         task: opts.task,
       }),
     );
-    return;
+    return 0;
+  }
+
+  if ((opts.resolveId || opts.dismissId) && !targetProposal) {
+    console.error(
+      t("cli.clear.error.proposal_id_not_found", {
+        id: opts.resolveId ?? opts.dismissId ?? "",
+      }),
+    );
+    return 1;
+  }
+
+  if (targetProposal && targetProposal.status !== "open") {
+    console.error(
+      t("cli.clear.error.proposal_already_closed", {
+        id: targetProposal.id,
+      }),
+    );
+    return 1;
   }
 
   if (!opts.yes) {
+    const targetCount = opts.clearProposals ? openProposals.length : 1;
     console.error(
       t("cli.clear.info.confirm", {
         task: opts.task,
-        count: String(proposals.length),
+        count: String(targetCount),
       }),
     );
     console.error(t("cli.clear.info.confirm_hint"));
-    return;
+    return 0;
   }
 
   const backupDir = path.join(stateDir, "..", "logs");
@@ -134,7 +190,7 @@ export async function runClear(opts: ClearOptions): Promise<void> {
 
   const now = new Date().toISOString();
   if (opts.clearProposals) {
-    for (const proposal of proposalsFile.proposals) {
+    for (const proposal of openProposals) {
       if (proposal.status === "open") {
         proposal.status = "resolved";
         proposal.resolved_at = now;
@@ -143,22 +199,10 @@ export async function runClear(opts: ClearOptions): Promise<void> {
     }
   }
 
-  if (opts.resolveId || opts.dismissId) {
-    const target = proposalsFile.proposals.find((proposal) => {
-      if (opts.resolveId) return proposal.id === opts.resolveId;
-      return proposal.id === opts.dismissId;
-    });
-    if (!target) {
-      throw new Error(
-        `proposal id not found: ${opts.resolveId ?? opts.dismissId}`,
-      );
-    }
-    if (target.status !== "open") {
-      throw new Error(`proposal is already closed: ${target.id}`);
-    }
-    target.status = opts.dismissId ? "dismissed" : "resolved";
-    target.resolved_at = now;
-    target.resolved_by = "cli";
+  if (targetProposal) {
+    targetProposal.status = opts.dismissId ? "dismissed" : "resolved";
+    targetProposal.resolved_at = now;
+    targetProposal.resolved_by = "cli";
   }
 
   saveProposals(proposalsPath, proposalsFile);
@@ -167,4 +211,5 @@ export async function runClear(opts: ClearOptions): Promise<void> {
       task: opts.task,
     }),
   );
+  return 0;
 }

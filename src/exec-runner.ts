@@ -4,6 +4,7 @@ import * as path from "node:path";
 
 import type { ExecOptions } from "./cli-args.js";
 import { assertExecHelperSourceIsSafe } from "./exec-ast-check.js";
+import { t } from "./i18n/messages.js";
 
 function readAllStdin(): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -151,7 +152,26 @@ export async function runExec(opts: ExecOptions): Promise<ExecResult> {
     let stderr = "";
     let totalBytes = 0;
     let truncated = false;
+    let timedOut = false;
     let settled = false;
+    let reportedMaxOutput = false;
+
+    const appendMaxOutputError = () => {
+      if (reportedMaxOutput) return;
+      reportedMaxOutput = true;
+      stderr += t("cli.exec.error.max_output", {
+        maxOutputBytes: String(opts.maxOutputBytes),
+      });
+    };
+
+    const timeoutId = setTimeout(() => {
+      if (settled) return;
+      timedOut = true;
+      stderr += t("cli.exec.error.timeout", {
+        timeoutMs: String(opts.timeoutMs),
+      });
+      child.kill();
+    }, opts.timeoutMs);
 
     const append = (target: "stdout" | "stderr", chunk: Buffer) => {
       if (settled) return;
@@ -159,6 +179,7 @@ export async function runExec(opts: ExecOptions): Promise<ExecResult> {
       const remaining = limit - totalBytes;
       if (remaining <= 0) {
         truncated = true;
+        appendMaxOutputError();
         child.kill();
         return;
       }
@@ -171,6 +192,7 @@ export async function runExec(opts: ExecOptions): Promise<ExecResult> {
       }
       if (slice.length < chunk.length) {
         truncated = true;
+        appendMaxOutputError();
         child.kill();
       }
     };
@@ -179,14 +201,16 @@ export async function runExec(opts: ExecOptions): Promise<ExecResult> {
     child.stderr?.on("data", (chunk: Buffer) => append("stderr", chunk));
 
     child.on("error", (err) => {
+      clearTimeout(timeoutId);
       settled = true;
       reject(err);
     });
 
     child.on("close", (code) => {
       if (settled) return;
+      clearTimeout(timeoutId);
       settled = true;
-      resolve({ code, stdout, stderr, truncated });
+      resolve({ code: timedOut ? null : code, stdout, stderr, truncated });
     });
   });
 }

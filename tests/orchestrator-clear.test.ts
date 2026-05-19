@@ -2,12 +2,30 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-import { runClear, type ClearOptions } from "../src/orchestrator-clear.js";
+declare const process: { env: Record<string, string | undefined> };
+
+import {
+  parseClearArgs,
+  runClear,
+  type ClearOptions,
+} from "../src/orchestrator-clear.js";
 import { getOrchestratorStateDir } from "../src/orchestrator-paths.js";
 
 describe("runClear", () => {
+  it("rejects multiple target selectors at parse time", () => {
+    expect(() =>
+      parseClearArgs([
+        "--task",
+        "orch-clear-task",
+        "--proposals",
+        "--resolve",
+        "p-1",
+      ]),
+    ).toThrow(/1 つだけ|exactly one/i);
+  });
+
   it("resolves all open proposals in proposals.json", async () => {
     const tmpBase = fs.mkdtempSync(path.join(os.tmpdir(), "orch-clear-base-"));
     process.env.XDG_STATE_HOME = tmpBase;
@@ -176,7 +194,8 @@ describe("runClear", () => {
     expect(saved.proposals[0].resolved_by).toBe("cli");
   });
 
-  it("throws when the proposal id is missing", async () => {
+  it("reports a missing proposal id without mutating state", async () => {
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const tmpBase = fs.mkdtempSync(path.join(os.tmpdir(), "orch-clear-base-"));
     process.env.XDG_STATE_HOME = tmpBase;
 
@@ -210,13 +229,78 @@ describe("runClear", () => {
       "utf8",
     );
 
-    await expect(
-      runClear({
-        task,
-        clearProposals: false,
-        yes: true,
-        resolveId: "missing",
-      }),
-    ).rejects.toThrow("proposal id not found: missing");
+    const code = await runClear({
+      task,
+      clearProposals: false,
+      yes: true,
+      resolveId: "missing",
+    });
+
+    expect(code).toBe(1);
+    expect(errSpy.mock.calls.map((c) => String(c[0])).join("\n")).toContain(
+      "proposal の ID が見つかりません: missing",
+    );
+    errSpy.mockRestore();
+  });
+
+  it("reports no proposals to update when only closed proposals remain", async () => {
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const tmpBase = fs.mkdtempSync(path.join(os.tmpdir(), "orch-clear-base-"));
+    process.env.XDG_STATE_HOME = tmpBase;
+
+    const task = "orch-clear-no-open-task";
+    const stateDir = getOrchestratorStateDir(task);
+    fs.mkdirSync(stateDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(stateDir, "proposals.json"),
+      JSON.stringify(
+        {
+          version: 1,
+          proposals: [
+            {
+              id: "p-1",
+              source: "executor",
+              cycle: 1,
+              kind: "need_replan",
+              priority: "high",
+              summary: "already resolved",
+              related_requirement_ids: ["R1"],
+              related_todo_ids: [],
+              status: "resolved",
+              auto_resolvable: true,
+              created_at: "2026-03-29T00:00:00.000Z",
+              resolved_at: "2026-03-29T01:00:00.000Z",
+              resolved_by: "auto",
+            },
+          ],
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+
+    await runClear({ task, clearProposals: true, yes: true });
+
+    expect(errSpy.mock.calls.map((c) => String(c[0])).join("\n")).toContain(
+      "更新対象の proposal はありません",
+    );
+    errSpy.mockRestore();
+  });
+
+  it("reports an unknown task instead of treating it as an empty proposal set", async () => {
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const tmpBase = fs.mkdtempSync(path.join(os.tmpdir(), "orch-clear-base-"));
+    process.env.XDG_STATE_HOME = tmpBase;
+
+    const knownStateDir = getOrchestratorStateDir("known-task");
+    fs.mkdirSync(knownStateDir, { recursive: true });
+
+    await runClear({ task: "missing-task", clearProposals: true, yes: true });
+
+    expect(errSpy.mock.calls.map((c) => String(c[0])).join("\n")).toContain(
+      "タスク 'missing-task' は見つかりませんでした",
+    );
+    errSpy.mockRestore();
   });
 });

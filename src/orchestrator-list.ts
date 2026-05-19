@@ -9,6 +9,7 @@ import {
 import type { ListOptions } from "./cli-args.js";
 import { getOpenProposals, loadProposals } from "./orchestrator-proposals.js";
 import { t } from "./i18n/messages.js";
+import { listKnownTasks, suggestRecentTasks } from "./task-resolution.js";
 
 interface TaskListEntry {
   task: string;
@@ -53,8 +54,29 @@ function extractSummaryFromSpec(markdown: string): string | undefined {
   return firstNonEmptyLine(markdown.replace(/^#.*$/gm, "").trim());
 }
 
-export async function runList(opts: ListOptions): Promise<void> {
+export async function runList(opts: ListOptions): Promise<number> {
   if (opts.showProposals && opts.task) {
+    const knownInfos = listKnownTasks();
+    const knownTasks = knownInfos.map((info) => info.task);
+    if (!knownTasks.includes(opts.task)) {
+      const suggestions = suggestRecentTasks(opts.task, knownInfos, 5);
+      if (suggestions.length > 0) {
+        console.error(
+          t("cli.status.error.unknown_task_with_suggestions", {
+            input: opts.task,
+            candidates: suggestions.join(", "),
+          }),
+        );
+      } else {
+        console.error(
+          t("cli.status.error.unknown_task_no_suggestions", {
+            input: opts.task,
+          }),
+        );
+      }
+      return 1;
+    }
+
     const stateDir = getOrchestratorStateDir(opts.task);
     const proposalsPath = path.join(stateDir, "proposals.json");
     const proposalsFile = loadProposals(proposalsPath);
@@ -74,16 +96,19 @@ export async function runList(opts: ListOptions): Promise<void> {
           2,
         ),
       );
-      return;
+      return 0;
     }
 
     if (proposals.length === 0) {
+      const noneKey = opts.openOnly
+        ? "cli.list.proposals.none_open"
+        : "cli.list.proposals.none";
       console.error(
-        t("cli.list.proposals.none", {
+        t(noneKey as never, {
           task: opts.task,
         }),
       );
-      return;
+      return 0;
     }
 
     console.error(
@@ -101,7 +126,7 @@ export async function runList(opts: ListOptions): Promise<void> {
         console.error(`    details: ${firstLine}`);
       }
     }
-    return;
+    return 0;
   }
 
   const baseDir = getOrchestratorBaseDir();
@@ -117,7 +142,7 @@ export async function runList(opts: ListOptions): Promise<void> {
           baseDir,
         }),
       );
-      return;
+      return 1;
     }
     console.error(
       t("cli.list.error.base_read_failed", {
@@ -125,7 +150,7 @@ export async function runList(opts: ListOptions): Promise<void> {
         message: anyErr && anyErr.message ? anyErr.message : String(err),
       }),
     );
-    process.exit(1);
+    return 1;
   }
 
   const tasks: TaskListEntry[] = [];
@@ -198,7 +223,7 @@ export async function runList(opts: ListOptions): Promise<void> {
         baseDir,
       }),
     );
-    return;
+    return 0;
   }
 
   tasks.sort((a, b) => a.task.localeCompare(b.task));
@@ -213,7 +238,7 @@ export async function runList(opts: ListOptions): Promise<void> {
     }));
     // Pretty-print JSON so that it is easy to inspect from the CLI.
     console.log(JSON.stringify(payload, null, 2));
-    return;
+    return 0;
   }
 
   // Determine which optional columns are present across all entries.
@@ -246,6 +271,7 @@ export async function runList(opts: ListOptions): Promise<void> {
     }
     console.log(cols.join("  "));
   }
+  return 0;
 }
 
 function describeLoopStatus(loopStatus: string): string {

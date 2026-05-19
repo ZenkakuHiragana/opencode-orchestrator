@@ -149,6 +149,49 @@ describe("runCompleteCommand (__complete)", () => {
     expect(parsed.every((c) => c.type === "option")).toBe(true);
     const hasTask = parsed.some((c) => c.value === "--task");
     expect(hasTask).toBe(true);
+    expect(parsed.some((c) => c.value === "--commit")).toBe(true);
+    expect(parsed.some((c) => c.value === "--max-loop")).toBe(true);
+
+    logSpy.mockRestore();
+  });
+
+  it("suggests low-level list options for list subcommand", async () => {
+    const lines: string[] = [];
+    const logSpy = vi.spyOn(console, "log").mockImplementation((...args) => {
+      lines.push(args.map((a) => String(a)).join(" "));
+    });
+
+    const line = "ococ list --";
+    const cursor = String(line.length);
+    const code = await runCompleteCommand({
+      argv: ["bash", line, cursor],
+    });
+
+    expect(code).toBe(0);
+    const parsed = lines.map((l) => JSON.parse(l) as any);
+    expect(parsed.some((c) => c.value === "--json")).toBe(true);
+    expect(parsed.some((c) => c.value === "--proposals")).toBe(true);
+    expect(parsed.some((c) => c.value === "--open")).toBe(true);
+
+    logSpy.mockRestore();
+  });
+
+  it("suggests supported shell names for the completion subcommand", async () => {
+    const lines: string[] = [];
+    const logSpy = vi.spyOn(console, "log").mockImplementation((...args) => {
+      lines.push(args.map((a) => String(a)).join(" "));
+    });
+
+    const line = "ococ completion ";
+    const cursor = String(line.length);
+    const code = await runCompleteCommand({
+      argv: ["bash", line, cursor],
+    });
+
+    expect(code).toBe(0);
+    const parsed = lines.map((l) => JSON.parse(l) as any);
+    expect(parsed.some((c) => c.value === "bash")).toBe(true);
+    expect(parsed.some((c) => c.value === "powershell")).toBe(true);
 
     logSpy.mockRestore();
   });
@@ -199,9 +242,64 @@ describe("runCompleteCommand (__complete)", () => {
       }
     }
   });
+
+  it("suggests task names when completing the value for -t", async () => {
+    const originalXdg = process.env.XDG_STATE_HOME;
+    const tmpBase = fs.mkdtempSync(
+      path.join(os.tmpdir(), "orch-complete-task-short-"),
+    );
+    process.env.XDG_STATE_HOME = tmpBase;
+
+    try {
+      const task = "demo-task-short";
+      const stateDir = path.join(
+        tmpBase,
+        "opencode",
+        "orchestrator",
+        task,
+        "state",
+      );
+      fs.mkdirSync(stateDir, { recursive: true });
+
+      const lines: string[] = [];
+      const logSpy = vi.spyOn(console, "log").mockImplementation((...args) => {
+        lines.push(args.map((a) => String(a)).join(" "));
+      });
+
+      const line = "ococ run -t ";
+      const cursor = String(line.length);
+      const code = await runCompleteCommand({
+        argv: ["bash", line, cursor],
+      });
+
+      expect(code).toBe(0);
+      const parsed = lines.map((l) => JSON.parse(l) as any);
+      expect(parsed.every((c) => c.type === "task")).toBe(true);
+      expect(parsed.some((c) => c.value === task)).toBe(true);
+
+      logSpy.mockRestore();
+    } finally {
+      if (originalXdg === undefined) {
+        delete process.env.XDG_STATE_HOME;
+      } else {
+        process.env.XDG_STATE_HOME = originalXdg;
+      }
+    }
+  });
 });
 
 describe("runCompletionCommand (completion)", () => {
+  it("rejects unsupported shell names instead of silently failing", async () => {
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const code = await runCompletionCommand({ argv: ["zsh"] });
+
+    expect(code).toBe(1);
+    expect(errSpy).toHaveBeenCalled();
+
+    errSpy.mockRestore();
+  });
+
   it("emits a bash completion script that calls __complete with line and cursor", async () => {
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 

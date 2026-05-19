@@ -44,7 +44,7 @@ describe("runResumeCommand", () => {
     errSpy.mockRestore();
   });
 
-  it("parses --task and calls runLoop with --continue", async () => {
+  it("parses --task, preserves loop flags, and calls runLoop with --continue", async () => {
     const { runResumeCommand } = await import("../src/orchestrator-resume.js");
 
     const originalXdg = process.env.XDG_STATE_HOME;
@@ -76,22 +76,31 @@ describe("runResumeCommand", () => {
         ),
         "utf8",
       );
+      fs.writeFileSync(
+        path.join(stateDir, "status.json"),
+        JSON.stringify({ version: 1, last_session_id: "ses-1" }, null, 2),
+        "utf8",
+      );
 
       parseLoopArgsMock.mockImplementationOnce((argv: string[]) => ({ argv }));
       runLoopMock.mockResolvedValueOnce(true);
 
-      const code = await runResumeCommand({ argv: ["--task", task] });
+      const code = await runResumeCommand({
+        argv: ["--task", task, "--max-loop", "5"],
+      });
 
       expect(code).toBe(0);
       expect(parseLoopArgsMock).toHaveBeenCalledTimes(1);
       expect(parseLoopArgsMock).toHaveBeenCalledWith([
         "--task",
         task,
+        "--max-loop",
+        "5",
         "--continue",
       ]);
       expect(runLoopMock).toHaveBeenCalledTimes(1);
       expect(runLoopMock).toHaveBeenCalledWith({
-        argv: ["--task", task, "--continue"],
+        argv: ["--task", task, "--max-loop", "5", "--continue"],
       });
     } finally {
       if (originalXdg === undefined) {
@@ -99,6 +108,137 @@ describe("runResumeCommand", () => {
       } else {
         process.env.XDG_STATE_HOME = originalXdg;
       }
+    }
+  });
+
+  it("injects a resolved task before forwarding loop flags", async () => {
+    const { runResumeCommand } = await import("../src/orchestrator-resume.js");
+
+    const originalXdg = process.env.XDG_STATE_HOME;
+    const tmpBase = fs.mkdtempSync(path.join(os.tmpdir(), "orch-resume-test-"));
+    process.env.XDG_STATE_HOME = tmpBase;
+
+    try {
+      const task = "demo-task";
+      const stateDir = path.join(
+        tmpBase,
+        "opencode",
+        "orchestrator",
+        task,
+        "state",
+      );
+      fs.mkdirSync(stateDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(stateDir, "command-policy.json"),
+        JSON.stringify(
+          {
+            version: 1,
+            summary: {
+              loop_status: "ready_for_loop",
+            },
+            commands: [],
+          },
+          null,
+          2,
+        ),
+        "utf8",
+      );
+      fs.writeFileSync(
+        path.join(stateDir, "status.json"),
+        JSON.stringify({ version: 1, last_session_id: "ses-2" }, null, 2),
+        "utf8",
+      );
+
+      parseLoopArgsMock.mockImplementationOnce((argv: string[]) => ({ argv }));
+      runLoopMock.mockResolvedValueOnce(true);
+
+      const code = await runResumeCommand({ argv: ["--max-loop", "7"] });
+
+      expect(code).toBe(0);
+      expect(parseLoopArgsMock).toHaveBeenCalledTimes(1);
+      expect(parseLoopArgsMock).toHaveBeenCalledWith([
+        "--task",
+        task,
+        "--max-loop",
+        "7",
+        "--continue",
+      ]);
+      expect(runLoopMock).toHaveBeenCalledTimes(1);
+      expect(runLoopMock).toHaveBeenCalledWith({
+        argv: ["--task", task, "--max-loop", "7", "--continue"],
+      });
+    } finally {
+      if (originalXdg === undefined) {
+        delete process.env.XDG_STATE_HOME;
+      } else {
+        process.env.XDG_STATE_HOME = originalXdg;
+      }
+    }
+  });
+
+  it("rejects unsupported low-level session flags instead of ignoring them", async () => {
+    const { runResumeCommand } = await import("../src/orchestrator-resume.js");
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const code = await runResumeCommand({ argv: ["--session", "ses-1"] });
+
+    expect(code).toBe(1);
+    expect(parseLoopArgsMock).not.toHaveBeenCalled();
+    expect(runLoopMock).not.toHaveBeenCalled();
+    expect(errSpy).toHaveBeenCalled();
+
+    errSpy.mockRestore();
+  });
+
+  it("prints a clear error when no recent session is recorded", async () => {
+    const { runResumeCommand } = await import("../src/orchestrator-resume.js");
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const originalXdg = process.env.XDG_STATE_HOME;
+    const tmpBase = fs.mkdtempSync(path.join(os.tmpdir(), "orch-resume-test-"));
+    process.env.XDG_STATE_HOME = tmpBase;
+
+    try {
+      const task = "demo-task";
+      const stateDir = path.join(
+        tmpBase,
+        "opencode",
+        "orchestrator",
+        task,
+        "state",
+      );
+      fs.mkdirSync(stateDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(stateDir, "command-policy.json"),
+        JSON.stringify(
+          {
+            version: 1,
+            summary: {
+              loop_status: "ready_for_loop",
+            },
+            commands: [],
+          },
+          null,
+          2,
+        ),
+        "utf8",
+      );
+
+      const code = await runResumeCommand({ argv: ["--task", task] });
+
+      expect(code).toBe(1);
+      expect(parseLoopArgsMock).not.toHaveBeenCalled();
+      expect(runLoopMock).not.toHaveBeenCalled();
+      expect(errSpy.mock.calls.map((c) => String(c[0])).join("\n")).toContain(
+        "再開可能な直近セッションが記録されていません",
+      );
+    } finally {
+      if (originalXdg === undefined) {
+        delete process.env.XDG_STATE_HOME;
+      } else {
+        process.env.XDG_STATE_HOME = originalXdg;
+      }
+      errSpy.mockRestore();
     }
   });
 });

@@ -8,9 +8,16 @@ import {
   parseListArgs,
   parseExecArgs,
   printLoopUsage,
+  printRunUsage,
+  printResumeUsage,
+  printStatusUsage,
+  printDoctorUsage,
+  printFixUsage,
+  printCompletionUsage,
   printExecUsage,
   printListUsage,
 } from "./cli-args.js";
+import { TASK_AWARE_SUBCOMMANDS } from "./cli-contract.js";
 import {
   runLoop,
   enforceCommandPolicyGate,
@@ -71,7 +78,13 @@ export async function runCli(argv: string[]): Promise<number> {
     subcommand !== "loop" &&
     subcommand !== "list" &&
     subcommand !== "exec" &&
-    subcommand !== "clear"
+    subcommand !== "clear" &&
+    subcommand !== "run" &&
+    subcommand !== "resume" &&
+    subcommand !== "status" &&
+    subcommand !== "doctor" &&
+    subcommand !== "fix" &&
+    subcommand !== "completion"
   ) {
     if (args.includes("--help") || args.includes("-h")) {
       printUsage();
@@ -101,6 +114,30 @@ export async function runCli(argv: string[]): Promise<number> {
       printClearUsage();
       return 0;
     }
+    if (subcommand === "run") {
+      printRunUsage();
+      return 0;
+    }
+    if (subcommand === "resume") {
+      printResumeUsage();
+      return 0;
+    }
+    if (subcommand === "status") {
+      printStatusUsage();
+      return 0;
+    }
+    if (subcommand === "doctor") {
+      printDoctorUsage();
+      return 0;
+    }
+    if (subcommand === "fix") {
+      printFixUsage();
+      return 0;
+    }
+    if (subcommand === "completion") {
+      printCompletionUsage();
+      return 0;
+    }
   }
 
   // Root-level version for known subcommands
@@ -111,16 +148,7 @@ export async function runCli(argv: string[]): Promise<number> {
 
   const actualSubcommand = args.shift();
 
-  const taskAwareSubcommands = new Set([
-    "loop",
-    "run",
-    "resume",
-    "status",
-    "doctor",
-    "fix",
-    "list",
-    "clear",
-  ]);
+  const taskAwareSubcommands = new Set<string>(TASK_AWARE_SUBCOMMANDS);
 
   if (actualSubcommand && taskAwareSubcommands.has(actualSubcommand)) {
     const hasLong = args.includes("--task");
@@ -145,33 +173,51 @@ export async function runCli(argv: string[]): Promise<number> {
   }
 
   if (actualSubcommand === "loop") {
-    const opts = parseLoopArgs(args);
-    const done = await runLoop(opts);
-    return done ? 0 : 1;
+    try {
+      const opts = parseLoopArgs(args);
+      const done = await runLoop(opts);
+      return done ? 0 : 1;
+    } catch (error) {
+      console.error(String((error as Error).message ?? error));
+      return 1;
+    }
   }
 
   if (actualSubcommand === "list") {
-    const opts = parseListArgs(args);
-    await runList(opts);
-    return 0;
+    try {
+      const opts = parseListArgs(args);
+      return await runList(opts);
+    } catch (error) {
+      console.error(String((error as Error).message ?? error));
+      return 1;
+    }
   }
 
   if (actualSubcommand === "exec") {
-    const opts = parseExecArgs(args);
-    const result = await runExec(opts);
-    if (result.stdout) {
-      process.stdout.write(result.stdout);
+    try {
+      const opts = parseExecArgs(args);
+      const result = await runExec(opts);
+      if (result.stdout) {
+        process.stdout.write(result.stdout);
+      }
+      if (result.stderr) {
+        process.stderr.write(result.stderr);
+      }
+      return result.code === 0 ? 0 : 1;
+    } catch (error) {
+      console.error(String((error as Error).message ?? error));
+      return 1;
     }
-    if (result.stderr) {
-      process.stderr.write(result.stderr);
-    }
-    return result.code === 0 ? 0 : 1;
   }
 
   if (actualSubcommand === "clear") {
-    const opts = parseClearArgs(args);
-    await runClear(opts);
-    return 0;
+    try {
+      const opts = parseClearArgs(args);
+      return await runClear(opts);
+    } catch (error) {
+      console.error(String((error as Error).message ?? error));
+      return 1;
+    }
   }
 
   if (actualSubcommand === "run") {

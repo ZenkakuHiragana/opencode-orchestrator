@@ -1,13 +1,10 @@
-import * as path from "node:path";
-
 import { t } from "./i18n/messages.js";
+import { parseFixArgs } from "./cli-args.js";
 import {
   listKnownTasks,
   sortTasksByRecency,
   suggestRecentTasks,
 } from "./task-resolution.js";
-import { getOrchestratorStateDir } from "./orchestrator-paths.js";
-import { loadProposals } from "./orchestrator-proposals.js";
 import { inspectTaskStatus } from "./orchestrator-status.js";
 
 export interface FixCommandOptions {
@@ -21,12 +18,6 @@ function diagnoseTask(task: string): number {
     return 1;
   }
 
-  const stateDir = getOrchestratorStateDir(task);
-  const proposalsPath = path.join(stateDir, "proposals.json");
-  const openProposals = loadProposals(proposalsPath).proposals.filter(
-    (proposal) => proposal.status === "open",
-  );
-  const firstOpenProposal = openProposals[0];
   const failedRequirements =
     snapshot.status.last_auditor_report?.requirements?.filter(
       (requirement) => requirement.passed === false,
@@ -48,6 +39,20 @@ function diagnoseTask(task: string): number {
       }),
     );
     return 0;
+  }
+
+  if (snapshot.phase === "proposal_blocked") {
+    console.error(
+      t("cli.fix.info.proposal_blocked", {
+        task,
+        count: String(snapshot.blockingOpenProposalCount),
+        summary:
+          snapshot.latestBlockingOpenProposalSummary ||
+          snapshot.latestOpenProposalSummary ||
+          t("cli.fix.info.no_summary"),
+      }),
+    );
+    return 1;
   }
 
   if (snapshot.phase === "env_blocked") {
@@ -72,11 +77,11 @@ function diagnoseTask(task: string): number {
         task,
       }),
     );
-    if (snapshot.openProposalCount > 0 && firstOpenProposal) {
+    if (snapshot.openProposalCount > 0 && snapshot.latestOpenProposalSummary) {
       console.error(
         t("cli.fix.info.open_proposals", {
           count: String(snapshot.openProposalCount),
-          summary: firstOpenProposal.summary,
+          summary: snapshot.latestOpenProposalSummary,
           task,
         }),
       );
@@ -85,10 +90,15 @@ function diagnoseTask(task: string): number {
   }
 
   if (failedRequirements.length > 0) {
+    const requirements = failedRequirements.map((req) => req.id).join(", ");
+    const auditKey =
+      snapshot.openProposalCount > 0
+        ? "cli.fix.info.audit_failed_with_proposals"
+        : "cli.fix.info.audit_failed";
     console.error(
-      t("cli.fix.info.audit_failed", {
+      t(auditKey as never, {
         task,
-        requirements: failedRequirements.map((req) => req.id).join(", "),
+        requirements,
       }),
     );
     const firstReason = failedRequirements[0]?.reason?.trim();
@@ -102,11 +112,11 @@ function diagnoseTask(task: string): number {
     return 1;
   }
 
-  if (snapshot.openProposalCount > 0 && firstOpenProposal) {
+  if (snapshot.openProposalCount > 0 && snapshot.latestOpenProposalSummary) {
     console.error(
       t("cli.fix.info.open_proposals", {
         count: String(snapshot.openProposalCount),
-        summary: firstOpenProposal.summary,
+        summary: snapshot.latestOpenProposalSummary,
         task,
       }),
     );
@@ -132,14 +142,12 @@ function diagnoseTask(task: string): number {
 }
 
 export async function runFixCommand(opts: FixCommandOptions): Promise<number> {
-  const args = [...opts.argv];
-
   let explicitTask: string | undefined;
-  for (let i = 0; i < args.length; i += 1) {
-    if (args[i] === "--task" || args[i] === "-t") {
-      explicitTask = args[i + 1];
-      break;
-    }
+  try {
+    explicitTask = parseFixArgs(opts.argv).task;
+  } catch (error) {
+    console.error(String((error as Error).message ?? error));
+    return 1;
   }
 
   const knownInfos = listKnownTasks();

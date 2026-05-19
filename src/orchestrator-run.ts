@@ -8,7 +8,7 @@ import {
   suggestRecentTasks,
 } from "./task-resolution.js";
 import { getOrchestratorStateDir } from "./orchestrator-paths.js";
-import { parseLoopArgs } from "./cli-args.js";
+import { parseLoopArgs, parseRunArgs } from "./cli-args.js";
 import { runLoop } from "./orchestrator-loop.js";
 
 export interface RunCommandOptions {
@@ -16,14 +16,15 @@ export interface RunCommandOptions {
 }
 
 export async function runRunCommand(opts: RunCommandOptions): Promise<number> {
-  const args = [...opts.argv];
-
   let explicitTask: string | undefined;
-  for (let i = 0; i < args.length; i += 1) {
-    if (args[i] === "--task" || args[i] === "-t") {
-      explicitTask = args[i + 1];
-      break;
-    }
+  let parsedLoopArgv: string[] = [];
+  try {
+    const parsed = parseRunArgs(opts.argv);
+    explicitTask = parsed.task;
+    parsedLoopArgv = parsed.loopArgv;
+  } catch (error) {
+    console.error(String((error as Error).message ?? error));
+    return 1;
   }
 
   const knownInfos = listKnownTasks();
@@ -49,7 +50,7 @@ export async function runRunCommand(opts: RunCommandOptions): Promise<number> {
     }
 
     const task = knownTasks[0];
-    return await runForResolvedTask(task);
+    return await runForResolvedTask(task, parsedLoopArgv);
   }
 
   if (knownTasks.length === 0) {
@@ -62,7 +63,7 @@ export async function runRunCommand(opts: RunCommandOptions): Promise<number> {
   }
 
   if (knownTasks.includes(explicitTask)) {
-    return await runForResolvedTask(explicitTask);
+    return await runForResolvedTask(explicitTask, parsedLoopArgv);
   }
 
   const suggestions = suggestRecentTasks(explicitTask, knownInfos, 5);
@@ -88,7 +89,10 @@ export async function runRunCommand(opts: RunCommandOptions): Promise<number> {
   return 1;
 }
 
-async function runForResolvedTask(task: string): Promise<number> {
+async function runForResolvedTask(
+  task: string,
+  parsedLoopArgv: string[],
+): Promise<number> {
   const stateDir = getOrchestratorStateDir(task);
   const policyPath = path.join(stateDir, "command-policy.json");
 
@@ -105,9 +109,17 @@ async function runForResolvedTask(task: string): Promise<number> {
   }
 
   if (loopStatus === "ready_for_loop") {
-    const loopOpts = parseLoopArgs(["--task", task]);
-    const done = await runLoop(loopOpts);
-    return done ? 0 : 1;
+    const loopArgv = parsedLoopArgv.includes("--task")
+      ? [...parsedLoopArgv]
+      : ["--task", task, ...parsedLoopArgv];
+    try {
+      const loopOpts = parseLoopArgs(loopArgv);
+      const done = await runLoop(loopOpts);
+      return done ? 0 : 1;
+    } catch (error) {
+      console.error(String((error as Error).message ?? error));
+      return 1;
+    }
   }
 
   console.error(t("cli.run.info.not_ready_generic", { task }));

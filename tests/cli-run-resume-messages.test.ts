@@ -60,6 +60,65 @@ describe("runRunCommand i18n messages and task resolution", () => {
     expect(code).toBe(1);
   });
 
+  it("prints a multiple-tasks message for run when --task is omitted", async () => {
+    const tmpBase = fs.mkdtempSync(path.join(os.tmpdir(), "orch-run-many-"));
+    process.env.XDG_STATE_HOME = tmpBase;
+
+    const baseDir = path.join(tmpBase, "opencode", "orchestrator");
+    fs.mkdirSync(path.join(baseDir, "task-a", "state"), { recursive: true });
+    fs.mkdirSync(path.join(baseDir, "task-b", "state"), { recursive: true });
+
+    const code = await runRunCommand({ argv: [] });
+
+    expect(code).toBe(1);
+    const errMock = console.error as unknown as {
+      mock: { calls: unknown[][] };
+    };
+    const text = errMock.mock.calls.map((c) => String(c[0])).join("\n");
+    expect(text).toContain("--task <タスク名> を指定してください");
+  });
+
+  it("prints a not-ready message for run when loop_status is not ready_for_loop", async () => {
+    const tmpBase = fs.mkdtempSync(
+      path.join(os.tmpdir(), "orch-run-notready-"),
+    );
+    process.env.XDG_STATE_HOME = tmpBase;
+
+    const task = "cli-ux-i18n-and-completion";
+    const stateDir = path.join(
+      tmpBase,
+      "opencode",
+      "orchestrator",
+      task,
+      "state",
+    );
+    fs.mkdirSync(stateDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(stateDir, "command-policy.json"),
+      JSON.stringify(
+        {
+          version: 1,
+          summary: {
+            loop_status: "needs_refinement",
+          },
+          commands: [],
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+
+    const code = await runRunCommand({ argv: ["--task", task] });
+
+    expect(code).toBe(1);
+    const errMock = console.error as unknown as {
+      mock: { calls: unknown[][] };
+    };
+    const text = errMock.mock.calls.map((c) => String(c[0])).join("\n");
+    expect(text).toContain("高レベル run はまだ実行の準備ができていません");
+  });
+
   // NOTE: ready_for_loop の実際のループ実行は orchestrator-loop のテストで
   // カバーされているため、ここでは run 側の smoke test は行わない。
 
@@ -404,6 +463,88 @@ describe("runResumeCommand i18n messages", () => {
     const text = errMock.mock.calls.map((c) => String(c[0])).join("\n");
     expect(text).toContain(
       "このタスクのセッションは、計画フェーズや事前チェックが完了していないため再開できません",
+    );
+  });
+
+  it("prints an env-blocked message for resume", async () => {
+    const tmpBase = fs.mkdtempSync(path.join(os.tmpdir(), "orch-resume-env-"));
+    process.env.XDG_STATE_HOME = tmpBase;
+
+    const task = "cli-ux-i18n-and-completion";
+    const stateDir = path.join(
+      tmpBase,
+      "opencode",
+      "orchestrator",
+      task,
+      "state",
+    );
+    fs.mkdirSync(stateDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(stateDir, "command-policy.json"),
+      JSON.stringify(
+        {
+          version: 1,
+          summary: {
+            loop_status: "blocked_by_environment",
+          },
+          commands: [],
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+
+    const code = await runResumeCommand({ argv: ["--task", task] });
+
+    expect(code).toBe(1);
+    const errMock = console.error as unknown as {
+      mock: { calls: unknown[][] };
+    };
+    const text = errMock.mock.calls.map((c) => String(c[0])).join("\n");
+    expect(text).toContain("環境要因");
+  });
+
+  it("prints a generic not-ready message for resume when loop_status is unknown", async () => {
+    const tmpBase = fs.mkdtempSync(
+      path.join(os.tmpdir(), "orch-resume-generic-"),
+    );
+    process.env.XDG_STATE_HOME = tmpBase;
+
+    const task = "cli-ux-i18n-and-completion";
+    const stateDir = path.join(
+      tmpBase,
+      "opencode",
+      "orchestrator",
+      task,
+      "state",
+    );
+    fs.mkdirSync(stateDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(stateDir, "command-policy.json"),
+      JSON.stringify(
+        {
+          version: 1,
+          summary: {
+            loop_status: "mystery_state",
+          },
+          commands: [],
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+
+    const code = await runResumeCommand({ argv: ["--task", task] });
+
+    expect(code).toBe(1);
+    const errMock = console.error as unknown as {
+      mock: { calls: unknown[][] };
+    };
+    const text = errMock.mock.calls.map((c) => String(c[0])).join("\n");
+    expect(text).toContain(
+      "高レベル resume はまだセッション再開の準備ができていません",
     );
   });
 });

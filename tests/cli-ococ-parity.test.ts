@@ -26,7 +26,7 @@ describe("ococ / opencode-orchestrator help parity", () => {
     expect(code).toBe(0);
     const out = writes.join("\n");
     expect(out).toContain("run        タスク用の orchestrator ループを開始");
-    expect(out).toContain("resume     最近のタスク/セッションを再開");
+    expect(out).toContain("resume     指定タスクの直近セッションを再開");
     expect(out).toContain("status     タスクの要約と次に行うべき操作を表示");
     expect(out).toContain(
       "doctor     orchestrator 利用に必要な環境全体の診断を実行",
@@ -48,7 +48,7 @@ describe("ococ / opencode-orchestrator help parity", () => {
     expect(out).toContain("High-level subcommands (recommended):");
     expect(out).toContain("run        Start an orchestrator loop for a task");
     expect(out).toContain(
-      "resume     Resume the most relevant recent task/session",
+      "resume     Resume the most recent session for a task",
     );
     expect(out).toContain(
       "status     Show a high-level summary and next actions for a task",

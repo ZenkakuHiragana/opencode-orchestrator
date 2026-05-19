@@ -4,7 +4,7 @@ export const messagesJa = {
     "\n" +
     "よく使う高レベルサブコマンド:\n" +
     "  run        タスク用の orchestrator ループを開始 (短いエイリアス: ococ run)\n" +
-    "  resume     最近のタスク/セッションを再開\n" +
+    "  resume     指定タスクの直近セッションを再開\n" +
     "  status     タスクの要約と次に行うべき操作を表示\n" +
     "  doctor     orchestrator 利用に必要な環境全体の診断を実行\n" +
     "  fix        特定タスクが進まない理由と次のアクションを説明\n" +
@@ -14,7 +14,7 @@ export const messagesJa = {
     '  loop  --task <task-name> [--session <ses_...> | --continue] [--commit] [--max-loop N] [--max-restarts M] [--file <path>] "prompt..."\n' +
     "  list  [--json]   orchestrator タスク一覧または proposal 一覧を表示\n" +
     '  exec  [--allow-fs-read <path>] [--allow-fs-write <path>] [--file <path>] ["helper-source"]\n' +
-    "  clear --task <task-name> --proposals [-y]   指定タスクの proposal を削除\n" +
+    "  clear --task <task-name> --proposals [-y]   指定タスクの proposal を更新\n" +
     "\n" +
     "共通オプション:\n" +
     "  -h, --help       このヘルプを表示\n" +
@@ -27,6 +27,15 @@ export const messagesJa = {
 
   "cli.root.error.task_flag_conflict":
     "[opencode-orchestrator] {subcommand}: --task と -t を同時には指定できません。どちらか一方を使用してください。",
+
+  "cli.highlevel.error.unknown_option":
+    "[opencode-orchestrator] {subcommand}: 不明なオプションです: {option}",
+
+  "cli.highlevel.error.unexpected_arg":
+    "[opencode-orchestrator] {subcommand}: 想定外の引数です: {arg}",
+
+  "cli.highlevel.error.unsupported_option":
+    "[opencode-orchestrator] {subcommand}: {option} はこの高レベルコマンドでは使えません。低レベルのセッション制御が必要な場合は 'ococ loop' を使ってください。",
 
   "cli.list.usage":
     "使い方: opencode-orchestrator list [--json] [--task/-t <task-name> --proposals]\n" +
@@ -41,6 +50,9 @@ export const messagesJa = {
 
   "cli.list.proposals.none":
     '[opencode-orchestrator] タスク "{task}" に proposal はありません。',
+
+  "cli.list.proposals.none_open":
+    '[opencode-orchestrator] タスク "{task}" に open proposal はありません。',
 
   "cli.list.proposals.header":
     '[opencode-orchestrator] タスク "{task}" の proposal 一覧:',
@@ -102,6 +114,62 @@ export const messagesJa = {
     "\n" +
     "末尾の prompt 引数は省略可能です。省略時は spec.md / acceptance-index.json を元にした既定プロンプトを使用します。\n",
 
+  "cli.run.usage":
+    "使い方: opencode-orchestrator run [--task/-t <task-name>] [options]\n" +
+    "\n" +
+    "実行可能なタスクのループを開始します。--task を省略できるのは、既知タスクがちょうど 1 つだけのときです。\n" +
+    "\n" +
+    "対応オプション:\n" +
+    "  --task, -t <name>                 対象タスクキー\n" +
+    "  --commit                          ループ完了時に autocommit を依頼する\n" +
+    "  --max-loop <n>                    ループの最大ステップ数\n" +
+    "  --max-restarts <n>                safety 再起動の上限\n" +
+    "  --dangerously-skip-command-policy command-policy gate をサンドボックスなしでスキップする\n" +
+    "  --bwrap-skip-command-policy       Bubblewrap 内で command-policy gate をスキップする\n" +
+    "  --bwrap-arg <arg>                 Bubblewrap に渡す追加引数\n" +
+    "  --file, -f <path>                 各 opencode run ステップにファイルを添付する\n" +
+    "  --help, -h                        このヘルプを表示する\n" +
+    "\n" +
+    "この高レベルラッパでは --session、--continue、自由入力の prompt は受け付けません。\n",
+
+  "cli.resume.usage":
+    "使い方: opencode-orchestrator resume [--task/-t <task-name>] [options]\n" +
+    "\n" +
+    "実行可能なタスクの直近セッションを再開します。--task を省略できるのは、既知タスクがちょうど 1 つだけのときです。\n" +
+    "\n" +
+    "対応オプション:\n" +
+    "  --task, -t <name>                 対象タスクキー\n" +
+    "  --commit                          再開したループ完了時に autocommit を依頼する\n" +
+    "  --max-loop <n>                    ループの最大ステップ数\n" +
+    "  --max-restarts <n>                safety 再起動の上限\n" +
+    "  --dangerously-skip-command-policy command-policy gate をサンドボックスなしでスキップする\n" +
+    "  --bwrap-skip-command-policy       Bubblewrap 内で command-policy gate をスキップする\n" +
+    "  --bwrap-arg <arg>                 Bubblewrap に渡す追加引数\n" +
+    "  --file, -f <path>                 各 opencode run ステップにファイルを添付する\n" +
+    "  --help, -h                        このヘルプを表示する\n" +
+    "\n" +
+    "この高レベルラッパは常に直近セッションを再開するため、--session、--continue、自由入力の prompt は受け付けません。\n",
+
+  "cli.status.usage":
+    "使い方: opencode-orchestrator status [--task/-t <task-name>]\n" +
+    "\n" +
+    "タスクの要約と次のアクションを表示します。--task を省略できるのは、既知タスクがちょうど 1 つだけのときです。\n",
+
+  "cli.doctor.usage":
+    "使い方: opencode-orchestrator doctor\n" +
+    "\n" +
+    "orchestrator 利用に必要な環境全体の診断を実行します。\n",
+
+  "cli.fix.usage":
+    "使い方: opencode-orchestrator fix [--task/-t <task-name>]\n" +
+    "\n" +
+    "タスクが進まない理由と次のアクションを表示します。--task を省略できるのは、既知タスクがちょうど 1 つだけのときです。\n",
+
+  "cli.completion.usage":
+    "使い方: opencode-orchestrator completion <bash|powershell>\n" +
+    "\n" +
+    "シェル補完設定スニペットを生成します。\n",
+
   "cli.run.error.no_tasks_found":
     "[opencode-orchestrator] 実行可能な orchestrator タスクが見つかりません。まず Refiner/Todo-Writer で少なくとも 1 つタスクを用意してから run を使ってください。",
 
@@ -131,6 +199,9 @@ export const messagesJa = {
 
   "cli.resume.error.multiple_tasks":
     "[opencode-orchestrator] 利用可能なタスクが複数あります。resume には --task <タスク名> を指定してください。利用可能なタスク: {tasks}",
+
+  "cli.resume.error.no_recent_session":
+    "[opencode-orchestrator] タスク '{task}' には再開可能な直近セッションが記録されていません。まず 'ococ run --task {task}' か低レベルの 'ococ loop --task {task}' で開始してください。",
 
   "cli.resume.info.not_ready_generic":
     "[opencode-orchestrator] 高レベル resume はまだセッション再開の準備ができていません。セッションの状態や次のアクションを確認するには 'ococ status --task {task}' や 'ococ fix --task {task}' を利用してください。",
@@ -177,6 +248,9 @@ export const messagesJa = {
   "cli.status.summary.phase.planning":
     "[opencode-orchestrator] フェーズ: 計画中 (command-policy や事前チェックがまだ完了していません)",
 
+  "cli.status.summary.phase.proposal_blocked":
+    "[opencode-orchestrator] フェーズ: proposal によりブロック中 (未解決の非自動解決 proposal があるため高レベルの run/resume を続行できません)",
+
   "cli.status.summary.phase.execution_ready":
     "[opencode-orchestrator] フェーズ: 実行可能 (このタスク向けの orchestrator ループを開始できます)",
 
@@ -198,8 +272,14 @@ export const messagesJa = {
   "cli.status.summary.open_proposals.some":
     "[opencode-orchestrator] このタスクには未解決の proposal が {count} 件あります。",
 
+  "cli.status.summary.open_proposals.latest":
+    "[opencode-orchestrator] 最新の open proposal 要約: {summary}",
+
   "cli.status.summary.next_action.planning":
     "[opencode-orchestrator] 次のステップ: 'ococ fix --task {task}' で計画フェーズの問題を確認し、環境に不安があれば 'ococ doctor' を実行してください。",
+
+  "cli.status.summary.next_action.proposal_blocked":
+    "[opencode-orchestrator] 次のステップ: 'ococ list --task {task} --proposals' で未解決 proposal を確認して対処し、その後で 'ococ run' や 'ococ resume' を再実行してください。",
 
   "cli.status.summary.next_action.env_blocked":
     "[opencode-orchestrator] 次のステップ: まず 'ococ doctor' で環境要因の問題を診断し、その後 'ococ fix --task {task}' や 'ococ run'/'ococ resume' を再実行してください。",
@@ -255,13 +335,21 @@ export const messagesJa = {
   "cli.fix.info.execution_ready":
     "[opencode-orchestrator] このタスクは実行可能な状態です。新しく始めるなら 'ococ run --task {task}'、直近のセッションを継続するなら 'ococ resume --task {task}' を実行してください。",
 
+  "cli.fix.info.proposal_blocked":
+    "[opencode-orchestrator] このタスクには実行を妨げる未解決 proposal が {count} 件あります。最新の要約: {summary}。'ococ list --task {task} --proposals' で確認し、対処が済むまで高レベルの 'run' と 'resume' はブロックされます。",
+
+  "cli.fix.info.no_summary": "(要約なし)",
+
   "cli.fix.info.last_failure": "[opencode-orchestrator] 直近の失敗: {summary}",
 
   "cli.fix.info.open_proposals":
     "[opencode-orchestrator] このタスクには未解決 proposal が {count} 件あります。最新の要約: {summary}。'ococ list --task {task} --proposals' で詳細を確認し、必要なら 'ococ resume --task {task}' を再実行してください。",
 
   "cli.fix.info.audit_failed":
-    "[opencode-orchestrator] このタスクは直近の監査で未達要件が残っています: {requirements}。まず 'ococ list --task {task} --proposals' で指摘内容を確認し、その後 'ococ resume --task {task}' で継続してください。",
+    "[opencode-orchestrator] このタスクは直近の監査で未達要件が残っています: {requirements}。まず 'ococ status --task {task}' で状況を確認してから継続してください。",
+
+  "cli.fix.info.audit_failed_with_proposals":
+    "[opencode-orchestrator] このタスクは直近の監査で未達要件が残っています: {requirements}。'ococ list --task {task} --proposals' で関連 proposal を確認し、その後 'ococ status --task {task}' で状況を確認してから継続してください。",
 
   "cli.fix.info.first_requirement_reason":
     "[opencode-orchestrator] 代表的な監査理由: {reason}",
@@ -287,6 +375,18 @@ export const messagesJa = {
   "cli.doctor.warn.state_base_not_writable":
     "[opencode-orchestrator] orchestrator の状態ディレクトリを書き込み不可として検出しました。権限やマウント設定を確認してください。",
 
+  "cli.exec.error.timeout":
+    "[opencode-orchestrator] exec は {timeoutMs} ms でタイムアウトしました。",
+
+  "cli.exec.error.max_output":
+    "[opencode-orchestrator] exec の収集出力が上限 {maxOutputBytes} bytes を超えました。",
+
+  "cli.completion.error.missing_shell":
+    "[opencode-orchestrator] completion: 'bash' または 'powershell' を指定してください。",
+
+  "cli.completion.error.unknown_shell":
+    "[opencode-orchestrator] completion: 不明なシェルです: {shell}。'bash' または 'powershell' を指定してください。",
+
   "cli.clear.error.no_target":
     "[opencode-orchestrator] clear: 実行対象が指定されていません (--proposals か --resolve/--dismiss のいずれかが必要です)",
 
@@ -300,7 +400,7 @@ export const messagesJa = {
     "  --proposals     すべての open proposal を resolved にする\n" +
     "  --resolve <id>  指定した proposal を resolved にする\n" +
     "  --dismiss <id>  指定した proposal を dismissed にする\n" +
-    "  -y              確認なしで削除を実行する\n",
+    "  -y              確認なしで更新を実行する\n",
 
   "cli.clear.error.missing_task_name":
     "[opencode-orchestrator] clear: --task にはタスク名が必要です。",
@@ -319,6 +419,15 @@ export const messagesJa = {
 
   "cli.clear.error.unexpected_arg":
     "[opencode-orchestrator] clear: 想定外の引数です: {arg}",
+
+  "cli.clear.error.multiple_targets":
+    "[opencode-orchestrator] clear: --proposals、--resolve <id>、--dismiss <id> のうち 1 つだけを指定してください。",
+
+  "cli.clear.error.proposal_id_not_found":
+    "[opencode-orchestrator] clear: proposal の ID が見つかりません: {id}",
+
+  "cli.clear.error.proposal_already_closed":
+    "[opencode-orchestrator] clear: proposal はすでに closed です: {id}",
 
   "cli.clear.info.no_proposals":
     '[opencode-orchestrator] タスク "{task}" には更新対象の proposal はありません。',
@@ -340,7 +449,7 @@ export const messagesJa = {
 
   "cli.completion.subcommand.run": "タスク用の orchestrator ループを開始します",
 
-  "cli.completion.subcommand.resume": "最近のタスクやセッションを再開します",
+  "cli.completion.subcommand.resume": "指定タスクの直近セッションを再開します",
 
   "cli.completion.subcommand.status":
     "タスクの概要と次に行うべき操作を表示します",
@@ -366,6 +475,10 @@ export const messagesJa = {
     "タスクに紐づく proposal の状態を更新します",
 
   "cli.completion.option.task": "orchestrator タスクキーを指定します",
+
+  "cli.completion.option.generic": "CLI オプション",
+
+  "cli.completion.option.shell": "対応シェル名",
 
   "cli.completion.task.known": "既知の orchestrator タスク",
 

@@ -50,6 +50,15 @@ describe("runDoctorCommand", () => {
     expect(errSpy).toHaveBeenCalled();
   }, 15_000);
 
+  it("rejects unsupported arguments instead of ignoring them", async () => {
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const code = await runDoctorCommand({ argv: ["--task", "demo-task"] });
+
+    expect(code).toBe(1);
+    expect(errSpy).toHaveBeenCalled();
+  });
+
   it("reports when the orchestrator state base directory is missing", async () => {
     const tmpBase = fs.mkdtempSync(
       path.join(os.tmpdir(), "orch-doctor-missing-"),

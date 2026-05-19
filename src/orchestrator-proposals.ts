@@ -84,12 +84,54 @@ export function getOpenProposals(file: ProposalsFile): ProposalEntry[] {
   return file.proposals.filter((proposal) => proposal.status === "open");
 }
 
+function proposalTimeMs(proposal: ProposalEntry): number {
+  const parsed = Date.parse(proposal.created_at);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+export function getOpenProposalsSortedByRecency(
+  file: ProposalsFile,
+): ProposalEntry[] {
+  return [...getOpenProposals(file)].sort((a, b) => {
+    const timeDelta = proposalTimeMs(b) - proposalTimeMs(a);
+    if (timeDelta !== 0) return timeDelta;
+    if (b.cycle !== a.cycle) return b.cycle - a.cycle;
+    return a.id.localeCompare(b.id);
+  });
+}
+
+export function getLatestOpenProposal(
+  file: ProposalsFile,
+): ProposalEntry | undefined {
+  return getOpenProposalsSortedByRecency(file)[0];
+}
+
+export function getBlockingOpenProposalsSortedByRecency(
+  file: ProposalsFile,
+): ProposalEntry[] {
+  return getOpenProposalsSortedByRecency(file).filter(
+    (proposal) => !proposal.auto_resolvable,
+  );
+}
+
+export function getLatestBlockingOpenProposal(
+  file: ProposalsFile,
+): ProposalEntry | undefined {
+  return getBlockingOpenProposalsSortedByRecency(file)[0];
+}
+
+export function countOpenNonAutoResolvableProposals(
+  file: ProposalsFile,
+): number {
+  return file.proposals.filter(
+    (proposal) => proposal.status === "open" && !proposal.auto_resolvable,
+  ).length;
+}
+
 export function hasOpenNonAutoResolvableProposals(
   file: ProposalsFile,
 ): boolean {
-  return file.proposals.some(
-    (proposal) => proposal.status === "open" && !proposal.auto_resolvable,
-  );
+  return countOpenNonAutoResolvableProposals(file) > 0;
 }
 
 export function resolveAutoResolvableProposals(

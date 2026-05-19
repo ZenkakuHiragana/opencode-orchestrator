@@ -1,18 +1,29 @@
 import { tool, type ToolDefinition } from "@opencode-ai/plugin/tool";
 import * as fs from "node:fs";
 import * as path from "node:path";
+
 import helperCommandsData from "../resources/helper-commands.json" with { type: "json" };
-import { getOrchestratorStateDir } from "./orchestrator-paths.js";
 import { getOpencodeClient } from "./opencode-client-store.js";
+import { getOrchestratorStateDir } from "./orchestrator-paths.js";
 import { getPreflightRunnerBashPermissionSource } from "./preflight-permission-store.js";
+import {
+  refreshCommandPolicySummary,
+  truncateExcerpt,
+} from "./preflight-command-policy.js";
+import {
+  evaluateBashPermission,
+  evaluateEffectiveBashPermission,
+  type CommandPermissionDecision,
+  type PermissionEvaluationResult,
+} from "./preflight-bash-permission.js";
+import type {
+  CommandDescriptor,
+  CommandUsage,
+  PreflightProbeResult,
+} from "./preflight-types.js";
 
 type ToastVariant = "info" | "success" | "warning" | "error";
 
-/**
- * Show a toast notification in the OpenCode TUI.
- * Best-effort: failures are silently ignored so that preflight logic
- * is never disrupted by notification issues.
- */
 function emitToast(input: {
   title?: string;
   message: string;
@@ -22,7 +33,6 @@ function emitToast(input: {
   try {
     const client = getOpencodeClient();
     if (!client?.tui?.showToast) return;
-    // Fire-and-forget; do not await.
     void client.tui.showToast({
       body: {
         ...(input.title ? { title: input.title } : {}),
@@ -39,234 +49,6 @@ function emitToast(input: {
 }
 
 const z = tool.schema;
-
-export type CommandUsage = "must_exec" | "may_exec" | "doc_only";
-
-export type CommandDescriptor = {
-  // Stable identifier assigned by the refiner. This ID must be unique
-  // per task and remain stable across spec-check, preflight, and
-  // command-policy generation so that downstream agents can refer to
-  // commands without reconstructing them from free-form text.
-  id: string;
-  command: string;
-  role: string;
-  usage: CommandUsage;
-};
-
-export function truncateExcerpt(text: string, maxLen = 200): string {
-  if (text.length <= maxLen) return text;
-  return text.slice(0, maxLen) + "...";
-}
-
-export type PreflightProbeResult = {
-  id: string;
-  command: string;
-  role: string | null;
-  usage: CommandUsage;
-  available: boolean;
-  exit_code: number | null;
-  stderr_excerpt: string;
-};
-
-function refreshCommandPolicySummary(
-  task: string,
-  results: PreflightProbeResult[],
-): void {
-  const stateDir = getOrchestratorStateDir(task);
-  const policyPath = path.join(stateDir, "command-policy.json");
-  if (!fs.existsSync(policyPath)) {
-    return;
-  }
-
-  const rawPolicy = fs.readFileSync(policyPath, "utf8");
-  const policyJson = JSON.parse(rawPolicy) as {
-    version?: number;
-    summary?: {
-      loop_status?: string;
-      available_helper_commands?: string[];
-    };
-    commands?: {
-      id?: string;
-      usage?: CommandUsage | string;
-      availability?: "available" | "unavailable";
-      [key: string]: unknown;
-    }[];
-  };
-
-  if (policyJson.version !== 1 || !Array.isArray(policyJson.commands)) {
-    return;
-  }
-
-  const resultById = new Map<string, PreflightProbeResult>();
-  for (const r of results) {
-    resultById.set(r.id, r);
-  }
-
-  const availableHelperCommands = helperCommandsData.helper_commands
-    .filter((helper) => {
-      const r = resultById.get(helper.id);
-      return r && r.available;
-    })
-    .map((helper) => helper.command);
-
-  if (!policyJson.summary) {
-    policyJson.summary = {};
-  }
-  policyJson.summary.available_helper_commands = availableHelperCommands;
-
-  for (const cmd of policyJson.commands) {
-    if (!cmd.id || cmd.id.startsWith("helper:")) continue;
-    const r = resultById.get(cmd.id);
-    if (!r) continue;
-    cmd.availability = r.available ? "available" : "unavailable";
-  }
-
-  // Preserve summary.loop_status as-is.
-  // Refiner initializes it for new/rewritten policies and Planner finalizes it
-  // after consuming current preflight + spec-check results. Preflight only
-  // refreshes mechanical availability fields.
-
-  fs.writeFileSync(policyPath, JSON.stringify(policyJson, null, 2), "utf8");
-}
-
-function isBashPermissionDecision(
-  value: unknown,
-): value is CommandPermissionDecision {
-  return value === "allow" || value === "ask" || value === "deny";
-}
-
-function escapeRegexChar(ch: string): string {
-  return /[\\^$+?.()|[\]{}]/.test(ch) ? `\\${ch}` : ch;
-}
-
-function wildcardToRegExp(pattern: string): RegExp {
-  let out = "^";
-  for (const ch of pattern) {
-    if (ch === "*") {
-      out += ".*";
-    } else if (ch === "?") {
-      out += ".";
-    } else {
-      out += escapeRegexChar(ch);
-    }
-  }
-  out += "$";
-  return new RegExp(out);
-}
-
-function wildcardMatch(pattern: string, command: string): boolean {
-  return wildcardToRegExp(pattern).test(command);
-}
-
-export type CommandPermissionDecision = "allow" | "ask" | "deny";
-
-export type PermissionEvaluationResult = {
-  decision: CommandPermissionDecision;
-  determined: boolean;
-  matchedPattern: string | null;
-};
-
-type PermissionLayerEvaluation = {
-  matched: boolean;
-  decision: CommandPermissionDecision;
-  matchedPattern: string | null;
-};
-
-function evaluateBashPermissionLayer(
-  command: string,
-  permission: unknown,
-): PermissionLayerEvaluation {
-  const normalizedCommand = command.trim();
-
-  if (permission === undefined) {
-    return { matched: false, decision: "ask", matchedPattern: null };
-  }
-
-  if (isBashPermissionDecision(permission)) {
-    return { matched: true, decision: permission, matchedPattern: null };
-  }
-
-  if (
-    !permission ||
-    typeof permission !== "object" ||
-    Array.isArray(permission)
-  ) {
-    return { matched: false, decision: "ask", matchedPattern: null };
-  }
-
-  let lastMatch: {
-    decision: CommandPermissionDecision;
-    pattern: string;
-  } | null = null;
-
-  for (const [pattern, value] of Object.entries(permission)) {
-    if (!isBashPermissionDecision(value)) {
-      continue;
-    }
-    if (wildcardMatch(pattern, normalizedCommand)) {
-      lastMatch = { decision: value, pattern };
-    }
-  }
-
-  if (!lastMatch) {
-    return { matched: false, decision: "ask", matchedPattern: null };
-  }
-
-  return {
-    matched: true,
-    decision: lastMatch.decision,
-    matchedPattern: lastMatch.pattern,
-  };
-}
-
-export function evaluateBashPermission(
-  command: string,
-  permission: unknown,
-): PermissionEvaluationResult {
-  const layer = evaluateBashPermissionLayer(command, permission);
-  if (!layer.matched) {
-    return { decision: "ask", determined: true, matchedPattern: null };
-  }
-
-  return {
-    decision: layer.decision,
-    determined: true,
-    matchedPattern: layer.matchedPattern,
-  };
-}
-
-export function evaluateEffectiveBashPermission(
-  command: string,
-  source: { globalBash: unknown; agentBash: unknown },
-): PermissionEvaluationResult {
-  // OpenCode's default when no permission.bash is configured is "allow"
-  // (permissive defaults). This early-return preserves that behavior.
-  // The plugin's config hook is responsible for populating the permission
-  // store with actual config values so that user-configured restrictions
-  // take effect. See index.ts config() → setPreflightRunnerBashPermissionSource.
-  if (source.globalBash === undefined && source.agentBash === undefined) {
-    return { decision: "allow", determined: true, matchedPattern: null };
-  }
-
-  const globalLayer = evaluateBashPermissionLayer(command, source.globalBash);
-  const agentLayer = evaluateBashPermissionLayer(command, source.agentBash);
-
-  const lastMatch = agentLayer.matched
-    ? agentLayer
-    : globalLayer.matched
-      ? globalLayer
-      : null;
-
-  if (!lastMatch) {
-    return { decision: "ask", determined: true, matchedPattern: null };
-  }
-
-  return {
-    decision: lastMatch.decision,
-    determined: true,
-    matchedPattern: lastMatch.matchedPattern,
-  };
-}
 
 function emitPreflightMetadata(
   context: {
@@ -323,9 +105,6 @@ const preflightCliTool: ToolDefinition = tool({
     commands: z
       .array(
         z.object({
-          // Stable identifier assigned by the refiner. Must be unique
-          // per task and reused across spec-check, preflight, and
-          // command-policy.
           id: z.string(),
           command: z.string(),
           role: z.string(),
@@ -337,9 +116,6 @@ const preflightCliTool: ToolDefinition = tool({
   async execute(args, context) {
     const agentName = (context as any).agent as string | undefined;
 
-    // Guardrail: this tool is reserved for the orch-planner agent. Other agents
-    // must not call it directly. We return a SPEC_ERROR-style payload so that
-    // callers can detect misuse mechanically.
     if (agentName !== "orch-planner") {
       const msg =
         "SPEC_ERROR: preflight-cli may only be called from the orch-planner agent. Other agents must not invoke this tool directly.";
@@ -359,13 +135,9 @@ const preflightCliTool: ToolDefinition = tool({
 
     const cwd =
       (context as any).worktree || (context as any).directory || process.cwd();
-
     const opencodeBin = process.env.OPENCODE_BIN || "opencode";
+    void opencodeBin;
 
-    // Lightweight JSONL logger for debugging preflight behavior. This writes
-    // to the orchestrator state directory for the current task so that we can
-    // later inspect how often preflight-cli was invoked and which child
-    // `opencode run` processes were spawned.
     let logPath: string | null = null;
     try {
       const stateDir = getOrchestratorStateDir(args.task);
@@ -388,11 +160,6 @@ const preflightCliTool: ToolDefinition = tool({
       }
     };
 
-    // Guardrail: preflight-cli MUST only be used when a proper orchestrator
-    // state directory for this task already exists (i.e. after Refiner has
-    // created acceptance-index/spec.md/command-policy). If the
-    // state directory or core files are missing, treat this as a spec/flow
-    // error and do not spawn any `orch-preflight` sessions.
     const stateDir = getOrchestratorStateDir(args.task);
     const acceptancePath = path.join(stateDir, "acceptance-index.json");
     const specPath = path.join(stateDir, "spec.md");
@@ -435,7 +202,6 @@ const preflightCliTool: ToolDefinition = tool({
       return JSON.stringify(aggregated, null, 2);
     }
 
-    // Include helper commands from helper-commands.json in the probe list.
     const allCommands: CommandDescriptor[] = [
       ...args.commands,
       ...helperCommandsData.helper_commands.map((h) => ({
@@ -463,10 +229,6 @@ const preflightCliTool: ToolDefinition = tool({
       status: "running",
     });
 
-    // Evaluate permission.bash rules for each command without spawning
-    // any `orch-preflight` sessions. This keeps preflight checks cheap and
-    // fully deterministic, relying solely on the effective bash permission
-    // map for preflight.
     const results: PreflightProbeResult[] = [];
     const preflightRunnerBashPermission =
       getPreflightRunnerBashPermissionSource();
@@ -510,8 +272,6 @@ const preflightCliTool: ToolDefinition = tool({
       results,
     };
 
-    // Best-effort command-policy.json update: reflect helper availability and
-    // per-command availability based on preflight results.
     try {
       refreshCommandPolicySummary(args.task, results);
     } catch (err) {
@@ -520,7 +280,6 @@ const preflightCliTool: ToolDefinition = tool({
         error:
           err && (err as Error).message ? (err as Error).message : String(err),
       });
-      // Do not throw; preflight results should still be returned.
     }
 
     log({ event: "execute_done", status, results });
@@ -546,5 +305,20 @@ const preflightCliTool: ToolDefinition = tool({
     return JSON.stringify(aggregated, null, 2);
   },
 });
+
+export type {
+  CommandDescriptor,
+  CommandUsage,
+  PreflightProbeResult,
+} from "./preflight-types.js";
+export type {
+  CommandPermissionDecision,
+  PermissionEvaluationResult,
+} from "./preflight-bash-permission.js";
+export { truncateExcerpt } from "./preflight-command-policy.js";
+export {
+  evaluateBashPermission,
+  evaluateEffectiveBashPermission,
+} from "./preflight-bash-permission.js";
 
 export default preflightCliTool;

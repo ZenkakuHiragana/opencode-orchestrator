@@ -3,11 +3,11 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const runLoopMock = vi.fn<(opts: any) => Promise<boolean>>(() =>
   Promise.resolve(true),
 );
-const runListMock = vi.fn<(opts: any) => Promise<void>>(() =>
-  Promise.resolve(),
+const runListMock = vi.fn<(opts: any) => Promise<number>>(() =>
+  Promise.resolve(0),
 );
-const runClearMock = vi.fn<(opts: any) => Promise<void>>(() =>
-  Promise.resolve(),
+const runClearMock = vi.fn<(opts: any) => Promise<number>>(() =>
+  Promise.resolve(0),
 );
 const runExecMock = vi.fn<(opts: any) => Promise<any>>(() =>
   Promise.resolve({ code: 0, stdout: "", stderr: "", truncated: false }),
@@ -178,10 +178,9 @@ describe("runCli subcommands", () => {
     expect(runRunCommandMock).not.toHaveBeenCalled();
   });
 
-  it("rewrites -t to --task for resume/status/doctor/fix/list", async () => {
+  it("rewrites -t to --task for resume/status/fix/list", async () => {
     runResumeCommandMock.mockResolvedValueOnce(0);
     runStatusCommandMock.mockResolvedValueOnce(0);
-    runDoctorCommandMock.mockResolvedValueOnce(0);
     runFixCommandMock.mockResolvedValueOnce(0);
     const { runCli } = await import("../src/cli.js");
 
@@ -199,13 +198,6 @@ describe("runCli subcommands", () => {
       argv: ["--task", "t2"],
     });
 
-    code = await runCli(["doctor", "-t", "t3"]);
-    expect(code).toBe(0);
-    expect(runDoctorCommandMock).toHaveBeenCalledTimes(1);
-    expect(runDoctorCommandMock).toHaveBeenCalledWith({
-      argv: ["--task", "t3"],
-    });
-
     code = await runCli(["fix", "-t", "t4"]);
     expect(code).toBe(0);
     expect(runFixCommandMock).toHaveBeenCalledTimes(1);
@@ -217,6 +209,19 @@ describe("runCli subcommands", () => {
     const listCode = await runCli(["list", "-t", "t5", "--proposals"]);
     expect(listCode).toBe(0);
     expect(runListMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("passes doctor arguments through without task-flag rewriting", async () => {
+    runDoctorCommandMock.mockResolvedValueOnce(0);
+    const { runCli } = await import("../src/cli.js");
+
+    const code = await runCli(["doctor", "-t", "t3"]);
+
+    expect(code).toBe(0);
+    expect(runDoctorCommandMock).toHaveBeenCalledTimes(1);
+    expect(runDoctorCommandMock).toHaveBeenCalledWith({
+      argv: ["-t", "t3"],
+    });
   });
 
   it("rewrites -t to --task for clear before parsing", async () => {
@@ -259,10 +264,6 @@ describe("runCli subcommands", () => {
     expect(code).toBe(1);
     expect(runStatusCommandMock).not.toHaveBeenCalled();
 
-    code = await runCli(["doctor", "--task", "t1", "-t", "t2"]);
-    expect(code).toBe(1);
-    expect(runDoctorCommandMock).not.toHaveBeenCalled();
-
     code = await runCli(["fix", "--task", "t1", "-t", "t2"]);
     expect(code).toBe(1);
     expect(runFixCommandMock).not.toHaveBeenCalled();
@@ -297,11 +298,11 @@ describe("runCli subcommands", () => {
   it("calls runDoctorCommand and returns its exit code", async () => {
     runDoctorCommandMock.mockResolvedValueOnce(0);
     const { runCli } = await import("../src/cli.js");
-    const code = await runCli(["doctor", "--task", "t1"]);
+    const code = await runCli(["doctor"]);
     expect(code).toBe(0);
     expect(runDoctorCommandMock).toHaveBeenCalledTimes(1);
     expect(runDoctorCommandMock).toHaveBeenCalledWith({
-      argv: ["--task", "t1"],
+      argv: [],
     });
   });
 

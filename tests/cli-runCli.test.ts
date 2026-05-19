@@ -65,12 +65,61 @@ describe("runCli", () => {
     expect(writes.join("\n")).toContain("使い方: opencode-orchestrator list");
   });
 
+  it("prints high-level subcommand help and returns 0", async () => {
+    let code = await runCli(["run", "--help"]);
+    expect(code).toBe(0);
+    expect(writes.join("\n")).toContain("使い方: opencode-orchestrator run");
+
+    writes.length = 0;
+    code = await runCli(["resume", "--help"]);
+    expect(code).toBe(0);
+    expect(writes.join("\n")).toContain("使い方: opencode-orchestrator resume");
+
+    writes.length = 0;
+    code = await runCli(["status", "--help"]);
+    expect(code).toBe(0);
+    expect(writes.join("\n")).toContain("使い方: opencode-orchestrator status");
+
+    writes.length = 0;
+    code = await runCli(["doctor", "--help"]);
+    expect(code).toBe(0);
+    expect(writes.join("\n")).toContain("使い方: opencode-orchestrator doctor");
+
+    writes.length = 0;
+    code = await runCli(["fix", "--help"]);
+    expect(code).toBe(0);
+    expect(writes.join("\n")).toContain("使い方: opencode-orchestrator fix");
+
+    writes.length = 0;
+    code = await runCli(["completion", "--help"]);
+    expect(code).toBe(0);
+    expect(writes.join("\n")).toContain(
+      "使い方: opencode-orchestrator completion",
+    );
+  });
+
   it("prints unknown subcommand and returns 1", async () => {
     const code = await runCli(["wat"]);
     expect(code).toBe(1);
     const output = writes.join("\n");
     expect(output).toContain("不明なサブコマンドです");
     expect(output).toContain("wat");
+  });
+
+  it("returns 1 with parser errors for low-level subcommands instead of fatal wrapping", async () => {
+    let code = await runCli(["list", "--foo"]);
+    expect(code).toBe(1);
+    expect(writes.join("\n")).toContain("unknown option for list");
+
+    writes.length = 0;
+    code = await runCli(["clear", "--resolve", "p-1"]);
+    expect(code).toBe(1);
+    expect(writes.join("\n")).toContain("--task");
+
+    writes.length = 0;
+    code = await runCli(["loop", "--task", "t1", "--unknown"]);
+    expect(code).toBe(1);
+    expect(writes.join("\n")).toContain("unknown option");
   });
 
   it("prints English usage when LANG is en_US.UTF-8", async () => {

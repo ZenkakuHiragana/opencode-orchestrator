@@ -167,6 +167,84 @@ describe("runList --task --proposals", () => {
     expect(lines).not.toContain("p-resolved");
   });
 
+  it("prints a dedicated message when no open proposals remain", async () => {
+    const fakeXdg = fs.mkdtempSync(
+      path.join(os.tmpdir(), "orch-list-proposals-none-open-"),
+    );
+    process.env.XDG_STATE_HOME = fakeXdg;
+
+    const baseDir = path.join(fakeXdg, "opencode", "orchestrator");
+    const task = "my-task-proposals-none-open";
+    const stateDir = path.join(baseDir, task, "state");
+    fs.mkdirSync(stateDir, { recursive: true });
+
+    fs.writeFileSync(
+      path.join(stateDir, "proposals.json"),
+      JSON.stringify(
+        {
+          version: 1,
+          proposals: [
+            {
+              id: "p-resolved",
+              source: "auditor",
+              cycle: 2,
+              kind: "audit_failure",
+              priority: "high",
+              summary: "resolved proposal",
+              related_requirement_ids: ["R19"],
+              related_todo_ids: [],
+              status: "resolved",
+              auto_resolvable: true,
+              created_at: "2026-03-29T00:00:00.000Z",
+              resolved_at: "2026-03-29T01:00:00.000Z",
+              resolved_by: "auto",
+            },
+          ],
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+
+    await runList({
+      format: "text",
+      task,
+      showProposals: true,
+      openOnly: true,
+    });
+
+    const errMock = console.error as unknown as {
+      mock: { calls: unknown[][] };
+    };
+    const lines = errMock.mock.calls.map((c) => c.join(" ")).join("\n");
+    expect(lines).toContain(`タスク "${task}" に open proposal はありません`);
+  });
+
+  it("reports an unknown task instead of pretending proposals are empty", async () => {
+    const fakeXdg = fs.mkdtempSync(
+      path.join(os.tmpdir(), "orch-list-proposals-missing-task-"),
+    );
+    process.env.XDG_STATE_HOME = fakeXdg;
+
+    const baseDir = path.join(fakeXdg, "opencode", "orchestrator");
+    fs.mkdirSync(path.join(baseDir, "known-task", "state"), {
+      recursive: true,
+    });
+
+    await runList({
+      format: "text",
+      task: "missing-task",
+      showProposals: true,
+    });
+
+    const errMock = console.error as unknown as {
+      mock: { calls: unknown[][] };
+    };
+    const lines = errMock.mock.calls.map((c) => c.join(" ")).join("\n");
+    expect(lines).toContain("タスク 'missing-task' は見つかりませんでした");
+  });
+
   it("returns proposals as JSON when format=json", async () => {
     const fakeXdg = fs.mkdtempSync(
       path.join(os.tmpdir(), "orch-list-proposals-json-"),

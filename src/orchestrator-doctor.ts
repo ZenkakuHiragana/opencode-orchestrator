@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import { spawnSync } from "node:child_process";
 
+import { parseDoctorArgs } from "./cli-args.js";
 import { t } from "./i18n/messages.js";
 import { getOrchestratorBaseDir } from "./orchestrator-paths.js";
 
@@ -24,7 +25,12 @@ function checkTool(name: string, args: string[]): ToolCheckResult {
 export async function runDoctorCommand(
   opts: DoctorCommandOptions,
 ): Promise<number> {
-  void opts;
+  try {
+    parseDoctorArgs(opts.argv);
+  } catch (error) {
+    console.error(String((error as Error).message ?? error));
+    return 1;
+  }
 
   const checks: ToolCheckResult[] = [];
 

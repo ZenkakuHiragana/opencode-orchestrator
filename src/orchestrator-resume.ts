@@ -2,9 +2,10 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 import { t } from "./i18n/messages.js";
-import { parseLoopArgs } from "./cli-args.js";
+import { parseLoopArgs, parseResumeArgs } from "./cli-args.js";
 import { runLoop } from "./orchestrator-loop.js";
 import { getOrchestratorStateDir } from "./orchestrator-paths.js";
+import { loadStatusJson } from "./orchestrator-status.js";
 import {
   listKnownTasks,
   sortTasksByRecency,
@@ -18,7 +19,14 @@ export interface ResumeCommandOptions {
 export async function runResumeCommand(
   opts: ResumeCommandOptions,
 ): Promise<number> {
-  const args = [...opts.argv];
+  let args: string[];
+  try {
+    const parsed = parseResumeArgs(opts.argv);
+    args = parsed.loopArgv;
+  } catch (error) {
+    console.error(String((error as Error).message ?? error));
+    return 1;
+  }
 
   let task: string | undefined;
   for (let i = 0; i < args.length; i += 1) {
@@ -101,9 +109,29 @@ export async function runResumeCommand(
   }
 
   if (loopStatus === "ready_for_loop") {
-    const loopOpts = parseLoopArgs(["--task", task, "--continue"]);
-    const done = await runLoop(loopOpts);
-    return done ? 0 : 1;
+    const status = loadStatusJson(path.join(stateDir, "status.json"));
+    if (!status.last_session_id) {
+      console.error(t("cli.resume.error.no_recent_session", { task }));
+      return 1;
+    }
+
+    const loopArgv = [...args];
+    if (!loopArgv.includes("--task") && !loopArgv.includes("-t")) {
+      loopArgv.unshift(task);
+      loopArgv.unshift("--task");
+    }
+    if (!loopArgv.includes("--continue")) {
+      loopArgv.push("--continue");
+    }
+
+    try {
+      const loopOpts = parseLoopArgs(loopArgv);
+      const done = await runLoop(loopOpts);
+      return done ? 0 : 1;
+    } catch (error) {
+      console.error(String((error as Error).message ?? error));
+      return 1;
+    }
   }
 
   if (loopStatus === "needs_refinement") {

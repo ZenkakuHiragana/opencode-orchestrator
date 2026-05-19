@@ -61,6 +61,17 @@ describe("status/fix task auto-resolution and suggestions", () => {
     expect(text).toContain("実行可能な orchestrator タスクが見つかりません");
   });
 
+  it("status rejects unsupported options instead of ignoring them", async () => {
+    const code = await runStatusCommand({ argv: ["--json"] });
+
+    expect(code).toBe(1);
+    const errMock = console.error as unknown as {
+      mock: { calls: unknown[][] };
+    };
+    const text = errMock.mock.calls.map((c) => String(c[0])).join("\n");
+    expect(text).toContain("不明なオプション");
+  });
+
   it("status prints a multiple-tasks message when --task is omitted and multiple tasks exist", async () => {
     const tmpBase = fs.mkdtempSync(path.join(os.tmpdir(), "orch-status-many-"));
     process.env.XDG_STATE_HOME = tmpBase;
@@ -249,6 +260,17 @@ describe("status/fix task auto-resolution and suggestions", () => {
     };
     const text = errMock.mock.calls.map((c) => String(c[0])).join("\n");
     expect(text).toContain("もしかして");
+  });
+
+  it("fix rejects unexpected positional arguments instead of ignoring them", async () => {
+    const code = await runFixCommand({ argv: ["demo-task"] });
+
+    expect(code).toBe(1);
+    const errMock = console.error as unknown as {
+      mock: { calls: unknown[][] };
+    };
+    const text = errMock.mock.calls.map((c) => String(c[0])).join("\n");
+    expect(text).toContain("想定外の引数");
   });
 
   it("fix suggests a close match when task is misspelled in English", async () => {

@@ -1,10 +1,18 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  parseCompletionCliArgs,
+  parseDoctorArgs,
   parseExecArgs,
+  parseFixArgs,
   parseListArgs,
   parseLoopArgs,
+  parseResumeArgs,
+  parseRunArgs,
+  parseStatusArgs,
 } from "../src/cli-args.js";
+
+declare const process: { platform: string };
 
 describe("parseLoopArgs", () => {
   it("parses minimal required arguments", () => {
@@ -80,6 +88,23 @@ describe("parseLoopArgs", () => {
     expect(opts.prompt).toBe("do something");
   });
 
+  it("still parses --file after bare bwrap flags are enabled", () => {
+    const opts = parseLoopArgs([
+      "--task",
+      "foo",
+      "--bwrap-skip-command-policy",
+      "--unshare-net",
+      "--file",
+      "note.md",
+      "do",
+      "something",
+    ]);
+    expect(opts.bwrapSkipCommandPolicy).toBe(true);
+    expect(opts.bwrapArgs).toEqual(["--unshare-net"]);
+    expect(opts.files).toEqual(["note.md"]);
+    expect(opts.prompt).toBe("do something");
+  });
+
   it("generates a fallback prompt when none is provided", () => {
     const opts = parseLoopArgs(["--task", "foo"]);
     expect(opts.prompt).toContain("foo");
@@ -123,6 +148,57 @@ describe("parseListArgs", () => {
     expect(() => parseListArgs(["--proposals"])).toThrow(
       "--proposals requires --task <task-name>",
     );
+  });
+});
+
+describe("high-level CLI parsers", () => {
+  it("parseRunArgs delegates loop-compatible options without re-parsing them here", () => {
+    const opts = parseRunArgs([
+      "--task",
+      "foo",
+      "--max-loop",
+      "5",
+      "--file",
+      "a.txt",
+      "--commit",
+    ]);
+    expect(opts.task).toBe("foo");
+    expect(opts.loopArgv).toEqual([
+      "--task",
+      "foo",
+      "--max-loop",
+      "5",
+      "--file",
+      "a.txt",
+      "--commit",
+    ]);
+  });
+
+  it("parseResumeArgs rejects low-level session control flags", () => {
+    expect(() => parseResumeArgs(["--session", "ses-1"])).toThrow(
+      /--session.*高レベルコマンド/,
+    );
+  });
+
+  it("parseStatusArgs accepts only --task", () => {
+    expect(parseStatusArgs(["--task", "foo"]).task).toBe("foo");
+    expect(() => parseStatusArgs(["--json"])).toThrow(/不明なオプション/);
+  });
+
+  it("parseFixArgs accepts only --task", () => {
+    expect(parseFixArgs(["--task", "foo"]).task).toBe("foo");
+    expect(() => parseFixArgs(["extra"])).toThrow(/想定外の引数/);
+  });
+
+  it("parseDoctorArgs rejects extra arguments", () => {
+    expect(parseDoctorArgs([])).toEqual({ help: false });
+    expect(() => parseDoctorArgs(["--task"])).toThrow(/不明なオプション/);
+  });
+
+  it("parseCompletionCliArgs requires a supported shell", () => {
+    expect(parseCompletionCliArgs(["bash"])).toEqual({ shell: "bash" });
+    expect(() => parseCompletionCliArgs([])).toThrow(/bash.*powershell/);
+    expect(() => parseCompletionCliArgs(["zsh"])).toThrow(/不明なシェル/);
   });
 });
 

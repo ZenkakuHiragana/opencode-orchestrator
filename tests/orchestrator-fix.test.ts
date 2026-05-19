@@ -166,6 +166,88 @@ describe("runFixCommand planning diagnostics", () => {
     expect(text).toContain(`ococ run --task ${task}`);
   });
 
+  it("reports blocking proposals before claiming the task is execution-ready", async () => {
+    const tmpBase = fs.mkdtempSync(
+      path.join(os.tmpdir(), "orch-fix-proposal-"),
+    );
+    process.env.XDG_STATE_HOME = tmpBase;
+
+    const task = "cli-ux-i18n-and-completion";
+    const stateDir = path.join(
+      tmpBase,
+      "opencode",
+      "orchestrator",
+      task,
+      "state",
+    );
+    fs.mkdirSync(stateDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(stateDir, "command-policy.json"),
+      JSON.stringify(
+        {
+          version: 1,
+          summary: {
+            loop_status: "ready_for_loop",
+          },
+          commands: [],
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+    fs.writeFileSync(
+      path.join(stateDir, "proposals.json"),
+      JSON.stringify(
+        {
+          version: 1,
+          proposals: [
+            {
+              id: "p-old",
+              source: "executor",
+              cycle: 1,
+              kind: "need_replan",
+              priority: "high",
+              summary: "older blocking proposal",
+              related_requirement_ids: ["R1"],
+              related_todo_ids: [],
+              status: "open",
+              auto_resolvable: false,
+              created_at: "2026-03-29T00:00:00.000Z",
+            },
+            {
+              id: "p-new",
+              source: "executor",
+              cycle: 2,
+              kind: "env_blocked",
+              priority: "critical",
+              summary: "newest blocking proposal",
+              related_requirement_ids: ["R2"],
+              related_todo_ids: [],
+              status: "open",
+              auto_resolvable: false,
+              created_at: "2026-03-30T00:00:00.000Z",
+            },
+          ],
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+
+    const code = await runFixCommand({ argv: ["--task", task] });
+
+    expect(code).toBe(1);
+    const errMock = console.error as unknown as {
+      mock: { calls: unknown[][] };
+    };
+    const text = errMock.mock.calls.map((c) => String(c[0])).join("\n");
+    expect(text).toContain("実行を妨げる未解決 proposal が 2 件あります");
+    expect(text).toContain("newest blocking proposal");
+    expect(text).toContain("ococ list --task");
+  });
+
   it("surfaces the latest failed audit requirements when planning state is unknown", async () => {
     const tmpBase = fs.mkdtempSync(path.join(os.tmpdir(), "orch-fix-audit-"));
     process.env.XDG_STATE_HOME = tmpBase;
@@ -215,5 +297,6 @@ describe("runFixCommand planning diagnostics", () => {
     expect(text).toContain(
       "Missing verification evidence for the final acceptance path",
     );
+    expect(text).not.toContain("ococ list --task");
   });
 });

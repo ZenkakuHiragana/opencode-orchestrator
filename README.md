@@ -197,7 +197,7 @@ npx ococ run -t <task-key>
 | コマンド                    | 用途                                           |
 | --------------------------- | ---------------------------------------------- |
 | `ococ run --task <task>`    | 実行可能なタスクを開始する                     |
-| `ococ resume`               | 直近のタスクやセッションを再開する             |
+| `ococ resume`               | 指定タスクの直近セッションを再開する           |
 | `ococ status --task <task>` | 現在の状況と次のアクションを確認する           |
 | `ococ fix --task <task>`    | 詰まっている理由と次の一手を確認する           |
 | `ococ doctor`               | Node / npm / OpenCode / state まわりを診断する |
@@ -209,7 +209,15 @@ npx ococ run -t <task-key>
 
 - `ococ loop --task <task>`
 - `ococ list`
+- `ococ exec --file <helper.mjs>`
 - `ococ clear`
+
+proposal を確認・更新するときによく使う例:
+
+- `ococ list --task <task> --proposals`
+- `ococ list --task <task> --proposals --open`
+- `ococ clear --task <task> --resolve <proposal-id> -y`
+- `ococ clear --task <task> --dismiss <proposal-id> -y`
 
 ## シェル補完
 
@@ -297,6 +305,7 @@ README では固定の推奨セットは示さず、Planner が提示する内�
 | `--max-restarts N` | 安全装置による再起動上限を指定する |
 | `--file <path>`    | 各 step に追加ファイルを添付する   |
 | `--commit`         | 完了後にコミットを作る             |
+| `--bwrap-arg ARG`  | Bubblewrap に追加引数を渡す        |
 
 ### 危険なオプション
 
@@ -329,6 +338,9 @@ README では固定の推奨セットは示さず、Planner が提示する内�
 | `todo.json`             | Todo-Writer が作る正式な todo 一覧        |
 | `status.json`           | Executor / Auditor の進捗スナップショット |
 | `proposals.json`        | 再計画が必要な提案キュー                  |
+
+`proposals.json` に未解決の非自動解決 proposal がある場合、高レベルの `ococ run` / `ococ resume` はそのままでは進めません。
+まず `ococ list --task <task> --proposals` で内容を確認してください。
 
 ログは次のディレクトリに保存されます。
 
