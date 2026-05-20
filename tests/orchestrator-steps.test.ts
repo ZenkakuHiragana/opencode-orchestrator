@@ -643,6 +643,85 @@ describe("maybeRunTodoWriterStep", () => {
         "todo-writer が有効な todo.json を残さなかったため再計画状態を維持する",
     });
   });
+
+  it("skips Executor when todo-writer leaves non-dispatch active todos", async () => {
+    const status = createStatus();
+    const tmpState = fs.mkdtempSync(
+      path.join(os.tmpdir(), "orch-steps-state-nondispatch-todos-"),
+    );
+    const tmpLogs = fs.mkdtempSync(
+      path.join(os.tmpdir(), "orch-steps-logs-nondispatch-todos-"),
+    );
+    const acceptancePath = path.join(tmpState, "acceptance-index.json");
+    const statusPath = path.join(tmpState, "status.json");
+    const todoPath = path.join(tmpState, "todo.json");
+    fs.writeFileSync(
+      acceptancePath,
+      JSON.stringify({
+        version: 1,
+        requirements: [{ id: "R1", title: "Requirement 1" }],
+      }),
+      "utf8",
+    );
+
+    mockRunOpencode.mockImplementationOnce(async () => {
+      fs.writeFileSync(
+        todoPath,
+        JSON.stringify(
+          {
+            todos: [
+              {
+                id: "T1",
+                summary:
+                  "Planner-only wait-state coverage until a newly attached packet appears",
+                status: "pending",
+                related_requirement_ids: ["R1"],
+                execution_contract: {
+                  intent: "investigate",
+                  expected_evidence: [
+                    "If no newly attached signal is visible in the current pass, Executor must emit `STEP_BLOCKER` immediately and leave this hold unexecuted.",
+                  ],
+                },
+              },
+            ],
+          },
+          null,
+          2,
+        ) + "\n",
+        "utf8",
+      );
+      return { code: 0, stdout: "" } as any;
+    });
+
+    const res = await maybeRunTodoWriterStep(
+      baseOpts,
+      1,
+      "001",
+      tmpState,
+      tmpLogs,
+      acceptancePath,
+      "sess-1",
+      [],
+      status,
+      statusPath,
+      0,
+      false,
+    );
+
+    expect(res.abortLoop).toBe(false);
+    expect(res.forceTodoWriterNextStep).toBe(true);
+    expect(res.skipExecutorThisStep).toBe(true);
+
+    const saved = JSON.parse(
+      fs.readFileSync(statusPath, "utf8"),
+    ) as OrchestratorStatus;
+    expect(saved.failure_budget).toMatchObject({
+      last_failure_kind: "todo_writer_non_dispatch_active_todos",
+    });
+    expect(saved.failure_budget?.last_failure_summary).toContain(
+      "active todos must be executor-runnable",
+    );
+  });
 });
 
 describe("runExecutorAndAuditorStep", () => {
@@ -1013,6 +1092,76 @@ describe("runExecutorAndAuditorStep", () => {
     expect(proposals.proposals.some((p) => p.kind === "need_replan")).toBe(
       true,
     );
+  });
+
+  it("resolves older open auto-resolvable need_replan entries before appending the latest one", async () => {
+    const status = createStatus();
+    writeProposalsJson(sharedStateDir, [
+      {
+        id: "p-old-replan",
+        source: "executor",
+        cycle: 0,
+        kind: "need_replan",
+        priority: "high",
+        summary: "older replan signal",
+        related_todo_ids: ["T1"],
+        related_requirement_ids: ["R1"],
+        status: "open",
+        auto_resolvable: true,
+        created_at: "2026-03-29T00:00:00.000Z",
+      },
+      {
+        id: "p-other-kind",
+        source: "executor",
+        cycle: 0,
+        kind: "audit_failure",
+        priority: "high",
+        summary: "keep me open",
+        related_todo_ids: ["T2"],
+        related_requirement_ids: ["R2"],
+        status: "open",
+        auto_resolvable: true,
+        created_at: "2026-03-29T00:00:00.000Z",
+      },
+    ]);
+
+    const stdout = [
+      "STEP_INTENT: replan R1 sharpen the todo",
+      "STEP_VERIFY: not_ready - still narrowing scope",
+      "STEP_BLOCKER: general need_replan latest actionable split is required",
+      "STEP_AUDIT: in_progress R1",
+    ].join("\n");
+
+    mockRunOpencode.mockResolvedValueOnce({ code: 0, stdout } as any);
+
+    const res = await runExecutorAndAuditorStep(
+      baseOpts,
+      1,
+      "sess-1",
+      [],
+      stepLogPath(1),
+      auditLogPath(1),
+      status,
+      sharedStatusPath(),
+      0,
+      false,
+      sharedLogsDir,
+    );
+
+    expect(res.forceTodoWriterNextStep).toBe(true);
+    const proposals = loadProposals(sharedProposalsPath());
+    const oldNeedReplan = proposals.proposals.find(
+      (p) => p.id === "p-old-replan",
+    );
+    expect(oldNeedReplan?.status).toBe("resolved");
+    expect(
+      proposals.proposals.filter(
+        (p) => p.status === "open" && p.kind === "need_replan",
+      ),
+    ).toHaveLength(1);
+    expect(
+      proposals.proposals.find((p) => p.id === "p-other-kind")?.status,
+    ).toBe("open");
   });
 
   it("invokes auditor when STEP_AUDIT ready and propagates done + report", async () => {

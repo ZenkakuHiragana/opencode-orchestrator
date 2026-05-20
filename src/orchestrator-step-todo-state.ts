@@ -8,6 +8,148 @@ import type {
   TodoSummary,
 } from "./orchestrator-step-types.js";
 import type { OrchestratorStatus } from "./orchestrator-status.js";
+import type { CanonicalTodo } from "./orchestrator-todo-types.js";
+
+const ACTIVE_TODO_STATUSES = new Set<string>(["pending", "in_progress"]);
+
+const NON_DISPATCH_SUMMARY_PATTERNS: Array<{ label: string; regex: RegExp }> = [
+  { label: "planner-only", regex: /\bplanner-(?:only|held)\b/i },
+  { label: "planner-owned", regex: /\bplanner-owned\b/i },
+  { label: "wait-state", regex: /\bwait-state\b/i },
+  { label: "non-dispatch", regex: /\bnon-dispatch\b/i },
+  { label: "not-executor-runnable", regex: /not executor-runnable/i },
+  { label: "do-not-dispatch", regex: /do not (?:dispatch|send) executor/i },
+  { label: "coverage-placeholder", regex: /\bcoverage placeholder\b/i },
+  { label: "coverage-only", regex: /\bcoverage only\b/i },
+  {
+    label: "passive-coverage-gate",
+    regex: /preserve .* coverage until .*\b(?:signal|packet|proof|evidence)\b/i,
+  },
+  {
+    label: "future-signal-gate",
+    regex:
+      /awaiting a newly attached|until a newly attached|until a later attached/i,
+  },
+];
+
+const NON_DISPATCH_CONTRACT_PATTERNS: Array<{ label: string; regex: RegExp }> =
+  [
+    {
+      label: "immediate-step-blocker",
+      regex: /executor must emit\s+`?step_blocker`?\s+immediately/i,
+    },
+    {
+      label: "leave-unexecuted",
+      regex: /leave this .* unexecuted/i,
+    },
+    {
+      label: "block-immediately",
+      regex: /executor should block immediately/i,
+    },
+    {
+      label: "selected-only-after-later-signal",
+      regex: /selected only after .* newly attached/i,
+    },
+    {
+      label: "no-later-signal-yet",
+      regex: /when no later signal is attached yet/i,
+    },
+    {
+      label: "rerun-planning-not-executor",
+      regex: /rerun planning(?:,? not executor)?/i,
+    },
+    {
+      label: "same-shape-rerun-block",
+      regex: /do not generate another same-shape rerun/i,
+    },
+  ];
+
+type RuntimeTodoLike = Pick<
+  CanonicalTodo,
+  "id" | "summary" | "status" | "execution_contract"
+>;
+
+function summarizeTodoEscapeReasons(todo: RuntimeTodoLike): string[] {
+  if (!ACTIVE_TODO_STATUSES.has(todo.status)) {
+    return [];
+  }
+
+  const reasons = new Set<string>();
+  const summary = todo.summary ?? "";
+
+  for (const { label, regex } of NON_DISPATCH_SUMMARY_PATTERNS) {
+    if (regex.test(summary)) {
+      reasons.add(`summary:${label}`);
+    }
+  }
+
+  const contractTexts = [
+    ...(todo.execution_contract?.expected_evidence ?? []),
+    ...(todo.execution_contract?.audit_ready_when ?? []),
+  ];
+
+  for (const text of contractTexts) {
+    for (const { label, regex } of NON_DISPATCH_CONTRACT_PATTERNS) {
+      if (regex.test(text)) {
+        reasons.add(`contract:${label}`);
+      }
+    }
+  }
+
+  return Array.from(reasons);
+}
+
+export function validateNoExecutorEscapeActiveTodos(
+  todos: RuntimeTodoLike[],
+): CoverageCheckResult {
+  const flagged = todos
+    .map((todo) => {
+      const reasons = summarizeTodoEscapeReasons(todo);
+      return reasons.length > 0
+        ? `${todo.id} [${reasons.join(", ")}] ${todo.summary}`
+        : null;
+    })
+    .filter((value): value is string => value !== null);
+
+  if (flagged.length === 0) {
+    return { ok: true };
+  }
+
+  return {
+    ok: false,
+    reason:
+      "active todos must be executor-runnable and may not encode planner-only / wait-state / non-dispatch escape hatches: " +
+      flagged.join("; "),
+  };
+}
+
+export function validateTodoActionability(
+  todoPath: string,
+): CoverageCheckResult {
+  if (!fs.existsSync(todoPath)) {
+    return { ok: false, reason: "todo.json missing" };
+  }
+
+  try {
+    const todoRaw = fs.readFileSync(todoPath, "utf8");
+    const parsed = JSON.parse(todoRaw) as { todos?: unknown } | unknown[];
+    const todosUnknown = Array.isArray(parsed)
+      ? parsed
+      : Array.isArray((parsed as { todos?: unknown }).todos)
+        ? (parsed as { todos: unknown[] }).todos
+        : null;
+
+    if (!todosUnknown || !todosUnknown.every(isCanonicalTodoLike)) {
+      return { ok: false, reason: "todo.json has invalid shape" };
+    }
+
+    return validateNoExecutorEscapeActiveTodos(
+      todosUnknown as RuntimeTodoLike[],
+    );
+  } catch {
+    return { ok: false, reason: "todo.json parse failed" };
+  }
+}
 
 export function readTodoSummary(todoPath: string): TodoSummary {
   if (!fs.existsSync(todoPath)) {
@@ -117,13 +259,12 @@ export function validateTodoCoverage(
     };
 
     const todos = todosUnknown as TodoLike[];
-    const activeStatuses = new Set<string>(["pending", "in_progress"]);
     const missingActive: string[] = [];
 
     for (const reqId of unsatisfiedIds) {
       const hasActive = todos.some(
         (t) =>
-          activeStatuses.has(t.status) &&
+          ACTIVE_TODO_STATUSES.has(t.status) &&
           Array.isArray(t.related_requirement_ids) &&
           t.related_requirement_ids.includes(reqId),
       );

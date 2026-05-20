@@ -10,8 +10,7 @@ export const orchTodoWriteTool: ToolDefinition = tool({
     "Update orchestrator todos for a given task.\n\n" +
     "This tool is used by two orchestrator agents:\n" +
     "- orch-todo-writer (planner) uses planner_* modes to design and evolve the canonical todo set.\n" +
-    "- orch-executor uses executor_update_statuses to reflect execution progress.\n" +
-    "- orch-todo-writer may also enqueue replanning proposals directly with planner_add_proposals.\n\n" +
+    "- orch-executor uses executor_update_statuses to reflect execution progress.\n\n" +
     "Planner modes (orch-todo-writer only):\n" +
     "- mode=planner_replace_canonical: replace the entire canonical todo list for a task. Use this only when the todo structure must be regenerated from requirements/spec.\n" +
     "- mode=planner_add_todos: append new todos without changing any existing todos. Use this to add bridge work or new vertical slices.\n" +

@@ -8,6 +8,7 @@ import { getOrchestratorStateDir } from "../src/orchestrator-paths.js";
 import { orchTodoWriteTool } from "../src/orchestrator-todo.js";
 import {
   loadProposals,
+  resolveMatchingOpenAutoResolvableProposals,
   saveProposals,
   type ProposalsFile,
 } from "../src/orchestrator-proposals.js";
@@ -123,8 +124,75 @@ describe("saveProposals", () => {
   });
 });
 
+describe("resolveMatchingOpenAutoResolvableProposals", () => {
+  it("resolves only matching open auto-resolvable proposals", () => {
+    const resolvedAt = "2026-03-29T02:00:00.000Z";
+    const next = resolveMatchingOpenAutoResolvableProposals(
+      {
+        version: 1,
+        proposals: [
+          {
+            id: "p-open-a",
+            source: "executor",
+            cycle: 1,
+            kind: "need_replan",
+            priority: "high",
+            summary: "first",
+            related_requirement_ids: ["R1"],
+            related_todo_ids: ["T1"],
+            status: "open",
+            auto_resolvable: true,
+            created_at: "2026-03-29T00:00:00.000Z",
+          },
+          {
+            id: "p-open-b",
+            source: "executor",
+            cycle: 2,
+            kind: "audit_failure",
+            priority: "high",
+            summary: "keep open",
+            related_requirement_ids: ["R2"],
+            related_todo_ids: ["T2"],
+            status: "open",
+            auto_resolvable: true,
+            created_at: "2026-03-29T00:00:00.000Z",
+          },
+          {
+            id: "p-open-c",
+            source: "executor",
+            cycle: 3,
+            kind: "need_replan",
+            priority: "high",
+            summary: "blocking stays open",
+            related_requirement_ids: ["R3"],
+            related_todo_ids: ["T3"],
+            status: "open",
+            auto_resolvable: false,
+            created_at: "2026-03-29T00:00:00.000Z",
+          },
+        ],
+      },
+      (proposal) => proposal.kind === "need_replan",
+      "auto",
+      resolvedAt,
+    );
+
+    expect(next.proposals.find((p) => p.id === "p-open-a")).toMatchObject({
+      status: "resolved",
+      resolved_by: "auto",
+      resolved_at: resolvedAt,
+    });
+    expect(next.proposals.find((p) => p.id === "p-open-b")?.status).toBe(
+      "open",
+    );
+    expect(next.proposals.find((p) => p.id === "p-open-c")?.status).toBe(
+      "open",
+    );
+  });
+});
+
 describe("proposal enqueue path", () => {
-  it("persists Todo-Writer proposals directly into proposals.json", async () => {
+  it("rejects Todo-Writer proposal enqueue because planner stop proposals are disabled", async () => {
     const baseDir = fs.mkdtempSync(path.join(os.tmpdir(), "orch-proposals-"));
     const previousXdgStateHome = process.env.XDG_STATE_HOME;
     process.env.XDG_STATE_HOME = baseDir;
@@ -153,24 +221,12 @@ describe("proposal enqueue path", () => {
       { agent: "orch-todo-writer" } as any,
     );
 
-    const parsed = JSON.parse(result) as { ok: boolean; addedIds: string[] };
-    expect(parsed.ok).toBe(true);
-    expect(parsed.addedIds).toHaveLength(1);
-    expect(parsed.addedIds[0]).toMatch(/^p-/);
-
-    const saved = loadProposals(path.join(stateDir, "proposals.json"));
-    expect(saved.proposals).toHaveLength(1);
-    expect(saved.proposals[0]).toMatchObject({
-      source: "todo_writer",
-      cycle: 7,
-      kind: "need_replan",
-      priority: "high",
-      summary: "todo-writer から直接 proposal を追加する",
-      related_requirement_ids: ["R3"],
-      related_todo_ids: ["T3"],
-      status: "open",
-      auto_resolvable: true,
+    expect(JSON.parse(result)).toEqual({
+      ok: false,
+      error:
+        "SPEC_ERROR: mode=planner_add_proposals is disabled. Todo-Writer must repair canonical todos directly instead of enqueueing planner proposals.",
     });
+    expect(fs.existsSync(path.join(stateDir, "proposals.json"))).toBe(false);
 
     if (previousXdgStateHome === undefined) {
       delete process.env.XDG_STATE_HOME;

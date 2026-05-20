@@ -154,6 +154,29 @@ export function resolveAutoResolvableProposals(
   };
 }
 
+export function resolveMatchingOpenAutoResolvableProposals(
+  file: ProposalsFile,
+  predicate: (proposal: ProposalEntry) => boolean,
+  resolvedBy: ProposalResolvedBy,
+  resolvedAt: string,
+): ProposalsFile {
+  return {
+    version: 1,
+    proposals: file.proposals.map((proposal) =>
+      proposal.status === "open" &&
+      proposal.auto_resolvable &&
+      predicate(proposal)
+        ? {
+            ...proposal,
+            status: "resolved",
+            resolved_at: resolvedAt,
+            resolved_by: resolvedBy,
+          }
+        : proposal,
+    ),
+  };
+}
+
 function isStringArray(value: unknown): value is string[] {
   return (
     Array.isArray(value) && value.every((item) => typeof item === "string")

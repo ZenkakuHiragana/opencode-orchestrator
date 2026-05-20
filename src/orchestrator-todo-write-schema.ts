@@ -11,14 +11,12 @@ export function buildOrchTodoWriteArgs(z: typeof tool.schema) {
       .enum([
         "planner_replace_canonical",
         "planner_add_todos",
-        "planner_add_proposals",
         "planner_update_todos",
         "executor_update_statuses",
       ])
       .describe(
         "planner_replace_canonical: replace the canonical todo list (planner only). " +
           "planner_add_todos: append new todos with auto-assigned ids (planner only). " +
-          "planner_add_proposals: append new proposals to proposals.json (planner only). " +
           "planner_update_todos: patch existing todos based on filters (planner only). " +
           "executor_update_statuses: update statuses for existing todos (executor only).",
       ),
@@ -127,22 +125,6 @@ export function buildOrchTodoWriteArgs(z: typeof tool.schema) {
         "Todos to append when mode=planner_add_todos. Ids are auto-assigned based on the current todo count. " +
           "Newly added todos should normally use status 'pending' unless the work they describe is already known to be " +
           "completed, in progress, or explicitly cancelled.",
-      )
-      .optional(),
-    addProposals: z
-      .array(
-        z.object({
-          kind: z.string(),
-          priority: z.enum(["low", "medium", "high", "critical"]),
-          summary: z.string(),
-          details: z.string().optional(),
-          related_requirement_ids: z.array(z.string()),
-          related_todo_ids: z.array(z.string()),
-          auto_resolvable: z.boolean().optional(),
-        }),
-      )
-      .describe(
-        "Proposals to append when mode=planner_add_proposals. The source is always todo_writer and the current cycle is taken from status.json when available.",
       )
       .optional(),
     statusUpdates: z

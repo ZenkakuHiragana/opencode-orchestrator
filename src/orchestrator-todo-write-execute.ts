@@ -1,20 +1,9 @@
-import * as fs from "node:fs";
-import * as path from "node:path";
-
-import {
-  getOrchestratorProposalsPath,
-  getOrchestratorStateDir,
-} from "./orchestrator-paths.js";
-import {
-  createProposalEntry,
-  loadProposals,
-  saveProposals,
-} from "./orchestrator-proposals.js";
 import {
   buildGeneratedTodoId,
   loadCanonicalTodos,
   saveCanonicalTodos,
 } from "./orchestrator-todo-store.js";
+import { validateNoExecutorEscapeActiveTodos } from "./orchestrator-step-todo-state.js";
 import type { CanonicalTodo } from "./orchestrator-todo-types.js";
 
 export async function executeOrchTodoWrite(
@@ -41,6 +30,17 @@ export async function executeOrchTodoWrite(
         ok: false,
         error:
           "SPEC_ERROR: mode=planner_replace_canonical requires canonicalTodos to be provided.",
+      });
+    }
+    const actionabilityCheck = validateNoExecutorEscapeActiveTodos(
+      args.canonicalTodos,
+    );
+    if (!actionabilityCheck.ok) {
+      return JSON.stringify({
+        ok: false,
+        error:
+          "SPEC_ERROR: planner_replace_canonical cannot persist non-dispatch active todos. " +
+          actionabilityCheck.reason,
       });
     }
     saveCanonicalTodos(todoPath, args.canonicalTodos);
@@ -103,64 +103,25 @@ export async function executeOrchTodoWrite(
     }
 
     const updated = existing.concat(newTodos);
+    const actionabilityCheck = validateNoExecutorEscapeActiveTodos(updated);
+    if (!actionabilityCheck.ok) {
+      return JSON.stringify({
+        ok: false,
+        error:
+          "SPEC_ERROR: planner_add_todos cannot persist non-dispatch active todos. " +
+          actionabilityCheck.reason,
+      });
+    }
     saveCanonicalTodos(todoPath, updated);
     return JSON.stringify({ ok: true, addedIds: newTodos.map((t) => t.id) });
   }
 
   if (args.mode === "planner_add_proposals") {
-    if (agentName !== "orch-todo-writer") {
-      return JSON.stringify({
-        ok: false,
-        error:
-          "SPEC_ERROR: mode=planner_add_proposals may only be used by orch-todo-writer.",
-      });
-    }
-    if (!args.addProposals || args.addProposals.length === 0) {
-      return JSON.stringify({
-        ok: false,
-        error:
-          "SPEC_ERROR: mode=planner_add_proposals requires non-empty addProposals array.",
-      });
-    }
-
-    const proposalsPath = getOrchestratorProposalsPath(args.task);
-    const proposalsFile = loadProposals(proposalsPath);
-    const statusPath = path.join(
-      getOrchestratorStateDir(args.task),
-      "status.json",
-    );
-    let currentCycle = 0;
-    try {
-      if (fs.existsSync(statusPath)) {
-        const statusRaw = fs.readFileSync(statusPath, "utf8");
-        const statusJson = JSON.parse(statusRaw) as { current_cycle?: unknown };
-        if (typeof statusJson.current_cycle === "number") {
-          currentCycle = statusJson.current_cycle;
-        }
-      }
-    } catch {
-      currentCycle = 0;
-    }
-
-    const addedIds: string[] = [];
-    for (const item of args.addProposals) {
-      const entry = createProposalEntry({
-        source: "todo_writer",
-        cycle: currentCycle,
-        kind: item.kind,
-        priority: item.priority,
-        summary: item.summary,
-        details: item.details,
-        related_requirement_ids: item.related_requirement_ids,
-        related_todo_ids: item.related_todo_ids,
-        auto_resolvable: item.auto_resolvable ?? true,
-      });
-      proposalsFile.proposals.push(entry);
-      addedIds.push(entry.id);
-    }
-
-    saveProposals(proposalsPath, proposalsFile);
-    return JSON.stringify({ ok: true, addedIds });
+    return JSON.stringify({
+      ok: false,
+      error:
+        "SPEC_ERROR: mode=planner_add_proposals is disabled. Todo-Writer must repair canonical todos directly instead of enqueueing planner proposals.",
+    });
   }
 
   if (args.mode === "planner_update_todos") {
@@ -316,6 +277,15 @@ export async function executeOrchTodoWrite(
     }
 
     const updated = Array.from(byId.values());
+    const actionabilityCheck = validateNoExecutorEscapeActiveTodos(updated);
+    if (!actionabilityCheck.ok) {
+      return JSON.stringify({
+        ok: false,
+        error:
+          "SPEC_ERROR: planner_update_todos cannot persist non-dispatch active todos. " +
+          actionabilityCheck.reason,
+      });
+    }
     saveCanonicalTodos(todoPath, updated);
     return JSON.stringify({ ok: true, updatedIds: Array.from(updatedIds) });
   }

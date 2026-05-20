@@ -66,6 +66,9 @@ export function buildTodoWriterPrompt(
       "This planning pass must re-check unresolved proposals from proposals.json and sharpen the canonical todos around them: " +
         proposalSummary,
     );
+    parts.push(
+      "Replanning must produce executor-runnable implement/verify/investigate todos. Do not answer with planner-only holds, wait-state coverage, non-dispatch active todos, or Todo-Writer-created stop proposals.",
+    );
   }
 
   if (status?.failure_budget?.consecutive_verification_gaps) {
@@ -84,6 +87,19 @@ export function buildTodoWriterPrompt(
         "You MUST ensure that every unsatisfied requirement from acceptance-index.json has at least one active todo (`pending` or `in_progress`) whose related_requirement_ids includes that requirement id. " +
         (summary
           ? `Last failure summary from status.json: ${redactCommandPolicyTerms(summary, hideCommandPolicyConcept)}`
+          : ""),
+    );
+  }
+
+  if (
+    status?.failure_budget?.last_failure_kind ===
+    "todo_writer_non_dispatch_active_todos"
+  ) {
+    const summary = status.failure_budget.last_failure_summary ?? "";
+    parts.push(
+      "The last Todo-Writer pass tried to preserve coverage with non-dispatch active todos. This is forbidden. Replace planner-only holds, wait-state coverage, and later-packet gates with bounded current-revision work that Executor can actually run." +
+        (summary
+          ? ` Last failure summary from status.json: ${redactCommandPolicyTerms(summary, hideCommandPolicyConcept)}`
           : ""),
     );
   }

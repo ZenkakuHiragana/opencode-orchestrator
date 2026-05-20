@@ -308,6 +308,9 @@ export const messagesJa = {
   "loop.executor.failure.opencode_reasoning_summary":
     "executor で OpenCode の reasoning item フォーマットエラーが発生した: {message}",
 
+  "loop.todo_writer.error.non_dispatch_active_todos":
+    "[opencode-orchestrator] todo-writer が Executor に送ってはいけない待機/差し戻し用の active todo を生成したため、このステップでは Executor をスキップして再計画します: {reason}",
+
   "cli.fix.error.no_tasks_found":
     "[opencode-orchestrator] 実行可能な orchestrator タスクが見つかりません。まず Refiner/Todo-Writer で少なくとも 1 つタスクを用意してから fix を使ってください。",
 

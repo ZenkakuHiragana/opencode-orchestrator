@@ -137,6 +137,7 @@ describe("buildTodoWriterPrompt", () => {
     expect(prompt).toContain("kind=need_replan");
     expect(prompt).toContain("TW-009");
     expect(prompt).toContain("R6");
+    expect(prompt).toContain("executor-runnable");
   });
 
   it("returns an empty prompt when there are no open proposals or status hints", () => {
@@ -165,6 +166,27 @@ describe("buildTodoWriterPrompt", () => {
     expect(prompt).toContain("coverage invariants");
     expect(prompt).toContain("Last failure summary from status.json");
     expect(prompt).toContain("R1");
+  });
+
+  it("surfaces non-dispatch active todo failures from failure_budget to todo-writer", () => {
+    const prompt = buildTodoWriterPrompt({
+      version: 1,
+      failure_budget: {
+        todo_writer_safety_restarts: 0,
+        executor_safety_restarts: 0,
+        consecutive_env_blocked: 0,
+        consecutive_audit_failures: 0,
+        consecutive_verification_gaps: 0,
+        consecutive_contract_gaps: 0,
+        last_failure_kind: "todo_writer_non_dispatch_active_todos",
+        last_failure_summary:
+          "todo-writer が Executor 非実行の待機 todo を生成したため再計画状態を維持する: active todos must be executor-runnable",
+      },
+    } as any);
+
+    expect(prompt).toContain("non-dispatch active todos");
+    expect(prompt).toContain("Replace planner-only holds");
+    expect(prompt).toContain("executor-runnable");
   });
 
   it("redacts command-policy terminology when skip-command-policy mode hides the concept", () => {

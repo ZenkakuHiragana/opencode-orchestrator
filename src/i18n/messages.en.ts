@@ -372,6 +372,9 @@ export const messagesEn = {
   "loop.executor.failure.opencode_reasoning_summary":
     "Executor hit an OpenCode 'Item of type ...' reasoning-format error: {message}",
 
+  "loop.todo_writer.error.non_dispatch_active_todos":
+    "[opencode-orchestrator] Todo-Writer produced active todos that are only wait-state / send-back escape hatches, so the Executor is skipped and replanning continues for this step: {reason}",
+
   "cli.fix.error.no_tasks_found":
     "[opencode-orchestrator] No orchestrator tasks were found. Run planning for at least one task before using 'fix'.",
 

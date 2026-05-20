@@ -232,7 +232,7 @@ describe("orchTodoWriteTool", () => {
     }
   });
 
-  it("enqueues todo-writer proposals directly into proposals.json", async () => {
+  it("rejects planner_add_proposals so Todo-Writer cannot enqueue stop proposals", async () => {
     const baseDir = fs.mkdtempSync(
       path.join(os.tmpdir(), "orch-todo-proposal-"),
     );
@@ -263,36 +263,67 @@ describe("orchTodoWriteTool", () => {
       { agent: "orch-todo-writer" } as any,
     );
 
-    const parsed = JSON.parse(result) as { ok: boolean; addedIds?: string[] };
-    expect(parsed.ok).toBe(true);
-    expect(parsed.addedIds).toHaveLength(1);
-
-    const proposals = JSON.parse(
-      fs.readFileSync(path.join(stateDir, "proposals.json"), "utf8"),
-    ) as {
-      proposals: Array<{
-        source: string;
-        cycle: number;
-        kind: string;
-        priority: string;
-        status: string;
-        auto_resolvable: boolean;
-        related_requirement_ids: string[];
-        related_todo_ids: string[];
-      }>;
-    };
-
-    expect(proposals.proposals).toHaveLength(1);
-    expect(proposals.proposals[0]).toMatchObject({
-      source: "todo_writer",
-      cycle: 7,
-      kind: "need_replan",
-      priority: "high",
-      status: "open",
-      auto_resolvable: true,
-      related_requirement_ids: ["R3"],
-      related_todo_ids: ["T3"],
+    expect(JSON.parse(result)).toEqual({
+      ok: false,
+      error:
+        "SPEC_ERROR: mode=planner_add_proposals is disabled. Todo-Writer must repair canonical todos directly instead of enqueueing planner proposals.",
     });
+
+    expect(fs.existsSync(path.join(stateDir, "proposals.json"))).toBe(false);
+
+    if (previousXdgStateHome === undefined) {
+      delete process.env.XDG_STATE_HOME;
+    } else {
+      process.env.XDG_STATE_HOME = previousXdgStateHome;
+    }
+  });
+
+  it("rejects planner_add_todos when the new active todo is planner-only wait-state coverage", async () => {
+    const baseDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), "orch-todo-nondispatch-add-"),
+    );
+    const previousXdgStateHome = process.env.XDG_STATE_HOME;
+    process.env.XDG_STATE_HOME = baseDir;
+    const stateDir = getOrchestratorStateDir("nondispatch-add");
+    fs.mkdirSync(stateDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(stateDir, "todo.json"),
+      JSON.stringify({ todos: [] }),
+      "utf8",
+    );
+
+    const result = await orchTodoWriteTool.execute(
+      {
+        task: "nondispatch-add",
+        mode: "planner_add_todos",
+        addTodos: [
+          {
+            summary:
+              "Planner-only wait-state coverage until a newly attached post-T249 signal appears",
+            status: "pending",
+            related_requirement_ids: ["R1"],
+            execution_contract: {
+              intent: "investigate",
+              expected_evidence: [
+                "If no newly attached signal is visible in the current pass, Executor must emit `STEP_BLOCKER` immediately and leave this hold unexecuted.",
+              ],
+            },
+          },
+        ],
+      },
+      { agent: "orch-todo-writer" } as any,
+    );
+
+    const parsed = JSON.parse(result) as { ok: boolean; error?: string };
+    expect(parsed.ok).toBe(false);
+    expect(parsed.error).toContain(
+      "planner_add_todos cannot persist non-dispatch active todos",
+    );
+
+    const saved = JSON.parse(
+      fs.readFileSync(path.join(stateDir, "todo.json"), "utf8"),
+    ) as { todos: unknown[] };
+    expect(saved.todos).toEqual([]);
 
     if (previousXdgStateHome === undefined) {
       delete process.env.XDG_STATE_HOME;
@@ -770,6 +801,54 @@ describe("orchTodoWriteTool", () => {
       command_ids: ["cmd-git-diff-file"],
       audit_ready_when: ["auditor can inspect proof boundary from state"],
     });
+
+    if (previousXdgStateHome === undefined) {
+      delete process.env.XDG_STATE_HOME;
+    } else {
+      process.env.XDG_STATE_HOME = previousXdgStateHome;
+    }
+  });
+
+  it("rejects planner_replace_canonical when active todos are non-dispatch wait-state coverage", async () => {
+    const baseDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), "orch-todo-replace-nondispatch-"),
+    );
+    const previousXdgStateHome = process.env.XDG_STATE_HOME;
+    process.env.XDG_STATE_HOME = baseDir;
+
+    const result = await orchTodoWriteTool.execute(
+      {
+        task: "replace-nondispatch",
+        mode: "planner_replace_canonical",
+        canonicalTodos: [
+          {
+            id: "T1",
+            summary:
+              "Non-dispatch wait-state coverage only until a later attached signal appears",
+            status: "pending",
+            related_requirement_ids: ["R1"],
+            execution_contract: {
+              intent: "investigate",
+              expected_evidence: [
+                "Executor must emit `STEP_BLOCKER` immediately and leave this hold unexecuted when the later signal is absent.",
+              ],
+            },
+          },
+        ],
+      },
+      { agent: "orch-todo-writer" } as any,
+    );
+
+    const parsed = JSON.parse(result) as { ok: boolean; error?: string };
+    expect(parsed.ok).toBe(false);
+    expect(parsed.error).toContain(
+      "planner_replace_canonical cannot persist non-dispatch active todos",
+    );
+    expect(
+      fs.existsSync(
+        path.join(getOrchestratorStateDir("replace-nondispatch"), "todo.json"),
+      ),
+    ).toBe(false);
 
     if (previousXdgStateHome === undefined) {
       delete process.env.XDG_STATE_HOME;

@@ -6,6 +6,7 @@ import {
   createProposalEntry,
   hasOpenNonAutoResolvableProposals,
   loadProposals,
+  resolveMatchingOpenAutoResolvableProposals,
   saveProposals,
 } from "./orchestrator-proposals.js";
 import { findSessionIdByTitle } from "./orchestrator-session.js";
@@ -82,7 +83,7 @@ export async function handleExecutorSnapshotAndAudit(
   );
 
   const proposalsPath = path.join(path.dirname(statusPath), "proposals.json");
-  const stepProposalFile = loadProposals(proposalsPath);
+  let stepProposalFile = loadProposals(proposalsPath);
   let stepProposalChanged = false;
 
   for (const blocker of otherBlockers) {
@@ -397,6 +398,27 @@ export async function handleExecutorSnapshotAndAudit(
   saveStatusJson(statusPath, status);
 
   if (needReplanProposal) {
+    const currentReqKey = [...needReplanProposal.related_requirement_ids]
+      .sort()
+      .join(",");
+    const currentTodoKey = [...needReplanProposal.related_todo_ids]
+      .sort()
+      .join(",");
+    stepProposalFile = resolveMatchingOpenAutoResolvableProposals(
+      stepProposalFile,
+      (proposal) =>
+        proposal.source === needReplanProposal.source &&
+        proposal.kind === needReplanProposal.kind &&
+        proposal.cycle < step &&
+        ((proposal.related_requirement_ids.length > 0 &&
+          [...proposal.related_requirement_ids].sort().join(",") ===
+            currentReqKey) ||
+          (proposal.related_requirement_ids.length === 0 &&
+            [...proposal.related_todo_ids].sort().join(",") ===
+              currentTodoKey)),
+      "auto",
+      new Date().toISOString(),
+    );
     stepProposalFile.proposals.push(needReplanProposal);
   }
   if (contractGapProposal) {

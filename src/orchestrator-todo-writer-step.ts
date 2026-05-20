@@ -31,6 +31,7 @@ import {
   loadMinimalTodos,
   normalizeTodoFile,
   readTodoSummary,
+  validateTodoActionability,
   validateTodoCoverage,
 } from "./orchestrator-step-todo-state.js";
 
@@ -277,6 +278,28 @@ export async function maybeRunTodoWriterStep(
     saveStatusJson(statusPath, status);
     console.error(
       `[opencode-orchestrator] todo-writer が生成した todo.json が coverage invariants に違反しています: ${coverageCheck.reason}`,
+    );
+    return {
+      sessionId,
+      restartCount,
+      forceTodoWriterNextStep: true,
+      restartedSession: false,
+      abortLoop: false,
+      skipExecutorThisStep: true,
+    };
+  }
+
+  const actionabilityCheck = validateTodoActionability(todoPath);
+  if (!actionabilityCheck.ok) {
+    failureBudget.last_failure_kind = "todo_writer_non_dispatch_active_todos";
+    failureBudget.last_failure_summary =
+      "todo-writer が Executor 非実行の待機 todo を生成したため再計画状態を維持する: " +
+      actionabilityCheck.reason;
+    saveStatusJson(statusPath, status);
+    console.error(
+      t("loop.todo_writer.error.non_dispatch_active_todos", {
+        reason: actionabilityCheck.reason,
+      }),
     );
     return {
       sessionId,
