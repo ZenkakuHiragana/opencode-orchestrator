@@ -49,6 +49,7 @@ export type CoverageCheckResult =
 
 export type MinimalTodo = {
   id: string;
+  summary: string;
   status: string;
   related_requirement_ids: string[];
   intent?: string;

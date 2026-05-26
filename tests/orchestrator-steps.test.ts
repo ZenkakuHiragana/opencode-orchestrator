@@ -773,6 +773,110 @@ describe("maybeRunTodoWriterStep", () => {
     );
   });
 
+  it("does not resolve missing verification audit failures with a final handoff verification artifact", async () => {
+    const status = createStatus();
+    status.last_auditor_report = {
+      cycle: 1,
+      done: false,
+      requirements: [
+        {
+          id: "R1",
+          passed: false,
+          failure_kind: "missing_verification",
+        },
+      ],
+    };
+    const tmpState = fs.mkdtempSync(
+      path.join(os.tmpdir(), "orch-steps-state-replan-verify-artifact-packet-"),
+    );
+    const tmpLogs = fs.mkdtempSync(
+      path.join(os.tmpdir(), "orch-steps-logs-replan-verify-artifact-packet-"),
+    );
+    const acceptancePath = path.join(tmpState, "acceptance-index.json");
+    const statusPath = path.join(tmpState, "status.json");
+    const todoPath = path.join(tmpState, "todo.json");
+    fs.writeFileSync(
+      acceptancePath,
+      JSON.stringify({
+        version: 1,
+        requirements: [{ id: "R1", title: "Requirement 1" }],
+      }),
+      "utf8",
+    );
+    fs.writeFileSync(todoPath, JSON.stringify({ todos: [] }), "utf8");
+    writeProposalsJson(tmpState, [
+      {
+        id: "p-audit",
+        source: "auditor",
+        cycle: 3,
+        kind: "audit_failure",
+        priority: "high",
+        summary: "R1 has no verification",
+        details: "[failure_kind: missing_verification]",
+        related_todo_ids: [],
+        related_requirement_ids: ["R1"],
+        status: "open",
+        auto_resolvable: true,
+        created_at: "2026-03-29T00:00:00.000Z",
+      },
+    ]);
+
+    mockRunOpencode.mockImplementationOnce(async () => {
+      fs.writeFileSync(
+        todoPath,
+        JSON.stringify(
+          {
+            todos: [
+              {
+                id: "T1-r1-final-handoff",
+                summary: "Prepare final handoff packet for R1",
+                status: "pending",
+                related_requirement_ids: ["R1"],
+                execution_contract: {
+                  intent: "verify",
+                  expected_evidence: ["Existing evidence summary"],
+                  audit_ready_when: ["The packet summarizes the current state"],
+                  artifact_schema: "verification_v1",
+                  artifact_filename: "T1-r1-final-handoff.json",
+                },
+              },
+            ],
+          },
+          null,
+          2,
+        ) + "\n",
+        "utf8",
+      );
+      return { code: 0, stdout: "" } as any;
+    });
+
+    const res = await maybeRunTodoWriterStep(
+      baseOpts,
+      2,
+      "002",
+      tmpState,
+      tmpLogs,
+      acceptancePath,
+      "sess-1",
+      [],
+      status,
+      statusPath,
+      0,
+      false,
+    );
+
+    expect(res.forceTodoWriterNextStep).toBe(true);
+    expect(res.skipExecutorThisStep).toBe(true);
+    const proposals = loadProposals(path.join(tmpState, "proposals.json"));
+    expect(proposals.proposals[0]?.status).toBe("open");
+    const saved = JSON.parse(
+      fs.readFileSync(statusPath, "utf8"),
+    ) as OrchestratorStatus;
+    expect(saved.failure_budget?.last_failure_kind).toBe(
+      "todo_writer_semantic_noop_replan",
+    );
+  });
+
   it("resolves weak evidence audit failures when verify evidence boundaries are strengthened", async () => {
     const status = createStatus();
     status.last_auditor_report = {

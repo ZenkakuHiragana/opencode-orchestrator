@@ -330,6 +330,7 @@ export function loadMinimalTodos(todoPath: string): MinimalTodo[] | null {
 
     type TodoLike = {
       id: string;
+      summary: string;
       status: string;
       related_requirement_ids: string[];
       execution_contract?: {
@@ -345,6 +346,7 @@ export function loadMinimalTodos(todoPath: string): MinimalTodo[] | null {
     const todos = todosUnknown as TodoLike[];
     return todos.map<MinimalTodo>((t) => ({
       id: t.id,
+      summary: t.summary,
       status: t.status,
       related_requirement_ids: Array.isArray(t.related_requirement_ids)
         ? t.related_requirement_ids
@@ -398,6 +400,24 @@ function allowedIntentsForFailureKind(
   }
 }
 
+function isPacketLikeVerificationTodo(todo: MinimalTodo): boolean {
+  const text = [
+    todo.id,
+    todo.summary,
+    todo.artifact_schema,
+    todo.artifact_filename,
+    ...(todo.expected_evidence ?? []),
+    ...(todo.audit_ready_when ?? []),
+  ]
+    .filter((value): value is string => typeof value === "string")
+    .join(" ")
+    .toLowerCase();
+
+  return /\b(?:handoff|closure|limitation|boundary|reconciliation|packet)\b/.test(
+    text,
+  );
+}
+
 function hasForwardWorkDelta(
   prevTodo: MinimalTodo | undefined,
   nextTodo: MinimalTodo,
@@ -449,9 +469,22 @@ function hasAllowedIntentDelta(
     const hasArtifactRouteDelta =
       prevTodo?.artifact_schema !== nextTodo.artifact_schema ||
       prevTodo?.artifact_filename !== nextTodo.artifact_filename;
+    const hasExpectedEvidenceDelta = hasNewStringValue(
+      prevTodo?.expected_evidence,
+      nextTodo.expected_evidence,
+    );
+    const hasAuditReadyDelta = hasNewStringValue(
+      prevTodo?.audit_ready_when,
+      nextTodo.audit_ready_when,
+    );
 
     if (failureKind === "missing_verification") {
-      return hasNewCommandRoute || hasArtifactRouteDelta;
+      return (
+        hasNewCommandRoute ||
+        (hasArtifactRouteDelta &&
+          (hasExpectedEvidenceDelta || hasAuditReadyDelta) &&
+          !isPacketLikeVerificationTodo(nextTodo))
+      );
     }
 
     if (
