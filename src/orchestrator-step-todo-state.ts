@@ -430,6 +430,7 @@ function hasForwardWorkDelta(
 function hasAllowedIntentDelta(
   prevTodo: MinimalTodo | undefined,
   nextTodo: MinimalTodo,
+  failureKind: AuditorFailureKind | undefined,
   allowedIntents: Set<string>,
 ): boolean {
   if (!ACTIVE_TODO_STATUSES.has(nextTodo.status) || !nextTodo.intent) {
@@ -441,11 +442,34 @@ function hasAllowedIntentDelta(
   }
 
   if (nextTodo.intent === "verify") {
-    return (
-      !prevTodo ||
-      prevTodo.intent !== nextTodo.intent ||
-      hasNewStringValue(prevTodo.command_ids, nextTodo.command_ids)
+    const hasNewCommandRoute = hasNewStringValue(
+      prevTodo?.command_ids,
+      nextTodo.command_ids,
     );
+    const hasArtifactRouteDelta =
+      prevTodo?.artifact_schema !== nextTodo.artifact_schema ||
+      prevTodo?.artifact_filename !== nextTodo.artifact_filename;
+
+    if (failureKind === "missing_verification") {
+      return hasNewCommandRoute || hasArtifactRouteDelta;
+    }
+
+    if (
+      failureKind === "weak_evidence" ||
+      failureKind === "artifact_mismatch"
+    ) {
+      return (
+        hasNewCommandRoute ||
+        hasArtifactRouteDelta ||
+        hasNewStringValue(
+          prevTodo?.expected_evidence,
+          nextTodo.expected_evidence,
+        ) ||
+        hasNewStringValue(prevTodo?.audit_ready_when, nextTodo.audit_ready_when)
+      );
+    }
+
+    return hasNewCommandRoute;
   }
 
   if (!prevTodo) {
@@ -541,6 +565,7 @@ export function hasMeaningfulTodoChangeForRequirementFailureKind(
     hasAllowedIntentDelta(
       prevForReq.find((prevTodo) => prevTodo.id === nextTodo.id),
       nextTodo,
+      failureKind,
       allowedIntents,
     ),
   );

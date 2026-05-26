@@ -90,6 +90,18 @@ function buildRequirementKey(requirementIds: string[]): string {
   return unique.length > 0 ? unique.join(",") : "unscoped";
 }
 
+function getOpenAutoResolvableRequirementIds(proposals: ProposalEntry[]) {
+  return Array.from(
+    new Set(
+      proposals
+        .filter(
+          (proposal) => proposal.status === "open" && proposal.auto_resolvable,
+        )
+        .flatMap((proposal) => proposal.related_requirement_ids),
+    ),
+  );
+}
+
 export async function maybeRunTodoWriterStep(
   opts: LoopOptions,
   step: number,
@@ -382,9 +394,52 @@ export async function maybeRunTodoWriterStep(
   );
 
   if (hasOpenAutoResolvable && !todoChanged) {
+    const relatedRequirementIds = getOpenAutoResolvableRequirementIds(
+      proposalsFile.proposals,
+    );
+    const requirementKey = buildRequirementKey(relatedRequirementIds);
+    const semanticNoopReplans =
+      failureBudget.semantic_noop_requirement_key === requirementKey
+        ? (failureBudget.semantic_noop_replans ?? 0) + 1
+        : 1;
+
+    failureBudget.semantic_noop_requirement_key = requirementKey;
+    failureBudget.semantic_noop_replans = semanticNoopReplans;
     failureBudget.last_failure_kind = "todo_writer_noop_replan";
     failureBudget.last_failure_summary =
-      "todo-writer が open な auto_resolvable proposals を抱えたまま再実行されましたが、todo.json に有意な変更がありません。";
+      "todo-writer が open な auto_resolvable proposals を抱えたまま再実行されましたが、todo.json に有意な変更がありません。" +
+      ` semantic_noop_replans=${semanticNoopReplans}.`;
+
+    if (semanticNoopReplans >= SEMANTIC_NOOP_BLOCK_THRESHOLD) {
+      const blockedProposal = createProposalEntry({
+        source: "todo_writer",
+        cycle: step,
+        kind: "need_replan",
+        priority: "high",
+        summary:
+          "Todo-Writer repeatedly produced no-op replans for open proposals",
+        details:
+          failureBudget.last_failure_summary +
+          " Planner or human input is required to identify a repo-visible implementation or investigation surface, relax the requirement, or accept a documented limitation.",
+        related_requirement_ids: relatedRequirementIds,
+        related_todo_ids: [],
+        auto_resolvable: false,
+      });
+      saveProposals(proposalsPath, {
+        version: proposalsFile.version,
+        proposals: [...proposalsFile.proposals, blockedProposal],
+      });
+      saveStatusJson(statusPath, status);
+      return {
+        sessionId,
+        restartCount,
+        forceTodoWriterNextStep: false,
+        restartedSession: false,
+        abortLoop: true,
+        skipExecutorThisStep: true,
+      };
+    }
+
     saveStatusJson(statusPath, status);
     console.error(
       "[opencode-orchestrator] todo-writer 再計画が no-op でした。open な auto_resolvable proposals を残したまま Executor をスキップし、次のステップでも再計画を継続します。",
@@ -452,15 +507,8 @@ export async function maybeRunTodoWriterStep(
   ).length;
 
   if (hasOpenAutoResolvable && todoChanged && resolvedAutoProposalCount === 0) {
-    const relatedRequirementIds = Array.from(
-      new Set(
-        proposalsFile.proposals
-          .filter(
-            (proposal) =>
-              proposal.status === "open" && proposal.auto_resolvable,
-          )
-          .flatMap((proposal) => proposal.related_requirement_ids),
-      ),
+    const relatedRequirementIds = getOpenAutoResolvableRequirementIds(
+      proposalsFile.proposals,
     );
     const reqSummary =
       relatedRequirementIds.length > 0
