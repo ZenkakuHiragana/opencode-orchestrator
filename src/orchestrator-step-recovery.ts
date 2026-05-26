@@ -23,8 +23,10 @@ export function ensureFailureBudget(
       consecutive_audit_failures: 0,
       consecutive_verification_gaps: 0,
       consecutive_contract_gaps: 0,
+      semantic_noop_replans: 0,
     };
   }
+  status.failure_budget.semantic_noop_replans ??= 0;
   return status.failure_budget;
 }
 

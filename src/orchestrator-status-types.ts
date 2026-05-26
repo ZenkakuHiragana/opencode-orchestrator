@@ -122,6 +122,8 @@ export type FailureBudgetSnapshot = {
   consecutive_audit_failures: number;
   consecutive_verification_gaps: number;
   consecutive_contract_gaps: number;
+  semantic_noop_replans?: number;
+  semantic_noop_requirement_key?: string;
   last_failure_kind?: string;
   last_failure_summary?: string;
 };

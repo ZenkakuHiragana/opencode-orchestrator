@@ -14,12 +14,14 @@ import {
   loadProposals,
   saveProposals,
 } from "./orchestrator-proposals.js";
+import type { ProposalEntry } from "./orchestrator-proposals.js";
 import {
   appendFileArg,
   buildSkipSafeJsonAttachment,
 } from "./orchestrator-session.js";
 import type { TodoWriterStepResult } from "./orchestrator-step-types.js";
 import type { OrchestratorStatus } from "./orchestrator-status.js";
+import type { AuditorFailureKind } from "./orchestrator-status-types.js";
 import { saveStatusJson } from "./orchestrator-status.js";
 import {
   detectExecutorOpencodeInfraError,
@@ -27,6 +29,7 @@ import {
   restartFromSafety,
 } from "./orchestrator-step-recovery.js";
 import {
+  hasMeaningfulTodoChangeForRequirementFailureKind,
   hasMeaningfulTodoChangeForRequirement,
   loadMinimalTodos,
   normalizeTodoFile,
@@ -34,6 +37,58 @@ import {
   validateTodoActionability,
   validateTodoCoverage,
 } from "./orchestrator-step-todo-state.js";
+
+const SEMANTIC_NOOP_BLOCK_THRESHOLD = 3;
+
+const AUDITOR_FAILURE_KINDS: AuditorFailureKind[] = [
+  "missing_implementation",
+  "incomplete_implementation",
+  "missing_verification",
+  "weak_evidence",
+  "missing_investigation",
+  "artifact_mismatch",
+  "scope_unclear",
+];
+
+function isAuditorFailureKind(value: string): value is AuditorFailureKind {
+  return AUDITOR_FAILURE_KINDS.includes(value as AuditorFailureKind);
+}
+
+function extractFailureKindFromDetails(
+  details: string | undefined,
+): AuditorFailureKind | undefined {
+  if (!details) {
+    return undefined;
+  }
+  const match = details.match(/\bfailure_kind:\s*([a-z_]+)/i);
+  const value = match?.[1];
+  return value && isAuditorFailureKind(value) ? value : undefined;
+}
+
+function getProposalFailureKind(
+  proposal: ProposalEntry,
+  status: OrchestratorStatus,
+): AuditorFailureKind | undefined {
+  if (proposal.kind !== "audit_failure") {
+    return undefined;
+  }
+
+  for (const reqId of proposal.related_requirement_ids) {
+    const reportRequirement = status.last_auditor_report?.requirements.find(
+      (requirement) => requirement.id === reqId,
+    );
+    if (reportRequirement?.failure_kind) {
+      return reportRequirement.failure_kind;
+    }
+  }
+
+  return extractFailureKindFromDetails(proposal.details);
+}
+
+function buildRequirementKey(requirementIds: string[]): string {
+  const unique = Array.from(new Set(requirementIds)).sort();
+  return unique.length > 0 ? unique.join(",") : "unscoped";
+}
 
 export async function maybeRunTodoWriterStep(
   opts: LoopOptions,
@@ -356,12 +411,20 @@ export async function maybeRunTodoWriterStep(
 
       if (proposal.related_requirement_ids.length > 0) {
         if (nextTodosMinimal) {
+          const failureKind = getProposalFailureKind(proposal, status);
           shouldResolve = proposal.related_requirement_ids.some((reqId) =>
-            hasMeaningfulTodoChangeForRequirement(
-              reqId,
-              prevTodosMinimal,
-              nextTodosMinimal,
-            ),
+            proposal.kind === "audit_failure"
+              ? hasMeaningfulTodoChangeForRequirementFailureKind(
+                  reqId,
+                  failureKind,
+                  prevTodosMinimal,
+                  nextTodosMinimal,
+                )
+              : hasMeaningfulTodoChangeForRequirement(
+                  reqId,
+                  prevTodosMinimal,
+                  nextTodosMinimal,
+                ),
           );
         }
       } else {
@@ -403,11 +466,50 @@ export async function maybeRunTodoWriterStep(
       relatedRequirementIds.length > 0
         ? ` related requirements: ${relatedRequirementIds.join(", ")}.`
         : "";
+    const requirementKey = buildRequirementKey(relatedRequirementIds);
+    const semanticNoopReplans =
+      failureBudget.semantic_noop_requirement_key === requirementKey
+        ? (failureBudget.semantic_noop_replans ?? 0) + 1
+        : 1;
 
+    failureBudget.semantic_noop_requirement_key = requirementKey;
+    failureBudget.semantic_noop_replans = semanticNoopReplans;
     failureBudget.last_failure_kind = "todo_writer_semantic_noop_replan";
     failureBudget.last_failure_summary =
       "todo-writer changed todo.json but did not add semantic repo-visible progress for any open auto-resolvable proposal." +
-      reqSummary;
+      reqSummary +
+      ` semantic_noop_replans=${semanticNoopReplans}.`;
+
+    if (semanticNoopReplans >= SEMANTIC_NOOP_BLOCK_THRESHOLD) {
+      const blockedProposal = createProposalEntry({
+        source: "todo_writer",
+        cycle: step,
+        kind: "need_replan",
+        priority: "high",
+        summary:
+          "Todo-Writer repeatedly failed to synthesize repo-visible work for open proposals",
+        details:
+          failureBudget.last_failure_summary +
+          " Planner or human input is required to identify a repo-visible implementation or investigation surface, relax the requirement, or accept a documented limitation.",
+        related_requirement_ids: relatedRequirementIds,
+        related_todo_ids: [],
+        auto_resolvable: false,
+      });
+      saveProposals(proposalsPath, {
+        version: proposalsFile.version,
+        proposals: [...proposalsFile.proposals, blockedProposal],
+      });
+      saveStatusJson(statusPath, status);
+      return {
+        sessionId,
+        restartCount,
+        forceTodoWriterNextStep: false,
+        restartedSession: false,
+        abortLoop: true,
+        skipExecutorThisStep: true,
+      };
+    }
+
     saveStatusJson(statusPath, status);
     return {
       sessionId,
@@ -422,6 +524,8 @@ export async function maybeRunTodoWriterStep(
   saveProposals(proposalsPath, updatedProposals);
   failureBudget.consecutive_contract_gaps = 0;
   failureBudget.consecutive_verification_gaps = 0;
+  failureBudget.semantic_noop_replans = 0;
+  failureBudget.semantic_noop_requirement_key = undefined;
   saveStatusJson(statusPath, status);
 
   return {

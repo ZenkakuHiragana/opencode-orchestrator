@@ -8,6 +8,7 @@ import type {
   TodoSummary,
 } from "./orchestrator-step-types.js";
 import type { OrchestratorStatus } from "./orchestrator-status.js";
+import type { AuditorFailureKind } from "./orchestrator-status-types.js";
 import type { CanonicalTodo } from "./orchestrator-todo-types.js";
 
 const ACTIVE_TODO_STATUSES = new Set<string>(["pending", "in_progress"]);
@@ -376,6 +377,27 @@ function isForwardWorkIntent(intent: string | undefined): boolean {
   return intent === "implement" || intent === "investigate";
 }
 
+function allowedIntentsForFailureKind(
+  failureKind: AuditorFailureKind | undefined,
+): Set<string> {
+  switch (failureKind) {
+    case "missing_implementation":
+      return new Set(["implement"]);
+    case "incomplete_implementation":
+      return new Set(["implement", "investigate"]);
+    case "missing_investigation":
+    case "scope_unclear":
+      return new Set(["investigate"]);
+    case "missing_verification":
+    case "weak_evidence":
+      return new Set(["verify"]);
+    case "artifact_mismatch":
+      return new Set(["verify", "implement"]);
+    default:
+      return new Set(["implement", "investigate"]);
+  }
+}
+
 function hasForwardWorkDelta(
   prevTodo: MinimalTodo | undefined,
   nextTodo: MinimalTodo,
@@ -403,6 +425,41 @@ function hasForwardWorkDelta(
   }
 
   return hasNewStringValue(prevTodo?.command_ids, nextTodo.command_ids);
+}
+
+function hasAllowedIntentDelta(
+  prevTodo: MinimalTodo | undefined,
+  nextTodo: MinimalTodo,
+  allowedIntents: Set<string>,
+): boolean {
+  if (!ACTIVE_TODO_STATUSES.has(nextTodo.status) || !nextTodo.intent) {
+    return false;
+  }
+
+  if (!allowedIntents.has(nextTodo.intent)) {
+    return false;
+  }
+
+  if (nextTodo.intent === "verify") {
+    return (
+      !prevTodo ||
+      prevTodo.intent !== nextTodo.intent ||
+      hasNewStringValue(prevTodo.command_ids, nextTodo.command_ids)
+    );
+  }
+
+  if (!prevTodo) {
+    return true;
+  }
+  if (prevTodo.intent !== nextTodo.intent) {
+    return true;
+  }
+  return (
+    hasNewStringValue(prevTodo.expected_evidence, nextTodo.expected_evidence) ||
+    hasNewStringValue(prevTodo.audit_ready_when, nextTodo.audit_ready_when) ||
+    prevTodo.artifact_schema !== nextTodo.artifact_schema ||
+    prevTodo.artifact_filename !== nextTodo.artifact_filename
+  );
 }
 
 export function hasMeaningfulTodoChangeForRequirement(
@@ -453,6 +510,40 @@ export function hasMeaningfulTodoChangeForRequirement(
   }
 
   return false;
+}
+
+export function hasMeaningfulTodoChangeForRequirementFailureKind(
+  requirementId: string,
+  failureKind: AuditorFailureKind | undefined,
+  prevTodos: MinimalTodo[] | null,
+  nextTodos: MinimalTodo[] | null,
+): boolean {
+  const prev = prevTodos ?? [];
+  const next = nextTodos ?? [];
+  const allowedIntents = allowedIntentsForFailureKind(failureKind);
+
+  const prevForReq = prev.filter((t) =>
+    Array.isArray(t.related_requirement_ids)
+      ? t.related_requirement_ids.includes(requirementId)
+      : false,
+  );
+  const nextForReq = next.filter((t) =>
+    Array.isArray(t.related_requirement_ids)
+      ? t.related_requirement_ids.includes(requirementId)
+      : false,
+  );
+
+  if (nextForReq.length === 0) {
+    return false;
+  }
+
+  return nextForReq.some((nextTodo) =>
+    hasAllowedIntentDelta(
+      prevForReq.find((prevTodo) => prevTodo.id === nextTodo.id),
+      nextTodo,
+      allowedIntents,
+    ),
+  );
 }
 
 export function hasPersistedVerificationEvidence(stateDir: string): boolean {
