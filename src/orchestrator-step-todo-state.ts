@@ -334,7 +334,10 @@ export function loadMinimalTodos(todoPath: string): MinimalTodo[] | null {
       execution_contract?: {
         intent?: string;
         expected_evidence?: string[];
+        command_ids?: string[];
         audit_ready_when?: string[];
+        artifact_schema?: string;
+        artifact_filename?: string;
       };
     };
 
@@ -347,11 +350,59 @@ export function loadMinimalTodos(todoPath: string): MinimalTodo[] | null {
         : [],
       intent: t.execution_contract?.intent,
       expected_evidence: t.execution_contract?.expected_evidence,
+      command_ids: t.execution_contract?.command_ids,
       audit_ready_when: t.execution_contract?.audit_ready_when,
+      artifact_schema: t.execution_contract?.artifact_schema,
+      artifact_filename: t.execution_contract?.artifact_filename,
     }));
   } catch {
     return null;
   }
+}
+
+function stringArrayValue(value: string[] | undefined): string[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function hasNewStringValue(
+  previous: string[] | undefined,
+  next: string[] | undefined,
+): boolean {
+  const prevSet = new Set(stringArrayValue(previous));
+  return stringArrayValue(next).some((value) => !prevSet.has(value));
+}
+
+function isForwardWorkIntent(intent: string | undefined): boolean {
+  return intent === "implement" || intent === "investigate";
+}
+
+function hasForwardWorkDelta(
+  prevTodo: MinimalTodo | undefined,
+  nextTodo: MinimalTodo,
+): boolean {
+  if (!ACTIVE_TODO_STATUSES.has(nextTodo.status)) {
+    return false;
+  }
+
+  if (isForwardWorkIntent(nextTodo.intent)) {
+    if (!prevTodo) {
+      return true;
+    }
+    if (prevTodo.intent !== nextTodo.intent) {
+      return true;
+    }
+    return (
+      hasNewStringValue(
+        prevTodo.expected_evidence,
+        nextTodo.expected_evidence,
+      ) ||
+      hasNewStringValue(prevTodo.audit_ready_when, nextTodo.audit_ready_when) ||
+      prevTodo.artifact_schema !== nextTodo.artifact_schema ||
+      prevTodo.artifact_filename !== nextTodo.artifact_filename
+    );
+  }
+
+  return hasNewStringValue(prevTodo?.command_ids, nextTodo.command_ids);
 }
 
 export function hasMeaningfulTodoChangeForRequirement(
@@ -378,8 +429,15 @@ export function hasMeaningfulTodoChangeForRequirement(
   }
 
   const prevIds = new Set(prevForReq.map((t) => t.id));
-  const hasNewTodo = nextForReq.some((t) => !prevIds.has(t.id));
-  if (hasNewTodo) {
+  const hasNewForwardWork = nextForReq.some((nextTodo) =>
+    hasForwardWorkDelta(
+      prevIds.has(nextTodo.id)
+        ? prevForReq.find((prevTodo) => prevTodo.id === nextTodo.id)
+        : undefined,
+      nextTodo,
+    ),
+  );
+  if (hasNewForwardWork) {
     return true;
   }
 
@@ -390,19 +448,7 @@ export function hasMeaningfulTodoChangeForRequirement(
     }
 
     if (prevTodo.intent !== nextTodo.intent) {
-      return true;
-    }
-
-    const prevEE = prevTodo.expected_evidence ?? [];
-    const nextEE = nextTodo.expected_evidence ?? [];
-    if (nextEE.length > prevEE.length) {
-      return true;
-    }
-
-    const prevARW = prevTodo.audit_ready_when ?? [];
-    const nextARW = nextTodo.audit_ready_when ?? [];
-    if (nextARW.length > prevARW.length) {
-      return true;
+      return isForwardWorkIntent(nextTodo.intent);
     }
   }
 

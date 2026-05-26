@@ -261,6 +261,228 @@ describe("maybeRunTodoWriterStep", () => {
     expect(proposals.proposals[0]?.resolved_at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
   });
 
+  it("keeps audit failure proposals open when replan only adds verify repackaging", async () => {
+    const status = createStatus();
+    const tmpState = fs.mkdtempSync(
+      path.join(os.tmpdir(), "orch-steps-state-replan-semantic-noop-"),
+    );
+    const tmpLogs = fs.mkdtempSync(
+      path.join(os.tmpdir(), "orch-steps-logs-replan-semantic-noop-"),
+    );
+    const acceptancePath = path.join(tmpState, "acceptance-index.json");
+    const statusPath = path.join(tmpState, "status.json");
+    const todoPath = path.join(tmpState, "todo.json");
+    fs.writeFileSync(
+      acceptancePath,
+      JSON.stringify({
+        version: 1,
+        requirements: [{ id: "R1", title: "Requirement 1" }],
+      }),
+      "utf8",
+    );
+    fs.writeFileSync(
+      todoPath,
+      JSON.stringify({
+        todos: [
+          {
+            id: "T1-old-verification",
+            summary: "Previous verification packet",
+            status: "completed",
+            related_requirement_ids: ["R1"],
+            execution_contract: {
+              intent: "verify",
+              expected_evidence: ["Existing evidence summary"],
+            },
+          },
+        ],
+      }),
+      "utf8",
+    );
+    writeProposalsJson(tmpState, [
+      {
+        id: "p-audit",
+        source: "auditor",
+        cycle: 3,
+        kind: "audit_failure",
+        priority: "high",
+        summary: "R1 still lacks actionable work",
+        related_todo_ids: [],
+        related_requirement_ids: ["R1"],
+        status: "open",
+        auto_resolvable: true,
+        created_at: "2026-03-29T00:00:00.000Z",
+      },
+    ]);
+
+    mockRunOpencode.mockImplementationOnce(async () => {
+      fs.writeFileSync(
+        todoPath,
+        JSON.stringify(
+          {
+            todos: [
+              {
+                id: "T1-old-verification",
+                summary: "Previous verification packet",
+                status: "completed",
+                related_requirement_ids: ["R1"],
+                execution_contract: {
+                  intent: "verify",
+                  expected_evidence: ["Existing evidence summary"],
+                },
+              },
+              {
+                id: "T2-r1-final-handoff",
+                summary: "Prepare final handoff packet for R1",
+                status: "pending",
+                related_requirement_ids: ["R1"],
+                execution_contract: {
+                  intent: "verify",
+                  expected_evidence: [
+                    "Existing evidence summary",
+                    "Stronger final handoff wording",
+                  ],
+                  audit_ready_when: [
+                    "The packet explains the current boundary",
+                  ],
+                },
+              },
+            ],
+          },
+          null,
+          2,
+        ) + "\n",
+        "utf8",
+      );
+      return { code: 0, stdout: "" } as any;
+    });
+
+    const res = await maybeRunTodoWriterStep(
+      baseOpts,
+      2,
+      "002",
+      tmpState,
+      tmpLogs,
+      acceptancePath,
+      "sess-1",
+      [],
+      status,
+      statusPath,
+      0,
+      false,
+    );
+
+    expect(res.forceTodoWriterNextStep).toBe(true);
+    expect(res.skipExecutorThisStep).toBe(true);
+    const proposals = loadProposals(path.join(tmpState, "proposals.json"));
+    expect(proposals.proposals[0]?.status).toBe("open");
+    const saved = JSON.parse(
+      fs.readFileSync(statusPath, "utf8"),
+    ) as OrchestratorStatus;
+    expect(saved.failure_budget).toMatchObject({
+      last_failure_kind: "todo_writer_semantic_noop_replan",
+    });
+  });
+
+  it("resolves audit failure proposals when replan adds forward work", async () => {
+    const status = createStatus();
+    const tmpState = fs.mkdtempSync(
+      path.join(os.tmpdir(), "orch-steps-state-replan-forward-work-"),
+    );
+    const tmpLogs = fs.mkdtempSync(
+      path.join(os.tmpdir(), "orch-steps-logs-replan-forward-work-"),
+    );
+    const acceptancePath = path.join(tmpState, "acceptance-index.json");
+    const todoPath = path.join(tmpState, "todo.json");
+    fs.writeFileSync(
+      acceptancePath,
+      JSON.stringify({
+        version: 1,
+        requirements: [{ id: "R1", title: "Requirement 1" }],
+      }),
+      "utf8",
+    );
+    fs.writeFileSync(
+      todoPath,
+      JSON.stringify({
+        todos: [
+          {
+            id: "T1-old-verification",
+            summary: "Previous verification packet",
+            status: "completed",
+            related_requirement_ids: ["R1"],
+          },
+        ],
+      }),
+      "utf8",
+    );
+    writeProposalsJson(tmpState, [
+      {
+        id: "p-audit",
+        source: "auditor",
+        cycle: 3,
+        kind: "audit_failure",
+        priority: "high",
+        summary: "R1 needs implementation work",
+        related_todo_ids: [],
+        related_requirement_ids: ["R1"],
+        status: "open",
+        auto_resolvable: true,
+        created_at: "2026-03-29T00:00:00.000Z",
+      },
+    ]);
+
+    mockRunOpencode.mockImplementationOnce(async () => {
+      fs.writeFileSync(
+        todoPath,
+        JSON.stringify(
+          {
+            todos: [
+              {
+                id: "T1-old-verification",
+                summary: "Previous verification packet",
+                status: "completed",
+                related_requirement_ids: ["R1"],
+              },
+              {
+                id: "T2-r1-implementation",
+                summary: "Implement concrete R1 repo change",
+                status: "pending",
+                related_requirement_ids: ["R1"],
+                execution_contract: {
+                  intent: "implement",
+                  expected_evidence: ["Changed source file covering R1"],
+                },
+              },
+            ],
+          },
+          null,
+          2,
+        ) + "\n",
+        "utf8",
+      );
+      return { code: 0, stdout: "" } as any;
+    });
+
+    const res = await maybeRunTodoWriterStep(
+      baseOpts,
+      2,
+      "002",
+      tmpState,
+      tmpLogs,
+      acceptancePath,
+      "sess-1",
+      [],
+      status,
+      path.join(tmpState, "status.json"),
+      0,
+      false,
+    );
+
+    expect(res.skipExecutorThisStep).toBe(false);
+    const proposals = loadProposals(path.join(tmpState, "proposals.json"));
+    expect(proposals.proposals[0]?.status).toBe("resolved");
+  });
+
   it("leaves non-auto-resolvable proposals open after todo-writer success", async () => {
     const status = createStatus();
     const tmpState = fs.mkdtempSync(

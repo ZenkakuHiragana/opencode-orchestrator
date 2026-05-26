@@ -104,6 +104,21 @@ export function buildTodoWriterPrompt(
     );
   }
 
+  if (
+    status?.failure_budget?.last_failure_kind ===
+    "todo_writer_semantic_noop_replan"
+  ) {
+    const summary = status.failure_budget.last_failure_summary ?? "";
+    parts.push(
+      "The last Todo-Writer pass was rejected as semantic no-op replanning: it changed todo.json without adding repo-visible progress for the open proposals. " +
+        "Do not restore active coverage by creating or repackaging another verification, reconciliation, boundary, closure, limitation, or handoff packet for the same requirement cluster. " +
+        "The next pass must create an executor-runnable implementation todo, create an executor-runnable investigation todo with concrete current repository surfaces, or make the existing active todo's implement/investigate boundary materially stronger. " +
+        (summary
+          ? `Last rejection summary from status.json: ${redactCommandPolicyTerms(summary, hideCommandPolicyConcept)}`
+          : ""),
+    );
+  }
+
   const failedRequirements =
     status?.last_auditor_report?.requirements?.filter(
       (req) => req.passed === false,

@@ -189,6 +189,29 @@ describe("buildTodoWriterPrompt", () => {
     expect(prompt).toContain("executor-runnable");
   });
 
+  it("surfaces semantic no-op replan rejection from failure_budget to todo-writer", () => {
+    const prompt = buildTodoWriterPrompt({
+      version: 1,
+      failure_budget: {
+        todo_writer_safety_restarts: 0,
+        executor_safety_restarts: 0,
+        consecutive_env_blocked: 0,
+        consecutive_audit_failures: 0,
+        consecutive_verification_gaps: 0,
+        consecutive_contract_gaps: 0,
+        last_failure_kind: "todo_writer_semantic_noop_replan",
+        last_failure_summary:
+          "todo-writer changed todo.json but did not add semantic repo-visible progress for any open auto-resolvable proposal. related requirements: R1.",
+      },
+    } as any);
+
+    expect(prompt).toContain("semantic no-op replanning");
+    expect(prompt).toContain("verification, reconciliation, boundary");
+    expect(prompt).toContain("implementation todo");
+    expect(prompt).toContain("investigation todo");
+    expect(prompt).toContain("R1");
+  });
+
   it("redacts command-policy terminology when skip-command-policy mode hides the concept", () => {
     const prompt = buildTodoWriterPrompt(
       {

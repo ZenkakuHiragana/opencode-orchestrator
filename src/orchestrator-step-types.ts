@@ -53,7 +53,10 @@ export type MinimalTodo = {
   related_requirement_ids: string[];
   intent?: string;
   expected_evidence?: string[];
+  command_ids?: string[];
   audit_ready_when?: string[];
+  artifact_schema?: string;
+  artifact_filename?: string;
 };
 
 export type ExecutorOpencodeInfraErrorKind =

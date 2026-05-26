@@ -354,7 +354,7 @@ export async function maybeRunTodoWriterStep(
 
       let shouldResolve = false;
 
-      if (proposal.kind === "audit_failure") {
+      if (proposal.related_requirement_ids.length > 0) {
         if (nextTodosMinimal) {
           shouldResolve = proposal.related_requirement_ids.some((reqId) =>
             hasMeaningfulTodoChangeForRequirement(
@@ -380,6 +380,44 @@ export async function maybeRunTodoWriterStep(
       };
     }),
   };
+
+  const resolvedAutoProposalCount = updatedProposals.proposals.filter(
+    (proposal, index) =>
+      proposalsFile.proposals[index]?.status === "open" &&
+      proposalsFile.proposals[index]?.auto_resolvable &&
+      proposal.status === "resolved",
+  ).length;
+
+  if (hasOpenAutoResolvable && todoChanged && resolvedAutoProposalCount === 0) {
+    const relatedRequirementIds = Array.from(
+      new Set(
+        proposalsFile.proposals
+          .filter(
+            (proposal) =>
+              proposal.status === "open" && proposal.auto_resolvable,
+          )
+          .flatMap((proposal) => proposal.related_requirement_ids),
+      ),
+    );
+    const reqSummary =
+      relatedRequirementIds.length > 0
+        ? ` related requirements: ${relatedRequirementIds.join(", ")}.`
+        : "";
+
+    failureBudget.last_failure_kind = "todo_writer_semantic_noop_replan";
+    failureBudget.last_failure_summary =
+      "todo-writer changed todo.json but did not add semantic repo-visible progress for any open auto-resolvable proposal." +
+      reqSummary;
+    saveStatusJson(statusPath, status);
+    return {
+      sessionId,
+      restartCount,
+      forceTodoWriterNextStep: true,
+      restartedSession: false,
+      abortLoop: false,
+      skipExecutorThisStep: true,
+    };
+  }
 
   saveProposals(proposalsPath, updatedProposals);
   failureBudget.consecutive_contract_gaps = 0;
